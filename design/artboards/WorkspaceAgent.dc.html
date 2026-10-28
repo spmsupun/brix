@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — atlas-web workspace (Agent layout)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+.term{margin:0;font-family:'SF Mono','JetBrains Mono',Menlo,monospace;font-size:12px;line-height:19px;color:#D4D4D8;white-space:pre-wrap}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="project" title="atlas-web" branch="feat/checkout-v2" initials="AW" hue="#A78BFA" preset="agent" dock-l="{{ false }}" dock-b="{{ false }}" dock-r="{{ true }}" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" variant="rail" active="atlas-web" accent="{{accent}}" hint-size="56px,822px"></dc-import>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+      <div role="tablist" aria-label="Agent sessions" style="height: 40px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 6px; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04)">
+        <sc-for list="{{sessions}}" as="s" hint-placeholder-count="4">
+          <button role="tab" style="{{s.style}}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="{{s.iconFill}}" stroke="{{s.iconStroke}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{s.icon}}"></path></svg>
+            <span>{{s.name}}</span>
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: {{s.dot}}"></span>
+          </button>
+        </sc-for>
+        <button aria-label="New agent session" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 7px; color: #8A8A93">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
+        <span style="flex: 1"></span>
+        <span style="font-size: 11.5px; color: #8A8A93">2 panes · split vertically</span>
+        <button aria-label="Change split" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); border: 0; border-radius: 7px; color: #F4F4F5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M12 4v16"></path></svg>
+        </button>
+      </div>
+
+      <div style="flex: 1; min-height: 0; display: flex; gap: 6px">
+        <section aria-label="Claude Code — atlas-web" style="flex: 1.25; min-width: 0; display: flex; flex-direction: column; background: #0B0B0D; border: 1px solid rgba(167,139,250,0.35); border-radius: 10px; box-shadow: 0 0 0 3px rgba(167,139,250,0.07), inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+          <header style="height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #111113; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <span style="width: 18px; height: 18px; border-radius: 5px; background: rgba(167,139,250,0.16); color: #C4B5FD; display: flex; align-items: center; justify-content: center">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z"></path></svg>
+            </span>
+            <span style="font-weight: 600; font-size: 12.5px">Claude Code</span>
+            <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11px; color: #8A8A93">~/Developer/atlas-web</span>
+            <span style="flex: 1"></span>
+            <span style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #A1A1AA"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 0 3px rgba(74,222,128,0.18)"></span>Working · 26 min</span>
+          </header>
+          <div style="flex: 1; min-height: 0; padding: 12px 16px; overflow: hidden">
+<pre class="term"><span style="color:#A78BFA">&gt;</span> <span style="color:#F4F4F5">add Apple Pay to the checkout flow, server-side intent only</span>
+
+<span style="color:#F4F4F5">⏺</span> I'll start by reading the checkout page and payment form.
+
+<span style="color:#4ADE80">⏺</span> <span style="color:#F4F4F5;font-weight:600">Read</span><span style="color:#8A8A93">(src/app/checkout/page.tsx)</span>
+  <span style="color:#74747E">⎿  Read 41 lines</span>
+<span style="color:#4ADE80">⏺</span> <span style="color:#F4F4F5;font-weight:600">Write</span><span style="color:#8A8A93">(src/lib/stripe/intent.ts)</span>
+  <span style="color:#74747E">⎿  </span><span style="color:#4ADE80">Wrote 24 lines</span>
+<span style="color:#FBBF24">⏺</span> <span style="color:#F4F4F5;font-weight:600">Update</span><span style="color:#8A8A93">(src/components/PaymentForm.tsx)</span>
+  <span style="color:#74747E">⎿  </span><span style="color:#4ADE80">+24</span> <span style="color:#F87171">−6</span>
+     <span style="color:#74747E">18</span> <span style="color:#4ADE80">+  const [request, setRequest] = useState&lt;PaymentRequest | null&gt;(null);</span>
+     <span style="color:#74747E">19</span> <span style="color:#4ADE80">+  useEffect(() =&gt; {</span>
+     <span style="color:#74747E">20</span> <span style="color:#4ADE80">+    if (!stripe) return;</span>
+
+<span style="color:#F4F4F5">⏺</span> <span style="color:#F4F4F5;font-weight:600">Bash</span><span style="color:#8A8A93">(pnpm test src/lib/stripe)</span>
+  <span style="color:#74747E">⎿  </span><span style="color:#4ADE80">✓ 3 tests passed</span> <span style="color:#74747E">(22ms)</span>
+
+<span style="color:#A78BFA">✶ Wiring wallet buttons…</span> <span style="color:#74747E">48s · ↓ 2.1k tokens · esc to interrupt</span></pre>
+          </div>
+          <div style="flex: none; margin: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #121214; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap">
+              <span style="height: 22px; display: flex; align-items: center; gap: 5px; padding: 0 8px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 11px; color: #A1A1AA">@ PaymentForm.tsx</span>
+              <span style="height: 22px; display: flex; align-items: center; gap: 5px; padding: 0 8px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 11px; color: #A1A1AA">@ atlas_dev · bookings</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <label for="agentin" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Message Claude</label>
+              <input id="agentin" placeholder="Reply to Claude, / for commands, @ to attach files…" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font: inherit; font-size: 13px">
+              <button style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 11px; background: {{accent}}; border: 0; border-radius: 7px; color: #09090B; font: inherit; font-size: 12px; font-weight: 600">Send <span style="opacity: 0.55; font-size: 10.5px">↩</span></button>
+            </div>
+          </div>
+        </section>
+
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+          <section aria-label="Task plan" style="flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+            <header style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA">Plan</span>
+              <span style="flex: 1"></span>
+              <span style="font-size: 11px; color: #8A8A93">2 of 4</span>
+            </header>
+            <div style="padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 2px">
+              <sc-for list="{{plan}}" as="p" hint-placeholder-count="4">
+                <div style="height: 26px; display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: {{p.color}}">
+                  <span style="{{p.box}}">{{p.check}}</span>
+                  <span style="{{p.text}}">{{p.label}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+          <section aria-label="Files touched" style="flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+            <header style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA">Files this session</span>
+              <span style="flex: 1"></span>
+              <a href="Git.dc.html" style="font-size: 11.5px; text-decoration: none">Review all →</a>
+            </header>
+            <div style="padding: 6px">
+              <sc-for list="{{touched}}" as="t" hint-placeholder-count="3">
+                <div style="height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 6px; font-size: 12.5px">
+                  <span style="width: 14px; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; font-weight: 700; color: {{t.color}}">{{t.st}}</span>
+                  <span>{{t.name}}</span>
+                  <span style="flex: 1; color: #74747E; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{t.dir}}</span>
+                  <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; color: #4ADE80">{{t.add}}</span>
+                  <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; color: #F87171">{{t.del}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+          <section aria-label="Claude Code — atlas-api" style="flex: 1; min-height: 0; display: flex; flex-direction: column; background: #0B0B0D; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+            <header style="height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #111113; border-bottom: 1px solid rgba(255,255,255,0.06)">
+              <span style="width: 18px; height: 18px; border-radius: 5px; background: rgba(34,211,238,0.14); color: #67E8F9; display: flex; align-items: center; justify-content: center">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z"></path></svg>
+              </span>
+              <span style="font-weight: 600; font-size: 12.5px">Claude Code</span>
+              <span style="font-size: 11px; color: #8A8A93">atlas-api</span>
+              <span style="flex: 1"></span>
+              <span style="font-size: 10.5px; font-weight: 600; color: #09090B; background: #FBBF24; border-radius: 99px; padding: 2px 8px">Needs input</span>
+            </header>
+            <div style="flex: 1; min-height: 0; padding: 10px 14px; overflow: hidden">
+<pre class="term"><span style="color:#4ADE80">⏺</span> <span style="color:#F4F4F5;font-weight:600">Bash</span><span style="color:#8A8A93">(go test ./internal/payments/...)</span>
+  <span style="color:#74747E">⎿  </span><span style="color:#4ADE80">ok  internal/payments  0.412s</span>
+
+<span style="color:#F4F4F5">⏺</span> Done. Migration adds <span style="color:#F4F4F5">payment_intents</span> with a booking FK.
+  Want me to wire the HTTP handler next?
+
+<span style="color:#22D3EE">&gt;</span> <span style="color:#22D3EE">▍</span></pre>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 264px; flex: none; display: flex; flex-direction: column; gap: 6px">
+      <section aria-label="Explorer (docked right)" style="flex: 1; min-height: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+        <header style="height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="#4A4A52" aria-hidden="true"><circle cx="2.5" cy="3" r="1.2"></circle><circle cx="7.5" cy="3" r="1.2"></circle><circle cx="2.5" cy="7" r="1.2"></circle><circle cx="7.5" cy="7" r="1.2"></circle><circle cx="2.5" cy="11" r="1.2"></circle><circle cx="7.5" cy="11" r="1.2"></circle></svg>
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA">Explorer</span>
+          <span style="flex: 1"></span>
+          <button aria-label="Explorer docked right — change position" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="15" y="4" width="6" height="16" rx="1.5" fill="currentColor" fill-opacity="0.45"></rect></svg>
+          </button>
+        </header>
+        <div style="flex: 1; min-height: 0; overflow: hidden; padding: 6px">
+          <sc-for list="{{tree}}" as="f" hint-placeholder-count="16">
+            <div style="{{f.row}}">
+              <span style="width: {{f.pad}}; flex: none"></span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#74747E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="{{f.chev}}"></path></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="{{f.fill}}" stroke="{{f.ic}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="{{f.icon}}"></path></svg>
+              <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{f.name}}</span>
+              <span style="{{f.agentStyle}}">{{f.agent}}</span>
+              <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10px; font-weight: 600; color: {{f.stc}}">{{f.st}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+      <section aria-label="Connections (docked right)" style="height: 222px; flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+        <header style="height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="#4A4A52" aria-hidden="true"><circle cx="2.5" cy="3" r="1.2"></circle><circle cx="7.5" cy="3" r="1.2"></circle><circle cx="2.5" cy="7" r="1.2"></circle><circle cx="7.5" cy="7" r="1.2"></circle><circle cx="2.5" cy="11" r="1.2"></circle><circle cx="7.5" cy="11" r="1.2"></circle></svg>
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA">Connections</span>
+          <span style="flex: 1"></span>
+          <button aria-label="Connections docked right — change position" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="15" y="4" width="6" height="16" rx="1.5" fill="currentColor" fill-opacity="0.45"></rect></svg>
+          </button>
+        </header>
+        <div style="padding: 6px">
+          <sc-for list="{{conns}}" as="c" hint-placeholder-count="5">
+            <a href="{{c.href}}" style="height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 8px; border-radius: 6px; text-decoration: none; color: #F4F4F5; font-size: 12.5px">
+              <span style="width: 20px; height: 20px; border-radius: 5px; background: rgba(255,255,255,0.06); color: #A1A1AA; font-size: 8px; font-weight: 800; display: flex; align-items: center; justify-content: center">{{c.badge}}</span>
+              <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</span>
+              <span style="font-size: 9px; font-weight: 700; color: {{c.tagColor}}">{{c.tag}}</span>
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: {{c.dot}}"></span>
+            </a>
+          </sc-for>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80"></span>2 agents · 1 needs input</span>
+    <span style="color: #A78BFA">⎇ feat/checkout-v2 ↑2</span>
+    <span style="flex: 1"></span>
+    <span>Explorer + Connections docked right · Sidebar: rail</span>
+    <span>Layout: Agent</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const SPARK = 'M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z';
+    const TERM = 'M5 8l4 4-4 4M12 17h7';
+    const sess = (name, icon, dot, sel, filled) => ({
+      name, icon, dot,
+      iconFill: filled ? 'currentColor' : 'none', iconStroke: filled ? 'none' : 'currentColor',
+      style: 'height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 0; border-radius: 7px; font: inherit; font-size: 12.5px; font-weight: 500; ' +
+        (sel ? 'background: rgba(255,255,255,0.08); color: #F4F4F5; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);' : 'background: transparent; color: #8A8A93;')
+    });
+    const OPEN = 'M6 9l6 6 6-6', CLOSED = 'M9 6l6 6-6 6';
+    const FOLDER = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
+    const FILE = 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5';
+    const ST = { M: '#FBBF24', A: '#4ADE80', U: '#22D3EE', D: '#F87171' };
+    const n = (depth, name, isDir, o) => {
+      o = o || {};
+      return {
+        name, pad: (depth * 12) + 'px', st: o.st || '', stc: ST[o.st] || '#74747E',
+        chev: isDir ? (o.open ? OPEN : CLOSED) : '', icon: isDir ? FOLDER : FILE,
+        ic: isDir ? '#8A8A93' : '#60A5FA', fill: isDir ? 'rgba(138,138,147,0.16)' : 'none',
+        agent: o.agent ? '✦' : '', agentStyle: o.agent ? 'font-size: 10px; color: #A78BFA' : 'display: none',
+        row: 'height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 6px 0 4px; border-radius: 6px; font-size: 12.5px; color: #D4D4D8; ' + (o.sel ? 'background: rgba(167,139,250,0.12); box-shadow: inset 0 0 0 1px rgba(167,139,250,0.22); color: #F4F4F5;' : '')
+      };
+    };
+    const plan = (label, state) => ({
+      label,
+      color: state === 'done' ? '#8A8A93' : '#F4F4F5',
+      check: state === 'done' ? '✓' : '',
+      text: state === 'done' ? 'text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.25)' : (state === 'now' ? 'font-weight: 500' : 'color: #A1A1AA'),
+      box: 'width: 16px; height: 16px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex: none; ' +
+        (state === 'done' ? 'background: rgba(74,222,128,0.16); color: #4ADE80;' : (state === 'now' ? 'border: 1.5px solid #A78BFA; box-shadow: 0 0 0 3px rgba(167,139,250,0.15); box-sizing: border-box;' : 'border: 1.5px solid #3F3F46; box-sizing: border-box;'))
+    });
+    return {
+      accent,
+      sessions: [
+        sess('Claude · atlas-web', SPARK, '#4ADE80', true, true),
+        sess('Claude · atlas-api', SPARK, '#FBBF24', false, true),
+        sess('dev server', TERM, '#4ADE80', false, false),
+        sess('deploy@dev', TERM, '#4ADE80', false, false)
+      ],
+      plan: [
+        plan('Server-side PaymentIntent helper', 'done'),
+        plan('Pass client secret from checkout page', 'done'),
+        plan('Render wallet button when Apple Pay is available', 'now'),
+        plan('Success route and tests', 'todo')
+      ],
+      touched: [
+        { st: 'A', color: ST.A, name: 'intent.ts', dir: 'src/lib/stripe', add: '+24', del: '' },
+        { st: 'M', color: ST.M, name: 'PaymentForm.tsx', dir: 'src/components', add: '+24', del: '−6' },
+        { st: 'M', color: ST.M, name: 'page.tsx', dir: 'src/app/checkout', add: '+9', del: '−3' }
+      ],
+      tree: [
+        n(0, 'src', true, { open: true }),
+        n(1, 'app', true, { open: true }),
+        n(2, 'checkout', true, { open: true, st: 'M' }),
+        n(3, 'page.tsx', false, { st: 'M', agent: true }),
+        n(3, 'success', true, { st: 'U' }),
+        n(1, 'components', true, { open: true }),
+        n(2, 'CartSummary.tsx', false),
+        n(2, 'PaymentForm.tsx', false, { st: 'M', sel: true, agent: true }),
+        n(1, 'lib', true, { open: true }),
+        n(2, 'stripe', true, { open: true, st: 'A' }),
+        n(3, 'intent.ts', false, { st: 'A', agent: true }),
+        n(0, 'public', true),
+        n(0, 'CLAUDE.md', false),
+        n(0, 'package.json', false, { st: 'M' }),
+        n(0, 'tsconfig.json', false)
+      ],
+      conns: [
+        { name: 'atlas_dev', badge: 'PG', tag: 'DEV', tagColor: '#60A5FA', dot: '#4ADE80', href: 'Database.dc.html' },
+        { name: 'atlas_staging', badge: 'PG', tag: 'STAGE', tagColor: '#FBBF24', dot: '#FBBF24', href: 'Database.dc.html' },
+        { name: 'Development Server', badge: 'SSH', tag: 'DEV', tagColor: '#60A5FA', dot: '#4ADE80', href: 'SSH.dc.html' },
+        { name: 'Staging Server', badge: 'SSH', tag: 'STAGE', tagColor: '#FBBF24', dot: '#FBBF24', href: 'SSH.dc.html' },
+        { name: 'Production Server', badge: 'SSH', tag: 'PROD', tagColor: '#F87171', dot: '#74747E', href: 'SSH.dc.html' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — Projects</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="screen" title="Projects" preset="none" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" active="projects" accent="{{accent}}" hint-size="232px,822px"></dc-import>
+
+    <section aria-label="Projects" style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <header style="height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <label style="width: 260px; height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 9px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; color: #8A8A93">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <input placeholder="Filter projects" aria-label="Filter projects" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font: inherit; font-size: 12.5px">
+        </label>
+        <div role="radiogroup" aria-label="Show" style="display: flex; gap: 2px; padding: 2px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px">
+          <button role="radio" aria-checked="true" style="height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: rgba(255,255,255,0.10); color: #F4F4F5; font: inherit; font-size: 12px; font-weight: 500">All</button>
+          <button role="radio" aria-checked="false" style="height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #8A8A93; font: inherit; font-size: 12px; font-weight: 500">Pinned</button>
+          <button role="radio" aria-checked="false" style="height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #8A8A93; font: inherit; font-size: 12px; font-weight: 500">Has changes</button>
+        </div>
+        <span style="flex: 1"></span>
+        <button style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 14px; background: {{accent}}; border: 0; border-radius: 8px; color: #09090B; font: inherit; font-size: 12.5px; font-weight: 600">+ Add Folder <span style="opacity: 0.55; font-size: 10.5px">⌘O</span></button>
+      </header>
+      <div style="height: 32px; flex: none; display: grid; grid-template-columns: 44px minmax(0, 1.4fr) minmax(0, 1.5fr) minmax(0, 1.2fr) 110px 120px 80px; align-items: center; padding: 0 16px; font-size: 11px; font-weight: 600; color: #8A8A93; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span></span><span>Name</span><span>Location</span><span>Branch</span><span>Working tree</span><span>Resources</span><span style="text-align: right">Opened</span>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 6px">
+        <sc-for list="{{projects}}" as="p" hint-placeholder-count="6">
+          <a href="ProjectWorkspace.dc.html" style="{{p.row}}">
+            <span style="width: 30px; height: 30px; border-radius: 9px; background: {{p.tint}}; border: 1px solid {{p.line}}; color: {{p.hue}}; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center">{{p.initials}}</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+              <span style="display: flex; align-items: center; gap: 6px; font-weight: 600">{{p.name}}<span style="font-size: 10px; color: #8A8A93">{{p.pin}}</span></span>
+              <span style="font-size: 11px; color: #8A8A93">{{p.framework}}</span>
+            </span>
+            <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11.5px; color: #A1A1AA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.path}}</span>
+            <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11.5px; color: #D4D4D8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">⎇ {{p.branch}}</span>
+            <span style="font-size: 12px; color: {{p.stateColor}}">{{p.state}}</span>
+            <span style="display: flex; gap: 4px">
+              <sc-for list="{{p.res}}" as="r" hint-placeholder-count="3">
+                <span style="height: 20px; display: flex; align-items: center; padding: 0 6px; background: rgba(255,255,255,0.05); border-radius: 5px; font-size: 10.5px; color: #A1A1AA">{{r}}</span>
+              </sc-for>
+            </span>
+            <span style="text-align: right; font-size: 12px; color: #8A8A93">{{p.when}}</span>
+          </a>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-label="atlas-web" style="width: 300px; flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <div style="padding: 18px 16px 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span style="width: 40px; height: 40px; border-radius: 11px; background: rgba(167,139,250,0.16); border: 1px solid rgba(167,139,250,0.4); color: #A78BFA; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center">AW</span>
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 15px; font-weight: 600">atlas-web</span>
+            <span style="font-size: 11.5px; color: #8A8A93">Next.js 15 · TypeScript · pnpm</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px">
+          <a href="ProjectWorkspace.dc.html" style="flex: 1; height: 30px; display: flex; align-items: center; justify-content: center; background: {{accent}}; border-radius: 8px; color: #09090B; font-size: 12.5px; font-weight: 600; text-decoration: none">Open</a>
+          <button style="flex: 1; height: 30px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12.5px">Terminal</button>
+          <button style="flex: 1; height: 30px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12.5px">Finder</button>
+        </div>
+      </div>
+      <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <sc-for list="{{facts}}" as="f" hint-placeholder-count="4">
+          <div style="height: 28px; display: flex; align-items: center; font-size: 12.5px"><span style="width: 96px; color: #8A8A93">{{f.k}}</span><span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11.5px">{{f.v}}</span></div>
+        </sc-for>
+      </div>
+      <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center"><span style="font-size: 11px; font-weight: 600; color: #8A8A93; flex: 1">Linked resources</span><a href="ProjectResources.dc.html" style="font-size: 11.5px; text-decoration: none">Manage →</a></div>
+        <sc-for list="{{linked}}" as="l" hint-placeholder-count="5">
+          <div style="height: 30px; display: flex; align-items: center; gap: 9px; font-size: 12.5px">
+            <span style="width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.05); color: #A1A1AA; font-size: 8px; font-weight: 800; display: flex; align-items: center; justify-content: center">{{l.b}}</span>
+            <span style="flex: 1">{{l.name}}</span>
+            <span style="font-size: 9px; font-weight: 700; color: {{l.c}}">{{l.tag}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </div>
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span>6 projects · 2 pinned · 10 uncommitted files</span>
+    <span style="flex: 1"></span>
+    <span>Double-click to open · right-click for more</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const p = (initials, name, framework, path, branch, state, res, when, hue, tint, line, pinned, sel) => ({
+      initials, name, framework, path, branch, state, res, when, hue, tint, line, pin: pinned ? 'PINNED' : '',
+      stateColor: state === 'Clean' ? '#4ADE80' : '#FBBF24',
+      row: 'height: 56px; display: grid; grid-template-columns: 44px minmax(0, 1.4fr) minmax(0, 1.5fr) minmax(0, 1.2fr) 110px 120px 80px; align-items: center; gap: 0 8px; padding: 0 10px; border-radius: 8px; text-decoration: none; color: #F4F4F5; ' +
+        (sel ? 'background: rgba(255,255,255,0.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);' : '')
+    });
+    return {
+      accent,
+      projects: [
+        p('AW', 'atlas-web', 'Next.js 15 · TypeScript', '~/Developer/atlas-web', 'feat/checkout-v2', '7 changed ↑2', ['3 SSH', '2 DB', '4 DK'], '5 min', '#A78BFA', 'rgba(167,139,250,0.16)', 'rgba(167,139,250,0.4)', true, true),
+        p('AA', 'atlas-api', 'Go 1.23 · chi', '~/Developer/atlas-api', 'main', 'Clean', ['3 SSH', '2 DB'], '1 h', '#22D3EE', 'rgba(34,211,238,0.14)', 'rgba(34,211,238,0.38)', true, false),
+        p('BS', 'billing-service', 'Laravel 11 · PHP', '~/Developer/billing-service', 'fix/invoice-rounding', '2 changed', ['1 SSH', '1 DB'], 'Yesterday', '#FB923C', 'rgba(251,146,60,0.15)', 'rgba(251,146,60,0.38)', false, false),
+        p('MP', 'ml-pipelines', 'Python 3.12 · Prefect', '~/Developer/ml-pipelines', 'develop', '1 changed', ['1 SSH', '1 DB'], '2 days', '#F472B6', 'rgba(244,114,182,0.15)', 'rgba(244,114,182,0.38)', false, false),
+        p('IC', 'ios-companion', 'SwiftUI', '~/Developer/ios-companion', 'release/2.4', 'Clean', [], '1 week', '#60A5FA', 'rgba(96,165,250,0.15)', 'rgba(96,165,250,0.38)', false, false),
+        p('DF', 'dotfiles', 'zsh · Homebrew', '~/dotfiles', 'main', 'Clean', ['1 SSH'], '3 weeks', '#4ADE80', 'rgba(74,222,128,0.14)', 'rgba(74,222,128,0.35)', false, false)
+      ],
+      facts: [
+        { k: 'Branch', v: 'feat/checkout-v2' },
+        { k: 'Remote', v: 'origin ↑2 ↓0' },
+        { k: 'Changes', v: '2 staged · 5 unstaged' },
+        { k: 'Sessions', v: 'Claude · dev server' }
+      ],
+      linked: [
+        { b: 'SSH', name: 'Development Server', tag: 'DEV', c: '#60A5FA' },
+        { b: 'SSH', name: 'Staging Server', tag: 'STAGE', c: '#FBBF24' },
+        { b: 'SSH', name: 'Production Server', tag: 'PROD', c: '#F87171' },
+        { b: 'PG', name: 'atlas_dev', tag: 'DEV', c: '#60A5FA' },
+        { b: 'PG', name: 'atlas_staging', tag: 'STAGE', c: '#FBBF24' },
+        { b: 'DK', name: 'db · redis · atlas-api', tag: 'DOCKER', c: '#A1A1AA' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

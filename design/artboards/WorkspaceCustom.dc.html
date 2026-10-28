@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — atlas-web custom workspace with Add Panel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+.code{margin:0;font-family:'SF Mono','JetBrains Mono',Menlo,monospace;font-size:12.5px;line-height:20px;color:#E4E4E7;white-space:pre}
+.k{color:#B4A1FF}.s{color:#C3E88D}.t{color:#7DD3FC}.f{color:#F4F4F5;font-weight:500}.p{color:#8A8A93}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; position: relative; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="project" title="atlas-web" branch="feat/checkout-v2" initials="AW" hue="#A78BFA" preset="none" dock-r="{{ false }}" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+
+    <div style="width: 258px; flex: none; display: flex; flex-direction: column; gap: 6px">
+      <section aria-label="Explorer" style="flex: 1; min-height: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+        <header style="{{hdr}}">
+          <span style="{{grip}}"></span>
+          <span style="{{hdrTitle}}">Explorer</span>
+          <span style="flex: 1"></span>
+          <span style="{{dockIcon}}">◧</span>
+        </header>
+        <div style="flex: 1; min-height: 0; overflow: hidden; padding: 6px">
+          <sc-for list="{{tree}}" as="f" hint-placeholder-count="12">
+            <div style="{{f.row}}"><span style="width: {{f.pad}}; flex: none"></span><span style="width: 10px; color: #74747E; font-size: 9px">{{f.chev}}</span><span style="color: {{f.ic}}; font-size: 11px; width: 14px">{{f.glyph}}</span><span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{f.name}}</span><span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10px; font-weight: 600; color: {{f.stc}}">{{f.st}}</span></div>
+          </sc-for>
+        </div>
+      </section>
+      <section aria-label="Docker" style="height: 300px; flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+        <header style="{{hdr}}">
+          <span style="{{grip}}"></span>
+          <span style="{{hdrTitle}}">Docker</span>
+          <span style="font-size: 10px; font-weight: 600; color: #4ADE80; background: rgba(74,222,128,0.10); border-radius: 99px; padding: 1px 6px">3 up</span>
+          <span style="flex: 1"></span>
+          <span style="{{dockIcon}}">◧</span>
+        </header>
+        <div style="flex: 1; min-height: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px">
+          <sc-for list="{{containers}}" as="c" hint-placeholder-count="4">
+            <div style="height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border-radius: 8px; {{c.bg}}">
+              <span style="width: 7px; height: 7px; border-radius: 50%; background: {{c.dot}}; flex: none; box-shadow: 0 0 0 3px {{c.ring}}"></span>
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+                <span style="font-size: 12.5px; font-weight: 500">{{c.name}}</span>
+                <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; color: #8A8A93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.sub}}</span>
+              </div>
+              <button aria-label="{{c.actionLabel}}" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 0; border-radius: 6px; color: #D4D4D8; font-size: 10px">{{c.action}}</button>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </div>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+      <section aria-label="Editor" style="flex: 1; min-height: 0; display: flex; flex-direction: column; background: #0E0E10; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+        <div style="height: 38px; flex: none; display: flex; align-items: flex-end; gap: 2px; padding: 0 6px; background: #121214; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <button style="position: relative; height: 33px; margin-bottom: -1px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border: 0; border-radius: 8px 8px 0 0; background: #0E0E10; color: #F4F4F5; font: inherit; font-size: 12.5px; font-weight: 500; box-shadow: inset 1px 0 0 rgba(255,255,255,0.06), inset -1px 0 0 rgba(255,255,255,0.06)">
+            <span style="position: absolute; left: 10px; right: 10px; top: 0; height: 2px; border-radius: 0 0 2px 2px; background: #A78BFA"></span>
+            <span style="width: 6px; height: 6px; border-radius: 2px; background: #60A5FA"></span>intent.ts<span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10px; font-weight: 600; color: #4ADE80">A</span>
+          </button>
+          <button style="height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border: 0; background: transparent; color: #8A8A93; font: inherit; font-size: 12.5px"><span style="width: 6px; height: 6px; border-radius: 2px; background: #FBBF24"></span>docker-compose.yml</button>
+        </div>
+        <div style="flex: 1; min-height: 0; display: flex; overflow: hidden">
+          <pre class="code" aria-hidden="true" style="padding: 10px 0; width: 44px; text-align: right; color: #3F3F46; flex: none">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20</pre>
+<pre class="code" style="flex: 1; padding: 10px 16px"><span class="k">import</span> <span class="t">Stripe</span> <span class="k">from</span> <span class="s">"stripe"</span><span class="p">;</span>
+
+<span class="k">const</span> stripe <span class="p">=</span> <span class="k">new</span> <span class="t">Stripe</span><span class="p">(</span>process<span class="p">.</span>env<span class="p">.</span><span class="t">STRIPE_SECRET_KEY</span><span class="p">!,</span> <span class="p">{</span>
+  apiVersion<span class="p">:</span> <span class="s">"2024-12-18.acacia"</span><span class="p">,</span>
+<span class="p">});</span>
+
+<span class="k">export type</span> <span class="t">IntentInput</span> <span class="p">=</span> <span class="p">{</span>
+  amount<span class="p">:</span> <span class="t">number</span><span class="p">;</span>
+  currency<span class="p">:</span> <span class="t">string</span><span class="p">;</span>
+  metadata<span class="p">?:</span> <span class="t">Record</span><span class="p">&lt;</span><span class="t">string</span><span class="p">,</span> <span class="t">string</span><span class="p">&gt;;</span>
+<span class="p">};</span>
+
+<span class="k">export async function</span> <span class="f">createPaymentIntent</span><span class="p">({</span> amount<span class="p">,</span> currency<span class="p">,</span> metadata <span class="p">}:</span> <span class="t">IntentInput</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">const</span> intent <span class="p">=</span> <span class="k">await</span> stripe<span class="p">.</span>paymentIntents<span class="p">.</span><span class="f">create</span><span class="p">({</span>
+    amount<span class="p">,</span> currency<span class="p">,</span> metadata<span class="p">,</span>
+    automatic_payment_methods<span class="p">:</span> <span class="p">{</span> enabled<span class="p">:</span> <span class="k">true</span> <span class="p">},</span>
+  <span class="p">});</span>
+  <span class="k">return</span> <span class="p">{</span> id<span class="p">:</span> intent<span class="p">.</span>id<span class="p">,</span> clientSecret<span class="p">:</span> intent<span class="p">.</span>client_secret<span class="p">!</span> <span class="p">};</span>
+<span class="p">}</span></pre>
+        </div>
+      </section>
+
+      <div style="height: 300px; flex: none; display: flex; gap: 6px">
+        <section aria-label="Database panel" style="flex: 1.3; min-width: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+          <header style="{{hdr}}">
+            <span style="{{grip}}"></span>
+            <span style="{{hdrTitle}}">Database</span>
+            <button style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; color: #F4F4F5; font: inherit; font-size: 11.5px">
+              <span style="font-size: 8px; font-weight: 800; color: #93B4FF">PG</span>atlas_dev<span style="color: #8A8A93">▾</span>
+            </button>
+            <span style="flex: 1"></span>
+            <button style="height: 24px; padding: 0 9px; background: {{accent}}; border: 0; border-radius: 6px; color: #09090B; font: inherit; font-size: 11.5px; font-weight: 600">Run ⌘↩</button>
+            <span style="{{dockIcon}}">⬓</span>
+          </header>
+          <div style="padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 12px; color: #E4E4E7"><span style="color: #B4A1FF">select</span> id, status, amount_cents <span style="color: #B4A1FF">from</span> payments <span style="color: #B4A1FF">order by</span> created_at <span style="color: #B4A1FF">desc limit</span> <span style="color: #F5A97F">5</span>;</div>
+          <div style="flex: 1; min-height: 0; overflow: hidden">
+            <div style="height: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; padding: 0 12px; font-size: 11px; font-weight: 600; color: #8A8A93; border-bottom: 1px solid rgba(255,255,255,0.05)">
+              <span>id</span><span>provider</span><span>status</span><span>amount_cents</span>
+            </div>
+            <sc-for list="{{payments}}" as="p" hint-placeholder-count="5">
+              <div style="height: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; padding: 0 12px; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11.5px; color: #E4E4E7; border-bottom: 1px solid rgba(255,255,255,0.03)">
+                <span>{{p.id}}</span><span>{{p.provider}}</span><span style="color: {{p.color}}">{{p.status}}</span><span>{{p.amount}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+        <section aria-label="Terminal panel" style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #0B0B0D; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; overflow: hidden; position: relative">
+          <header style="{{hdr}} background: #111113;">
+            <span style="{{grip}}"></span>
+            <span style="{{hdrTitle}}">Terminal</span>
+            <span style="font-size: 11.5px; color: #F4F4F5; background: rgba(255,255,255,0.08); border-radius: 6px; padding: 3px 8px">deploy@dev</span>
+            <span style="flex: 1"></span>
+            <button aria-label="Add panel" style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; color: #F4F4F5; font: inherit; font-size: 11.5px; font-weight: 500">+ Add panel</button>
+          </header>
+          <div style="padding: 10px 12px; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11.5px; line-height: 18px; color: #D4D4D8; white-space: pre"><span style="color:#4ADE80">deploy@dev</span><span style="color:#8A8A93">:</span><span style="color:#22D3EE">/srv/atlas</span> <span style="color:{{accent}}">❯</span> docker compose ps
+<span style="color:#8A8A93">NAME           STATUS     PORTS</span>
+atlas-api-1    Up 2 h     :8080
+queue-worker   Exited (0)
+<span style="color:#4ADE80">deploy@dev</span><span style="color:#8A8A93">:</span><span style="color:#22D3EE">/srv/atlas</span> <span style="color:{{accent}}">❯</span> ▍</div>
+        </section>
+      </div>
+    </div>
+
+    <dc-import name="Sidebar" variant="rail" active="atlas-web" accent="{{accent}}" hint-size="56px,822px"></dc-import>
+  </div>
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span>Custom layout · Explorer + Docker left · Database + Terminal bottom · sidebar moved right</span>
+    <span style="flex: 1"></span>
+    <span>Save as preset…</span>
+  </footer>
+
+  <div role="menu" aria-label="Add panel" style="position: absolute; right: 74px; bottom: 300px; width: 330px; padding: 6px; background: #18181B; border: 1px solid rgba(255,255,255,0.11); border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)">
+    <div style="padding: 4px 4px 8px">
+      <label style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 9px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; color: #8A8A93">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <input placeholder="Add a panel to this dock…" aria-label="Search panels" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font: inherit; font-size: 12.5px">
+      </label>
+    </div>
+    <sc-for list="{{menu}}" as="g" hint-placeholder-count="3">
+      <div style="padding: 6px 8px 3px; font-size: 10.5px; font-weight: 600; color: #8A8A93">{{g.title}}</div>
+      <sc-for list="{{g.items}}" as="m" hint-placeholder-count="3">
+        <div role="menuitem" style="{{m.style}}">
+          <span style="width: 24px; height: 24px; border-radius: 7px; background: {{m.tint}}; color: {{m.color}}; display: flex; align-items: center; justify-content: center; flex: none; font-size: 9px; font-weight: 800">{{m.badge}}</span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+            <span style="font-size: 12.5px; color: #F4F4F5">{{m.label}}</span>
+            <span style="font-size: 11px; color: #8A8A93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{m.sub}}</span>
+          </span>
+          <span style="font-size: 11px; color: #74747E">{{m.key}}</span>
+        </div>
+      </sc-for>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const ST = { M: '#FBBF24', A: '#4ADE80', U: '#22D3EE' };
+    const n = (depth, name, dir, o) => {
+      o = o || {};
+      return {
+        name, pad: (depth * 12) + 'px', chev: dir ? (o.open ? '▾' : '▸') : '', glyph: dir ? '▪' : '•',
+        ic: dir ? '#8A8A93' : (o.ic || '#60A5FA'), st: o.st || '', stc: ST[o.st] || '#74747E',
+        row: 'height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 6px 0 4px; border-radius: 6px; font-size: 12.5px; ' + (o.sel ? 'background: rgba(167,139,250,0.12); box-shadow: inset 0 0 0 1px rgba(167,139,250,0.22); color: #F4F4F5;' : 'color: #D4D4D8;')
+      };
+    };
+    const mi = (label, sub, badge, color, tint, key, hi) => ({
+      label, sub, badge, color, tint, key,
+      style: 'height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border-radius: 8px; ' + (hi ? 'background: rgba(255,255,255,0.07);' : '')
+    });
+    return {
+      accent,
+      hdr: 'height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.06);',
+      grip: 'width: 8px; height: 12px; flex: none; background-image: radial-gradient(circle, #4A4A52 1.2px, transparent 1.4px); background-size: 4px 4px',
+      hdrTitle: 'font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA',
+      dockIcon: 'font-size: 13px; color: #8A8A93; width: 22px; text-align: center',
+      tree: [
+        n(0, 'src', true, { open: true }), n(1, 'app', true), n(1, 'components', true), n(1, 'lib', true, { open: true }),
+        n(2, 'stripe', true, { open: true, st: 'A' }), n(3, 'intent.ts', false, { st: 'A', sel: true }),
+        n(0, 'public', true), n(0, 'docker-compose.yml', false, { ic: '#FBBF24' }), n(0, 'package.json', false, { st: 'M', ic: '#FBBF24' }),
+        n(0, 'CLAUDE.md', false, { ic: '#A78BFA' })
+      ],
+      containers: [
+        { name: 'db', sub: 'postgres:16 · :5432 · local', dot: '#4ADE80', ring: 'rgba(74,222,128,0.15)', action: '■', actionLabel: 'Stop db', bg: 'background: rgba(255,255,255,0.04);' },
+        { name: 'redis', sub: 'redis:7-alpine · :6379 · local', dot: '#4ADE80', ring: 'rgba(74,222,128,0.15)', action: '■', actionLabel: 'Stop redis', bg: '' },
+        { name: 'atlas-api', sub: 'Development Server · :8080', dot: '#4ADE80', ring: 'rgba(74,222,128,0.15)', action: '≡', actionLabel: 'Logs for atlas-api', bg: '' },
+        { name: 'queue-worker', sub: 'Development Server · exited (0)', dot: '#52525B', ring: 'transparent', action: '▶', actionLabel: 'Start queue-worker', bg: '' }
+      ],
+      payments: [
+        { id: '90429', provider: 'apple_pay', status: 'succeeded', color: '#4ADE80', amount: '12400' },
+        { id: '90428', provider: 'stripe', status: 'succeeded', color: '#4ADE80', amount: '8900' },
+        { id: '90427', provider: 'stripe', status: 'requires_action', color: '#FBBF24', amount: '4900' },
+        { id: '90426', provider: 'stripe', status: 'processing', color: '#60A5FA', amount: '31200' },
+        { id: '90425', provider: 'apple_pay', status: 'succeeded', color: '#4ADE80', amount: '6600' }
+      ],
+      menu: [
+        { title: 'Shells', items: [
+          mi('Terminal', 'zsh in ~/Developer/atlas-web', '❯', '#F4F4F5', 'rgba(255,255,255,0.07)', '⌘T', false),
+          mi('Claude Code session', 'New agent in this project', '✦', '#C4B5FD', 'rgba(167,139,250,0.16)', '⇧⌘T', true),
+          mi('Server shell', 'Development · Staging · Production', 'SSH', '#93C5FD', 'rgba(96,165,250,0.14)', '▸', false)
+        ] },
+        { title: 'Project', items: [
+          mi('Explorer', 'Already in left dock', 'EX', '#A1A1AA', 'rgba(255,255,255,0.06)', '', false),
+          mi('Source Control', 'Changes, commit, history', 'SC', '#A1A1AA', 'rgba(255,255,255,0.06)', '', false),
+          mi('Notes', 'Scratchpad saved with the project', 'NT', '#A1A1AA', 'rgba(255,255,255,0.06)', '', false)
+        ] },
+        { title: 'Linked resources', items: [
+          mi('Database', 'atlas_dev · atlas_staging', 'PG', '#93B4FF', 'rgba(125,167,255,0.14)', '▸', false),
+          mi('Docker', '4 linked containers', 'DK', '#A1A1AA', 'rgba(255,255,255,0.06)', '', false),
+          mi('Browser preview', 'localhost:3000', 'WEB', '#A1A1AA', 'rgba(255,255,255,0.06)', '', false)
+        ] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

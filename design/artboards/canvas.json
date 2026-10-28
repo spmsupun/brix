@@ -1,0 +1,189 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-27T06:10:00Z"
+  },
+  "title": "Conduit — macOS Developer Workspace",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Overview",
+      "expand": "fill"
+    },
+    "CommandPalette.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Command Palette (⌘K)",
+      "expand": "fill"
+    },
+    "Projects.dc.html": {
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Projects",
+      "expand": "fill"
+    },
+    "ProjectWorkspace.dc.html": {
+      "x": 0,
+      "y": 1360,
+      "w": 1440,
+      "h": 900,
+      "title": "Workspace — Code layout",
+      "expand": "fill"
+    },
+    "WorkspaceAgent.dc.html": {
+      "x": 1520,
+      "y": 1360,
+      "w": 1440,
+      "h": 900,
+      "title": "Workspace — Agent layout (explorer docked right, rail sidebar)",
+      "expand": "fill"
+    },
+    "Git.dc.html": {
+      "x": 3040,
+      "y": 1360,
+      "w": 1440,
+      "h": 900,
+      "title": "Workspace — Review layout",
+      "expand": "fill"
+    },
+    "Terminals.dc.html": {
+      "x": 0,
+      "y": 2720,
+      "w": 1440,
+      "h": 900,
+      "title": "Terminals",
+      "expand": "fill"
+    },
+    "SSH.dc.html": {
+      "x": 1520,
+      "y": 2720,
+      "w": 1440,
+      "h": 900,
+      "title": "SSH Connections + Editor Sheet",
+      "expand": "fill"
+    },
+    "Database.dc.html": {
+      "x": 3040,
+      "y": 2720,
+      "w": 1440,
+      "h": 900,
+      "title": "Database Browser",
+      "expand": "fill"
+    },
+    "SQL.dc.html": {
+      "x": 0,
+      "y": 4080,
+      "w": 1440,
+      "h": 900,
+      "title": "SQL Editor",
+      "expand": "fill"
+    },
+    "Customize.dc.html": {
+      "x": 1520,
+      "y": 4080,
+      "w": 1440,
+      "h": 900,
+      "title": "Customize Layout & Appearance (interactive)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Toolbar.dc.html": {
+      "x": 3040,
+      "y": 4080,
+      "w": 1440,
+      "h": 52,
+      "title": "Component — Toolbar"
+    },
+    "Sidebar.dc.html": {
+      "x": 3040,
+      "y": 4252,
+      "w": 232,
+      "h": 822,
+      "title": "Component — Sidebar (full / rail)"
+    },
+    "ProjectResources.dc.html": {
+      "x": 0,
+      "y": 5440,
+      "w": 1440,
+      "h": 900,
+      "title": "Project Resources — link SSH, databases, Docker (interactive)",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "WorkspaceCustom.dc.html": {
+      "x": 1520,
+      "y": 5440,
+      "w": 1440,
+      "h": 900,
+      "title": "Workspace — custom layout + Add Panel",
+      "expand": "fill"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "CommandPalette.dc.html",
+    "Projects.dc.html",
+    "ProjectWorkspace.dc.html",
+    "WorkspaceAgent.dc.html",
+    "Git.dc.html",
+    "Terminals.dc.html",
+    "SSH.dc.html",
+    "Database.dc.html",
+    "SQL.dc.html",
+    "Customize.dc.html",
+    "ProjectResources.dc.html",
+    "WorkspaceCustom.dc.html",
+    "Toolbar.dc.html",
+    "Sidebar.dc.html"
+  ],
+  "notes": {
+    "row1": {
+      "x": 0,
+      "y": -260,
+      "text": "Home & Projects",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "row2": {
+      "x": 0,
+      "y": 1100,
+      "text": "Project Workspace — dock any panel left, right or bottom",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "row3": {
+      "x": 0,
+      "y": 2460,
+      "text": "Terminals, Servers & Databases",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "row4": {
+      "x": 0,
+      "y": 3820,
+      "text": "SQL, Customisation & Shared Components",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "row5": {
+      "x": 0,
+      "y": 5180,
+      "text": "Project resources & custom panels",
+      "kind": "title1",
+      "maxW": 2960
+    }
+  },
+  "designSystems": []
+}

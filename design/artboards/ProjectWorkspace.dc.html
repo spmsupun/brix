@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — atlas-web workspace (Code layout)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+.code{margin:0;font-family:'SF Mono','JetBrains Mono',Menlo,monospace;font-size:12.5px;line-height:20px;color:#E4E4E7;white-space:pre}
+.k{color:#B4A1FF}.s{color:#C3E88D}.t{color:#7DD3FC}.f{color:#F4F4F5;font-weight:500}.c{color:#74747E;font-style:italic}.n{color:#F5A97F}.p{color:#8A8A93}.tag{color:#F9A8D4}
+.term{margin:0;font-family:'SF Mono','JetBrains Mono',Menlo,monospace;font-size:11.5px;line-height:18px;color:#D4D4D8;white-space:pre}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="project" title="atlas-web" branch="feat/checkout-v2" initials="AW" hue="#A78BFA" preset="code" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" variant="rail" active="atlas-web" accent="{{accent}}" hint-size="56px,822px"></dc-import>
+
+    <section aria-label="Explorer" style="width: 252px; flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <header style="height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <svg width="10" height="14" viewBox="0 0 10 14" fill="#4A4A52" aria-hidden="true"><circle cx="2.5" cy="3" r="1.2"></circle><circle cx="7.5" cy="3" r="1.2"></circle><circle cx="2.5" cy="7" r="1.2"></circle><circle cx="7.5" cy="7" r="1.2"></circle><circle cx="2.5" cy="11" r="1.2"></circle><circle cx="7.5" cy="11" r="1.2"></circle></svg>
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA">Explorer</span>
+        <span style="flex: 1"></span>
+        <button aria-label="New file" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M12 11v6M9 14h6"></path></svg>
+        </button>
+        <button aria-label="Explorer docked left — change position" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="3" y="4" width="6" height="16" rx="1.5" fill="currentColor" fill-opacity="0.45"></rect></svg>
+        </button>
+      </header>
+      <div style="padding: 8px 8px 6px">
+        <label style="height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 8px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; color: #8A8A93">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <input placeholder="Go to file" aria-label="Go to file" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font: inherit; font-size: 12px">
+          <span style="font-size: 10px; color: #74747E">⌘P</span>
+        </label>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 2px 6px 8px">
+        <sc-for list="{{tree}}" as="f" hint-placeholder-count="22">
+          <div style="{{f.row}}">
+            <span style="{{f.indent}}"></span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#74747E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="{{f.chev}}"></path></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="{{f.fill}}" stroke="{{f.ic}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="{{f.icon}}"></path></svg>
+            <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: {{f.color}}">{{f.name}}</span>
+            <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10px; font-weight: 600; color: {{f.stc}}">{{f.st}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+      <section aria-label="Editor" style="flex: 1; min-height: 0; display: flex; flex-direction: column; background: #0E0E10; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+        <div role="tablist" aria-label="Open files" style="height: 38px; flex: none; display: flex; align-items: flex-end; gap: 2px; padding: 0 6px; background: #121214; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+            <button role="tab" aria-selected="{{t.sel}}" style="{{t.style}}">
+              <span style="{{t.bar}}"></span>
+              <span style="width: 6px; height: 6px; border-radius: 2px; background: {{t.dot}}; flex: none"></span>
+              <span>{{t.name}}</span>
+              <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10px; font-weight: 600; color: {{t.stc}}">{{t.st}}</span>
+              <span style="{{t.close}}" aria-hidden="true">×</span>
+            </button>
+          </sc-for>
+          <span style="flex: 1"></span>
+          <div style="display: flex; align-items: center; gap: 2px; height: 37px">
+            <button aria-label="Split editor" style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M12 4v16"></path></svg>
+            </button>
+            <button aria-label="Ask Claude about this file" style="height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; background: rgba(167,139,250,0.10); border: 1px solid rgba(167,139,250,0.22); border-radius: 6px; color: #C4B5FD; font: inherit; font-size: 11px; font-weight: 500">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z"></path></svg>
+              Ask Claude
+            </button>
+          </div>
+        </div>
+        <div style="height: 28px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 11.5px; color: #8A8A93; border-bottom: 1px solid rgba(255,255,255,0.04)">
+          <span>src</span><span style="color: #3F3F46">/</span><span>components</span><span style="color: #3F3F46">/</span><span style="color: #D4D4D8">PaymentForm.tsx</span><span style="color: #3F3F46">/</span>
+          <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11px; color: #A1A1AA">ƒ WalletButtons</span>
+          <span style="flex: 1"></span>
+          <span style="color: #4ADE80; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11px">+24</span>
+          <span style="color: #F87171; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11px">−6</span>
+        </div>
+        <div style="flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative">
+          <pre class="code" aria-hidden="true" style="padding: 10px 0; width: 46px; text-align: right; color: #3F3F46; flex: none">{{lineNumbers}}</pre>
+          <div aria-hidden="true" style="width: 3px; flex: none; margin: 10px 10px 0 8px; position: relative">
+            <span style="position: absolute; top: 40px; height: 100px; width: 3px; background: #4ADE80; border-radius: 2px; opacity: 0.8"></span>
+            <span style="position: absolute; top: 200px; height: 20px; width: 3px; background: #FBBF24; border-radius: 2px; opacity: 0.8"></span>
+            <span style="position: absolute; top: 320px; height: 220px; width: 3px; background: #4ADE80; border-radius: 2px; opacity: 0.8"></span>
+          </div>
+<pre class="code" style="flex: 1; padding: 10px 14px 10px 0; position: relative"><span class="s">"use client"</span><span class="p">;</span>
+
+<span class="k">import</span> <span class="p">{</span> useEffect<span class="p">,</span> useState <span class="p">}</span> <span class="k">from</span> <span class="s">"react"</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span>
+  <span class="t">Elements</span><span class="p">,</span>
+  <span class="t">PaymentElement</span><span class="p">,</span>
+  <span class="t">PaymentRequestButtonElement</span><span class="p">,</span>
+  useStripe<span class="p">,</span>
+<span class="p">}</span> <span class="k">from</span> <span class="s">"@stripe/react-stripe-js"</span><span class="p">;</span>
+<span class="k">import</span> <span class="k">type</span> <span class="p">{</span> <span class="t">PaymentRequest</span> <span class="p">}</span> <span class="k">from</span> <span class="s">"@stripe/stripe-js"</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> stripePromise <span class="p">}</span> <span class="k">from</span> <span class="s">"@/lib/stripe/client"</span><span class="p">;</span>
+
+<span class="k">type</span> <span class="t">Props</span> <span class="p">=</span> <span class="p">{</span> clientSecret<span class="p">:</span> <span class="t">string</span><span class="p">;</span> amount<span class="p">:</span> <span class="t">number</span> <span class="p">};</span>
+
+<span class="k">export function</span> <span class="f">PaymentForm</span><span class="p">({</span> clientSecret<span class="p">,</span> amount <span class="p">}:</span> <span class="t">Props</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="p">(</span>
+    <span class="tag">&lt;Elements</span> stripe<span class="p">={</span>stripePromise<span class="p">}</span> options<span class="p">={{</span> clientSecret <span class="p">}}</span><span class="tag">&gt;</span>
+      <span class="tag">&lt;WalletButtons</span> amount<span class="p">={</span>amount<span class="p">}</span> <span class="tag">/&gt;</span>
+      <span class="tag">&lt;PaymentElement</span> options<span class="p">={{</span> layout<span class="p">:</span> <span class="s">"accordion"</span> <span class="p">}}</span> <span class="tag">/&gt;</span>
+    <span class="tag">&lt;/Elements&gt;</span>
+  <span class="p">);</span>
+<span class="p">}</span>
+
+<span class="k">function</span> <span class="f">WalletButtons</span><span class="p">({</span> amount <span class="p">}:</span> <span class="p">{</span> amount<span class="p">:</span> <span class="t">number</span> <span class="p">})</span> <span class="p">{</span>
+  <span class="k">const</span> stripe <span class="p">=</span> <span class="f">useStripe</span><span class="p">();</span>
+  <span class="k">const</span> <span class="p">[</span>request<span class="p">,</span> setRequest<span class="p">]</span> <span class="p">=</span> <span class="f">useState</span><span class="p">&lt;</span><span class="t">PaymentRequest</span> <span class="p">|</span> <span class="k">null</span><span class="p">&gt;(</span><span class="k">null</span><span class="p">);</span>
+
+  <span class="f">useEffect</span><span class="p">(()</span> <span class="p">=&gt;</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(!</span>stripe<span class="p">)</span> <span class="k">return</span><span class="p">;</span>
+    <span class="k">const</span> pr <span class="p">=</span> stripe<span class="p">.</span><span class="f">paymentRequest</span><span class="p">({</span>
+      country<span class="p">:</span> <span class="s">"GB"</span><span class="p">,</span>
+      currency<span class="p">:</span> <span class="s">"gbp"</span><span class="p">,</span>
+      total<span class="p">:</span> <span class="p">{</span> label<span class="p">:</span> <span class="s">"Atlas booking"</span><span class="p">,</span> amount <span class="p">},</span>
+    <span class="p">});</span>
+    pr<span class="p">.</span><span class="f">canMakePayment</span><span class="p">().</span><span class="f">then</span><span class="p">((</span>r<span class="p">)</span> <span class="p">=&gt;</span> r<span class="p">?.</span>applePay <span class="p">&amp;&amp;</span> <span class="f">setRequest</span><span class="p">(</span>pr<span class="p">));</span>
+  <span class="p">},</span> <span class="p">[</span>stripe<span class="p">,</span> amount<span class="p">]);</span>
+</pre>
+          <div style="position: absolute; left: 92px; right: 14px; top: 530px; height: 20px; background: rgba(167,139,250,0.07); border-left: 2px solid #A78BFA; pointer-events: none" aria-hidden="true"></div>
+          <div style="position: absolute; right: 18px; top: 524px; display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 7px; background: #18181B; border: 1px solid rgba(255,255,255,0.09); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); font-size: 11.5px; color: #D4D4D8">
+            <span style="width: 18px; height: 18px; border-radius: 5px; background: rgba(167,139,250,0.16); color: #C4B5FD; display: flex; align-items: center; justify-content: center">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z"></path></svg>
+            </span>
+            Claude is editing this block
+            <span style="color: #74747E">·</span>
+            <a href="Git.dc.html" style="text-decoration: none; color: #C4B5FD">View diff</a>
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Terminal" style="height: 262px; flex: none; display: flex; flex-direction: column; background: #0B0B0D; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+        <header style="height: 36px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; background: #111113; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="#4A4A52" aria-hidden="true"><circle cx="2.5" cy="3" r="1.2"></circle><circle cx="7.5" cy="3" r="1.2"></circle><circle cx="2.5" cy="7" r="1.2"></circle><circle cx="7.5" cy="7" r="1.2"></circle><circle cx="2.5" cy="11" r="1.2"></circle><circle cx="7.5" cy="11" r="1.2"></circle></svg>
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA; margin-right: 6px">Terminal</span>
+          <sc-for list="{{terms}}" as="t" hint-placeholder-count="3">
+            <button style="{{t.style}}">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: {{t.dot}}"></span>
+              {{t.name}}
+            </button>
+          </sc-for>
+          <button aria-label="New terminal" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+          <span style="flex: 1"></span>
+          <button aria-label="Split terminal" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M12 4v16"></path></svg>
+          </button>
+          <button aria-label="Maximize terminal" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
+          </button>
+          <button aria-label="Terminal docked bottom — change position" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="3" y="14" width="18" height="6" rx="1.5" fill="currentColor" fill-opacity="0.45"></rect></svg>
+          </button>
+        </header>
+        <div style="flex: 1; min-height: 0; display: flex">
+          <div style="flex: 1; min-width: 0; padding: 8px 12px; overflow: hidden; border-right: 1px solid rgba(255,255,255,0.06)">
+<pre class="term"><span style="color:#A78BFA">✻</span> <span style="color:#F4F4F5;font-weight:600">Claude Code</span>  <span style="color:#74747E">~/Developer/atlas-web</span>
+
+<span style="color:#A78BFA">&gt;</span> <span style="color:#F4F4F5">add Apple Pay to the checkout flow, server-side intent only</span>
+
+<span style="color:#4ADE80">⏺</span> <span style="color:#F4F4F5;font-weight:600">Write</span><span style="color:#8A8A93">(src/lib/stripe/intent.ts)</span>  <span style="color:#4ADE80">+24</span>
+<span style="color:#FBBF24">⏺</span> <span style="color:#F4F4F5;font-weight:600">Update</span><span style="color:#8A8A93">(src/components/PaymentForm.tsx)</span>  <span style="color:#4ADE80">+24</span> <span style="color:#F87171">−6</span>
+  <span style="color:#4ADE80">☒</span> <span style="color:#8A8A93">Server-side PaymentIntent helper</span>
+  <span style="color:#4ADE80">☒</span> <span style="color:#8A8A93">Pass client secret from checkout page</span>
+  <span style="color:#FBBF24">☐</span> Render PaymentRequestButton when Apple Pay is available
+  <span style="color:#3F3F46">☐</span> Add success route and tests
+
+<span style="color:#A78BFA">✶ Wiring wallet buttons…</span> <span style="color:#74747E">48s · ↓ 2.1k tokens · esc to interrupt</span></pre>
+          </div>
+          <div style="width: 38%; flex: none; padding: 8px 12px; overflow: hidden">
+<pre class="term"><span style="color:#22D3EE">atlas-web</span> <span style="color:#8A8A93">on</span> <span style="color:#A78BFA">⎇ feat/checkout-v2</span> <span style="color:#C8F560">❯</span> pnpm dev
+
+   <span style="color:#F4F4F5;font-weight:600">▲ Next.js 15.1.2</span> <span style="color:#8A8A93">(Turbopack)</span>
+   - Local:   http://localhost:3000
+
+ <span style="color:#4ADE80">✓</span> Ready in 1182ms
+ <span style="color:#4ADE80">✓</span> Compiled /checkout in 2.4s
+ <span style="color:#60A5FA">GET</span>  /checkout <span style="color:#4ADE80">200</span> <span style="color:#74747E">in 312ms</span>
+ <span style="color:#A78BFA">POST</span> /api/payment-intent <span style="color:#4ADE80">200</span> <span style="color:#74747E">in 488ms</span>
+ <span style="color:#FBBF24">⚠</span> <span style="color:#FBBF24">Fast Refresh did a full reload</span>
+ <span style="color:#4ADE80">✓</span> Compiled in 164ms</pre>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section aria-label="Source control" style="width: 300px; flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: visible; position: relative">
+      <header style="height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <svg width="10" height="14" viewBox="0 0 10 14" fill="#4A4A52" aria-hidden="true"><circle cx="2.5" cy="3" r="1.2"></circle><circle cx="7.5" cy="3" r="1.2"></circle><circle cx="2.5" cy="7" r="1.2"></circle><circle cx="7.5" cy="7" r="1.2"></circle><circle cx="2.5" cy="11" r="1.2"></circle><circle cx="7.5" cy="11" r="1.2"></circle></svg>
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #A1A1AA">Source Control</span>
+        <span style="font-size: 10px; font-weight: 600; color: #A1A1AA; background: rgba(255,255,255,0.06); border-radius: 99px; padding: 1px 6px">7</span>
+        <span style="flex: 1"></span>
+        <button aria-label="Refresh" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: #8A8A93">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>
+        </button>
+        <button aria-label="Source Control docked right — change position" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.08); border: 0; border-radius: 6px; color: #F4F4F5">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="15" y="4" width="6" height="16" rx="1.5" fill="currentColor" fill-opacity="0.45"></rect></svg>
+        </button>
+      </header>
+
+      <div role="menu" aria-label="Move Source Control" style="position: absolute; top: 34px; right: 6px; width: 200px; z-index: 5; padding: 5px; background: #1A1A1D; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)">
+        <div style="padding: 5px 8px 4px; font-size: 10.5px; font-weight: 600; color: #8A8A93; letter-spacing: 0.04em">Dock panel</div>
+        <sc-for list="{{dockMenu}}" as="m" hint-placeholder-count="4">
+          <div role="menuitem" style="{{m.style}}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="{{m.x}}" y="{{m.y}}" width="{{m.w}}" height="{{m.h}}" rx="1.5" fill="currentColor" fill-opacity="0.45"></rect></svg>
+            <span style="flex: 1">{{m.label}}</span>
+            <span style="font-size: 11px; color: {{m.keyColor}}">{{m.key}}</span>
+          </div>
+        </sc-for>
+        <div style="height: 1px; background: rgba(255,255,255,0.07); margin: 4px 2px"></div>
+        <div role="menuitem" style="height: 28px; display: flex; align-items: center; gap: 9px; padding: 0 8px; border-radius: 6px; font-size: 12.5px; color: #A1A1AA">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10 10 0 0 1 21 12a10 10 0 0 1-2.2 3.3M6.1 6.1A10 10 0 0 0 3 12a10 10 0 0 0 13.9 5.9"></path></svg>
+          <span style="flex: 1">Hide panel</span>
+          <span style="font-size: 11px; color: #74747E">⌥⌘G</span>
+        </div>
+      </div>
+
+      <div style="padding: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <label for="commitmsg" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Commit message</label>
+        <textarea id="commitmsg" rows="2" style="resize: none; box-sizing: border-box; width: 100%; padding: 8px 10px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12.5px; line-height: 1.45; outline: none">Add Apple Pay wallet buttons to checkout</textarea>
+        <div style="display: flex; gap: 6px">
+          <button style="flex: 1; height: 30px; display: flex; align-items: center; justify-content: center; gap: 8px; background: {{accent}}; border: 0; border-radius: 8px; color: #09090B; font: inherit; font-size: 12.5px; font-weight: 600">
+            Commit 2 files
+            <span style="font-size: 10.5px; opacity: 0.55">⌘↩</span>
+          </button>
+          <button aria-label="Push 2 commits" style="height: 30px; display: flex; align-items: center; gap: 5px; padding: 0 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12px; font-weight: 500">↑ 2</button>
+        </div>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 6px">
+        <sc-for list="{{changes}}" as="g" hint-placeholder-count="2">
+          <div style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 6px; margin-top: 4px; font-size: 11px; font-weight: 600; color: #8A8A93">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+            <span style="flex: 1">{{g.title}}</span>
+            <span style="font-weight: 500; color: #74747E">{{g.action}}</span>
+          </div>
+          <sc-for list="{{g.items}}" as="c" hint-placeholder-count="3">
+            <div style="{{c.row}}">
+              <span style="width: 16px; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; font-weight: 700; color: {{c.color}}; text-align: center">{{c.st}}</span>
+              <span style="color: #F4F4F5; white-space: nowrap">{{c.name}}</span>
+              <span style="flex: 1; min-width: 0; color: #74747E; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.dir}}</span>
+              <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; color: #4ADE80">{{c.add}}</span>
+              <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; color: #F87171">{{c.del}}</span>
+            </div>
+          </sc-for>
+        </sc-for>
+      </div>
+      <div style="flex: none; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 11px; font-weight: 600; color: #8A8A93">Recent commits</div>
+        <sc-for list="{{commits}}" as="c" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0">
+            <span style="width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid #A78BFA; flex: none; box-sizing: border-box"></span>
+            <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #D4D4D8">{{c.msg}}</span>
+            <span style="font-size: 11px; color: #74747E">{{c.when}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </div>
+
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80"></span>2 running</span>
+    <span style="color: #A78BFA">⎇ feat/checkout-v2 ↑2</span>
+    <span style="flex: 1"></span>
+    <span>Ln 32, Col 18</span>
+    <span>TypeScript JSX</span>
+    <span>Layout: Code</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const OPEN = 'M6 9l6 6 6-6', CLOSED = 'M9 6l6 6-6 6';
+    const FOLDER = 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z';
+    const FILE = 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5';
+    const ST = { M: '#FBBF24', A: '#4ADE80', U: '#22D3EE', D: '#F87171' };
+    const node = (depth, name, isDir, o) => {
+      o = o || {};
+      return {
+        name, st: o.st || '', stc: ST[o.st] || '#74747E',
+        chev: isDir ? (o.open ? OPEN : CLOSED) : '',
+        icon: isDir ? FOLDER : FILE,
+        ic: isDir ? '#8A8A93' : (o.ic || '#8A8A93'),
+        fill: isDir ? 'rgba(113,113,122,0.18)' : 'none',
+        color: o.dim ? '#74747E' : (o.sel ? '#F4F4F5' : '#D4D4D8'),
+        indent: 'width: ' + (depth * 12) + 'px; flex: none; align-self: stretch; ' + (depth ? 'background: linear-gradient(to right, transparent ' + (depth * 12 - 7) + 'px, rgba(255,255,255,0.06) ' + (depth * 12 - 7) + 'px, rgba(255,255,255,0.06) ' + (depth * 12 - 6) + 'px, transparent ' + (depth * 12 - 6) + 'px);' : ''),
+        row: 'height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 6px 0 4px; border-radius: 6px; font-size: 12.5px; ' + (o.sel ? 'background: rgba(167,139,250,0.12); box-shadow: inset 0 0 0 1px rgba(167,139,250,0.22);' : '')
+      };
+    };
+    const tab = (name, dot, st, sel) => ({
+      name, dot, st, sel: sel ? 'true' : 'false', stc: ST[st] || '#74747E',
+      style: 'position: relative; height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 10px 0 11px; border: 0; border-radius: 8px 8px 0 0; font: inherit; font-size: 12.5px; ' +
+        (sel ? 'background: #0E0E10; color: #F4F4F5; font-weight: 500; box-shadow: inset 1px 0 0 rgba(255,255,255,0.06), inset -1px 0 0 rgba(255,255,255,0.06); margin-bottom: -1px; height: 33px;' : 'background: transparent; color: #8A8A93;'),
+      bar: sel ? 'position: absolute; left: 10px; right: 10px; top: 0; height: 2px; border-radius: 0 0 2px 2px; background: #A78BFA' : 'display: none',
+      close: sel ? 'margin-left: 2px; color: #8A8A93; font-size: 14px; line-height: 1' : 'margin-left: 2px; color: transparent; font-size: 14px; line-height: 1'
+    });
+    const lines = [];
+    for (let i = 1; i <= 38; i++) lines.push(String(i));
+    const term = (name, dot, sel) => ({
+      name, dot,
+      style: 'height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 9px; border: 0; border-radius: 6px; font: inherit; font-size: 11.5px; font-weight: 500; ' +
+        (sel ? 'background: rgba(255,255,255,0.08); color: #F4F4F5;' : 'background: transparent; color: #8A8A93;')
+    });
+    const dm = (label, key, x, y, w, h, on) => ({
+      label, key, x, y, w, h, keyColor: on ? accent : '#74747E',
+      style: 'height: 28px; display: flex; align-items: center; gap: 9px; padding: 0 8px; border-radius: 6px; font-size: 12.5px; ' + (on ? 'background: rgba(255,255,255,0.07); color: #F4F4F5;' : 'color: #A1A1AA;')
+    });
+    const ch = (st, name, dir, add, del) => ({
+      st, name, dir, add: add ? '+' + add : '', del: del ? '−' + del : '', color: ST[st],
+      row: 'height: 26px; display: flex; align-items: center; gap: 7px; padding: 0 8px 0 4px; border-radius: 6px; font-size: 12.5px; ' + (name === 'PaymentForm.tsx' ? 'background: rgba(255,255,255,0.05);' : '')
+    });
+    return {
+      accent,
+      lineNumbers: lines.join('\n'),
+      tree: [
+        node(0, 'src', true, { open: true }),
+        node(1, 'app', true, { open: true }),
+        node(2, 'checkout', true, { open: true, st: 'M' }),
+        node(3, 'success', true, { st: 'U' }),
+        node(3, 'page.tsx', false, { st: 'M', ic: '#60A5FA' }),
+        node(3, 'loading.tsx', false, { ic: '#60A5FA' }),
+        node(2, 'layout.tsx', false, { ic: '#60A5FA' }),
+        node(1, 'components', true, { open: true }),
+        node(2, 'CartSummary.tsx', false, { ic: '#60A5FA' }),
+        node(2, 'PaymentForm.tsx', false, { st: 'M', sel: true, ic: '#60A5FA' }),
+        node(1, 'lib', true, { open: true }),
+        node(2, 'legacy', true, { st: 'D' }),
+        node(2, 'stripe', true, { open: true, st: 'A' }),
+        node(3, 'intent.ts', false, { st: 'A', ic: '#60A5FA' }),
+        node(2, 'useCartTotals.ts', false, { ic: '#60A5FA' }),
+        node(0, 'public', true),
+        node(0, 'docs', true),
+        node(0, '.env.local', false, { dim: true }),
+        node(0, 'CLAUDE.md', false, { ic: '#A78BFA' }),
+        node(0, 'docker-compose.yml', false),
+        node(0, 'package.json', false, { st: 'M', ic: '#FBBF24' }),
+        node(0, 'pnpm-lock.yaml', false, { st: 'M' }),
+        node(0, 'tsconfig.json', false, { ic: '#FBBF24' })
+      ],
+      tabs: [
+        tab('PaymentForm.tsx', '#60A5FA', 'M', true),
+        tab('page.tsx', '#60A5FA', 'M', false),
+        tab('intent.ts', '#60A5FA', 'A', false),
+        tab('CLAUDE.md', '#A78BFA', '', false)
+      ],
+      terms: [term('✦ Claude Code', '#4ADE80', true), term('dev server', '#4ADE80', false), term('zsh', '#52525B', false)],
+      dockMenu: [
+        dm('Left', '⌃⌥←', 3, 4, 6, 16, false),
+        dm('Right', '⌃⌥→', 15, 4, 6, 16, true),
+        dm('Bottom', '⌃⌥↓', 3, 14, 18, 6, false),
+        dm('Float', '⌃⌥F', 7, 8, 10, 8, false)
+      ],
+      changes: [
+        { title: 'Staged', action: 'Unstage all', items: [ch('A', 'intent.ts', 'src/lib/stripe', 24, 0), ch('M', 'PaymentForm.tsx', 'src/components', 24, 6)] },
+        { title: 'Changes', action: 'Stage all', items: [
+          ch('M', 'page.tsx', 'src/app/checkout', 9, 3), ch('D', 'cart.ts', 'src/lib/legacy', 0, 58),
+          ch('M', 'package.json', '', 2, 1), ch('M', 'pnpm-lock.yaml', '', 41, 12), ch('U', 'page.tsx', 'src/app/checkout/success', 18, 0)
+        ] }
+      ],
+      commits: [
+        { msg: 'Add payment intent endpoint', when: '2h' },
+        { msg: 'Refactor cart totals into hook', when: '5h' },
+        { msg: 'Merge PR #212 fix-tax-rounding', when: '1d' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

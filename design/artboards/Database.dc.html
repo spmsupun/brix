@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — Database browser</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="screen" title="Databases" preset="none" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" variant="rail" active="databases" accent="{{accent}}" hint-size="56px,822px"></dc-import>
+
+    <section aria-label="Database objects" style="width: 256px; flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <div style="padding: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <button style="height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 10px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.08); border-radius: 9px; color: #F4F4F5; font: inherit; text-align: left">
+          <span style="width: 24px; height: 24px; border-radius: 7px; background: rgba(125,167,255,0.14); color: #93B4FF; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center">PG</span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+            <span style="font-size: 12.5px; font-weight: 600">atlas_dev</span>
+            <span style="font-size: 10.5px; color: #8A8A93">PostgreSQL 16.4 · localhost</span>
+          </span>
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80"></span>
+        </button>
+        <label style="height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 9px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; color: #8A8A93">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <input placeholder="Filter objects" aria-label="Filter objects" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font: inherit; font-size: 12px">
+        </label>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 6px">
+        <sc-for list="{{tree}}" as="t" hint-placeholder-count="18">
+          <div style="{{t.row}}">
+            <span style="width: {{t.pad}}; flex: none"></span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#74747E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="{{t.chev}}"></path></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{t.ic}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="{{t.icon}}"></path></svg>
+            <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{t.name}}</span>
+            <span style="font-size: 10.5px; color: #74747E; font-variant-numeric: tabular-nums">{{t.meta}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-label="users table" style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <header style="height: 46px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 12px; color: #8A8A93">public.</span><span style="font-weight: 600; font-size: 14px; margin-left: -12px">users</span>
+        <span style="font-size: 11.5px; color: #8A8A93">12,482 rows · 4.8 MB</span>
+        <span style="flex: 1"></span>
+        <div role="tablist" aria-label="Table view" style="display: flex; gap: 2px; padding: 2px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px">
+          <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+            <a href="{{t.href}}" role="tab" aria-selected="{{t.sel}}" style="{{t.style}}">{{t.label}}</a>
+          </sc-for>
+        </div>
+      </header>
+      <div style="height: 44px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11px; font-weight: 600; color: #B4A1FF">WHERE</span>
+        <label style="flex: 1; height: 28px; display: flex; align-items: center; padding: 0 10px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.07); border-radius: 7px">
+          <input aria-label="Filter rows" value="plan = 'enterprise' and last_login_at > now() - interval '30 days'" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11.5px">
+        </label>
+        <button style="height: 28px; padding: 0 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; color: #F4F4F5; font: inherit; font-size: 12px">Apply</button>
+        <button style="height: 28px; padding: 0 10px; background: transparent; border: 0; border-radius: 7px; color: #A1A1AA; font: inherit; font-size: 12px">Columns · 8</button>
+        <button style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: {{accent}}; border: 0; border-radius: 7px; color: #09090B; font: inherit; font-size: 12px; font-weight: 600">+ Row</button>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow: auto">
+        <div style="min-width: 1000px">
+          <div style="height: 40px; display: flex; align-items: stretch; background: #151517; border-bottom: 1px solid rgba(255,255,255,0.07); position: sticky; top: 0">
+            <span style="width: 44px; flex: none; border-right: 1px solid rgba(255,255,255,0.05)"></span>
+            <sc-for list="{{cols}}" as="c" hint-placeholder-count="8">
+              <div style="{{c.cell}}">
+                <span style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #F4F4F5">
+                  <span style="{{c.keyStyle}}">{{c.key}}</span>{{c.name}}<span style="color: {{accent}}; font-size: 10px">{{c.sort}}</span>
+                </span>
+                <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10px; color: #74747E">{{c.type}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="16">
+            <div style="{{r.style}}">
+              <span style="width: 44px; flex: none; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; box-sizing: border-box; font-size: 10.5px; color: #52525B; font-variant-numeric: tabular-nums">{{r.n}}</span>
+              <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="8">
+                <span style="{{c.style}}">{{c.v}}</span>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <footer style="height: 38px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11.5px; color: #8A8A93">
+        <span>Rows 1–50 of 212 matching · 18 ms</span>
+        <span style="flex: 1"></span>
+        <span style="font-variant-numeric: tabular-nums">Page 1 of 5</span>
+        <button aria-label="Previous page" style="width: 26px; height: 26px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; color: #52525B; font: inherit">‹</button>
+        <button aria-label="Next page" style="width: 26px; height: 26px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 6px; color: #F4F4F5; font: inherit">›</button>
+      </footer>
+    </section>
+  </div>
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80"></span>atlas_dev connected</span>
+    <span>Read-write · Development</span>
+    <span style="flex: 1"></span>
+    <span>Sidebar collapsed to rail for more room</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const OPEN = 'M6 9l6 6 6-6', CLOSED = 'M9 6l6 6-6 6';
+    const I = {
+      schema: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6',
+      folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      table: 'M3 5h18v14H3zM3 10h18M9 10v9',
+      view: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+      fn: 'M10 4c-2 0-3 1-3 3v10c0 2-1 3-3 3M5 10h6'
+    };
+    const t = (depth, name, kind, o) => {
+      o = o || {};
+      return {
+        name, pad: (depth * 12) + 'px', meta: o.meta || '',
+        chev: o.dir ? (o.open ? OPEN : CLOSED) : '', icon: I[kind],
+        ic: o.sel ? accent : (kind === 'table' ? '#A1A1AA' : '#74747E'),
+        row: 'height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; border-radius: 6px; font-size: 12.5px; ' +
+          (o.sel ? 'background: rgba(255,255,255,0.07); color: #F4F4F5; font-weight: 500; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);' : 'color: #D4D4D8;')
+      };
+    };
+    const tab = (label, sel, href) => ({
+      label, href, sel: sel ? 'true' : 'false',
+      style: 'height: 24px; display: flex; align-items: center; padding: 0 10px; border-radius: 6px; font-size: 11.5px; font-weight: 500; text-decoration: none; ' +
+        (sel ? 'background: rgba(255,255,255,0.10); color: #F4F4F5;' : 'color: #8A8A93;')
+    });
+    const COLS = [
+      ['id', 'uuid', 110, 'PK'], ['email', 'varchar(255)', 230, ''], ['full_name', 'text', 150, ''], ['role', 'user_role', 96, ''],
+      ['plan', 'text', 100, ''], ['org_id', 'uuid', 110, 'FK'], ['created_at', 'timestamptz', 180, ''], ['last_login_at', 'timestamptz', 180, '']
+    ];
+    const cols = COLS.map(([name, type, w, key]) => ({
+      name, type, key, sort: name === 'last_login_at' ? '↓' : '',
+      keyStyle: key ? 'font-size: 8.5px; font-weight: 800; color: ' + (key === 'PK' ? '#FBBF24' : '#60A5FA') + '; border: 1px solid ' + (key === 'PK' ? 'rgba(251,191,36,0.35)' : 'rgba(96,165,250,0.35)') + '; border-radius: 3px; padding: 0 3px' : 'display: none',
+      cell: 'width: ' + w + 'px; flex: none; box-sizing: border-box; padding: 0 10px; display: flex; flex-direction: column; justify-content: center; gap: 1px; border-right: 1px solid rgba(255,255,255,0.05)'
+    }));
+    const first = ['Maya', 'Liam', 'Aisha', 'Noah', 'Sofia', 'Kenji', 'Elena', 'Omar', 'Priya', 'Lucas', 'Hannah', 'Mateo', 'Zara', 'Felix', 'Ines', 'Tom'];
+    const last = ['Chen', 'Okafor', 'Patel', 'Muller', 'Rossi', 'Tanaka', 'Garcia', 'Haddad', 'Novak', 'Silva', 'Kim', 'Andersen', 'Moreau', 'Fischer', 'Costa', 'Reid'];
+    const domains = ['acme.io', 'northwind.dev', 'globex.com', 'initech.co', 'hooli.xyz'];
+    const roles = ['owner', 'admin', 'member', 'member', 'viewer'];
+    const rows = [];
+    for (let i = 0; i < 18; i++) {
+      const f = first[(i * 7 + 3) % 16], l = last[(i * 11 + 5) % 16];
+      const vals = [
+        (2654435761 * (i + 1) >>> 0).toString(16).padStart(8, '0').slice(0, 8) + '-…',
+        f.toLowerCase() + '.' + l.toLowerCase() + '@' + domains[i % 5],
+        i === 6 ? 'NULL' : f + ' ' + l,
+        roles[i % 5], 'enterprise',
+        i % 4 === 0 ? 'NULL' : ((40503 * (i + 3)) >>> 0).toString(16).padStart(8, '0') + '-…',
+        '2025-' + String(1 + (i * 7) % 12).padStart(2, '0') + '-' + String(1 + (i * 5) % 28).padStart(2, '0') + ' 09:' + String((i * 13) % 60).padStart(2, '0'),
+        '2026-10-' + String(27 - Math.floor(i / 2)).padStart(2, '0') + ' ' + String(8 + i % 10).padStart(2, '0') + ':' + String((i * 7) % 60).padStart(2, '0')
+      ];
+      rows.push({
+        n: i + 1,
+        style: 'height: 30px; display: flex; align-items: stretch; border-bottom: 1px solid rgba(255,255,255,0.04); ' + (i === 2 ? 'background: rgba(255,255,255,0.05); box-shadow: inset 2px 0 0 ' + accent + ';' : ''),
+        cells: vals.map((v, c) => ({
+          v,
+          style: 'width: ' + COLS[c][2] + 'px; flex: none; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid rgba(255,255,255,0.04); ' +
+            (c === 0 || c === 5 || c >= 6 ? "font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11.5px; " : 'font-size: 12.5px; ') +
+            (v === 'NULL' ? 'color: #52525B; font-style: italic;' : (c === 3 ? 'color: #C4B5FD;' : 'color: #E4E4E7;'))
+        }))
+      });
+    }
+    return {
+      accent,
+      tree: [
+        t(0, 'atlas_dev', 'schema', { dir: true, open: true }),
+        t(1, 'public', 'folder', { dir: true, open: true }),
+        t(2, 'Tables', 'folder', { dir: true, open: true, meta: '7' }),
+        t(3, 'users', 'table', { sel: true, meta: '12.5k' }),
+        t(3, 'organizations', 'table', { meta: '1.2k' }),
+        t(3, 'projects', 'table', { meta: '3.4k' }),
+        t(3, 'bookings', 'table', { meta: '96k' }),
+        t(3, 'payments', 'table', { meta: '88k' }),
+        t(3, 'sessions', 'table', { meta: '5.9k' }),
+        t(3, 'audit_log', 'table', { meta: '771k' }),
+        t(2, 'Views', 'folder', { dir: true, open: true, meta: '2' }),
+        t(3, 'active_users', 'view'),
+        t(3, 'monthly_revenue', 'view'),
+        t(2, 'Functions', 'folder', { dir: true, meta: '1' }),
+        t(1, 'auth', 'folder', { dir: true, meta: '2' }),
+        t(0, 'billing', 'schema', { dir: true, meta: 'MySQL' }),
+        t(0, 'analytics.sqlite', 'schema', { dir: true, meta: 'SQLite' })
+      ],
+      tabs: [tab('Data', true, 'Database.dc.html'), tab('Structure', false, 'Database.dc.html'), tab('Indexes', false, 'Database.dc.html'), tab('SQL', false, 'SQL.dc.html')],
+      cols, rows
+    };
+  }
+}
+</script>
+</body>
+</html>

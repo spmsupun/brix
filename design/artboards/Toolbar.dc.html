@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Toolbar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+</style>
+</helmet>
+<header style="width: 100%; height: 52px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 18px; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <div style="display: flex; align-items: center; gap: 8px; flex: none" aria-hidden="true">
+    <span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57; display: block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E; display: block"></span>
+    <span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840; display: block"></span>
+  </div>
+  <button aria-label="Toggle sidebar" style="margin-left: 10px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 7px; color: #A1A1AA; flex: none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M9 4v16"></path></svg>
+  </button>
+  <sc-if value="{{isProject}}" hint-placeholder-val="{{ true }}">
+    <button aria-label="Switch project" style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; flex: none">
+      <span style="width: 20px; height: 20px; border-radius: 6px; background: {{hueTint}}; border: 1px solid {{hueLine}}; color: {{hue}}; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center">{{initials}}</span>
+      <span style="font-weight: 600">{{title}}</span>
+      <span style="color: #5E5E66">/</span>
+      <span style="font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11.5px; color: #A1A1AA">⎇ {{branch}}</span>
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#8A8A93" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"></path></svg>
+    </button>
+  </sc-if>
+  <sc-if value="{{isScreen}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; align-items: center; gap: 8px; flex: none; padding-left: 4px">
+      <span style="width: 8px; height: 8px; border-radius: 2px; background: {{accent}}; transform: rotate(45deg); display: block"></span>
+      <span style="font-weight: 600">{{title}}</span>
+    </div>
+  </sc-if>
+  <div style="flex: 1; min-width: 20px"></div>
+  <button style="flex: 0 1 400px; min-width: 180px; height: 30px; display: flex; align-items: center; gap: 9px; padding: 0 6px 0 11px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #8A8A93; font: inherit; font-size: 12.5px; text-align: left">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+    <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Search projects, files, hosts, actions…</span>
+    <span style="font-size: 10.5px; font-weight: 500; color: #8A8A93; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); border-radius: 5px; padding: 1px 6px">⌘K</span>
+  </button>
+  <div style="flex: 1; min-width: 20px"></div>
+  <div role="group" aria-label="Layout preset" style="display: flex; align-items: center; gap: 2px; padding: 2px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; flex: none">
+    <sc-for list="{{presets}}" as="p" hint-placeholder-count="4">
+      <button style="{{p.style}}">{{p.label}}</button>
+    </sc-for>
+  </div>
+  <div role="group" aria-label="Panels" style="display: flex; align-items: center; gap: 2px; flex: none">
+    <button aria-label="Toggle left dock" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 7px; color: {{dockLColor}}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="3" y="4" width="6" height="16" rx="1.5" fill="currentColor" fill-opacity="0.35"></rect></svg>
+    </button>
+    <button aria-label="Toggle bottom dock" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 7px; color: {{dockBColor}}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="3" y="14" width="18" height="6" rx="1.5" fill="currentColor" fill-opacity="0.35"></rect></svg>
+    </button>
+    <button aria-label="Toggle right dock" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 7px; color: {{dockRColor}}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><rect x="15" y="4" width="6" height="16" rx="1.5" fill="currentColor" fill-opacity="0.35"></rect></svg>
+    </button>
+  </div>
+  <button aria-label="Add" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: {{accent}}; border: 0; border-radius: 8px; color: #09090B; flex: none">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+  </button>
+</header>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["project","screen"],"default":"project"},"title":{"editor":"text","default":"atlas-web"},"branch":{"editor":"text","default":"feat/checkout-v2"},"initials":{"editor":"text","default":"AW"},"hue":{"editor":"color","default":"#A78BFA"},"preset":{"editor":"enum","options":["code","agent","review","focus","none"],"default":"code"},"dockL":{"editor":"boolean","default":true},"dockR":{"editor":"boolean","default":true},"dockB":{"editor":"boolean","default":true},"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":52}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'project';
+    const hue = this.props.hue ?? '#A78BFA';
+    const accent = this.props.accent ?? '#C8F560';
+    const preset = this.props.preset ?? 'code';
+    const on = (v) => (v ? '#F4F4F5' : '#5E5E66');
+    const hex = hue.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    const presets = [['code', 'Code'], ['agent', 'Agent'], ['review', 'Review'], ['focus', 'Focus']].map(([id, label]) => ({
+      label,
+      style: 'height: 24px; padding: 0 9px; border: 0; border-radius: 6px; font: inherit; font-size: 11.5px; font-weight: 600; ' +
+        (id === preset ? 'background: rgba(255,255,255,0.10); color: #F4F4F5;' : 'background: transparent; color: #8A8A93;')
+    }));
+    return {
+      isProject: mode === 'project',
+      isScreen: mode !== 'project',
+      title: this.props.title ?? 'atlas-web',
+      branch: this.props.branch ?? 'feat/checkout-v2',
+      initials: this.props.initials ?? 'AW',
+      hue,
+      hueTint: 'rgba(' + r + ',' + g + ',' + b + ',0.16)',
+      hueLine: 'rgba(' + r + ',' + g + ',' + b + ',0.38)',
+      accent,
+      presets: mode === 'project' ? presets : [],
+      dockLColor: on(this.props.dockL ?? true),
+      dockRColor: on(this.props.dockR ?? true),
+      dockBColor: on(this.props.dockB ?? true)
+    };
+  }
+}
+</script>
+</body>
+</html>

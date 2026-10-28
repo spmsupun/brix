@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sidebar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+</style>
+</helmet>
+<nav aria-label="Sidebar" style="width: {{width}}; height: 822px; box-sizing: border-box; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4); font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <sc-if value="{{isFull}}" hint-placeholder-val="{{ true }}">
+    <div style="flex: 1; min-height: 0; overflow: hidden; padding: 10px 8px; display: flex; flex-direction: column; gap: 12px">
+      <sc-for list="{{sections}}" as="sec" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column; gap: 1px">
+          <div style="height: 22px; display: flex; align-items: center; gap: 5px; padding: 0 8px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: #8A8A93">
+            <span style="flex: 1">{{sec.title}}</span>
+            <sc-if value="{{sec.add}}" hint-placeholder-val="{{ false }}">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8A8A93" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            </sc-if>
+          </div>
+          <sc-for list="{{sec.items}}" as="item" hint-placeholder-count="3">
+            <a href="{{item.href}}" style="{{item.rowStyle}}">
+              <span style="{{item.leadStyle}}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{item.iconColor}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{item.svgStyle}}"><path d="{{item.icon}}"></path></svg>
+                {{item.mark}}
+              </span>
+              <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{item.label}}</span>
+              <span style="{{item.badgeStyle}}">{{item.badge}}</span>
+            </a>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <div style="flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border-top: 1px solid rgba(255,255,255,0.06)">
+      <button style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px; background: {{accent}}; border: 0; border-radius: 7px; color: #09090B; font: inherit; font-size: 12px; font-weight: 600">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        Add
+      </button>
+      <a href="Customize.dc.html" aria-label="Customize layout and appearance" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 7px; color: #A1A1AA">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
+      </a>
+    </div>
+  </sc-if>
+  <sc-if value="{{isRail}}" hint-placeholder-val="{{ false }}">
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0">
+      <sc-for list="{{railNav}}" as="item" hint-placeholder-count="7">
+        <a href="{{item.href}}" aria-label="{{item.label}}" style="{{item.railStyle}}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{item.iconColor}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{item.icon}}"></path></svg>
+        </a>
+      </sc-for>
+      <div style="width: 26px; height: 1px; background: rgba(255,255,255,0.08); margin: 8px 0"></div>
+      <sc-for list="{{railProjects}}" as="p" hint-placeholder-count="4">
+        <a href="ProjectWorkspace.dc.html" aria-label="{{p.name}}" style="{{p.ring}}">
+          <span style="{{p.style}}">{{p.initials}}</span>
+        </a>
+      </sc-for>
+      <div style="flex: 1"></div>
+      <a href="Customize.dc.html" aria-label="Customize" style="width: 36px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #A1A1AA">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
+      </a>
+    </div>
+  </sc-if>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"enum","options":["overview","projects","recent","terminals","git","databases","ssh","servers","dbconn","atlas-web","atlas-api"],"default":"overview"},"variant":{"editor":"enum","options":["full","rail"],"default":"full"},"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":232,"height":822}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = this.props.active ?? 'overview';
+    const variant = this.props.variant ?? 'full';
+    const accent = this.props.accent ?? '#C8F560';
+    const I = {
+      overview: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+      projects: 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8',
+      recent: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
+      terminals: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM7 10l3 2-3 2M12 15h5',
+      git: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9',
+      databases: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+      ssh: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z',
+      servers: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+      dbconn: 'M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1'
+    };
+    const href = {
+      overview: 'Main.dc.html', projects: 'Projects.dc.html', recent: 'Projects.dc.html', terminals: 'Terminals.dc.html',
+      git: 'Git.dc.html', databases: 'Database.dc.html', ssh: 'SSH.dc.html', servers: 'SSH.dc.html', dbconn: 'Database.dc.html'
+    };
+    const base = 'height: 28px; display: flex; align-items: center; gap: 9px; padding: 0 8px; border-radius: 7px; text-decoration: none; ';
+    const badge = (color) => 'font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: ' + color + ';';
+    const nav = (id, label, b, bColor) => {
+      const on = id === active;
+      return {
+        id, label, badge: b || '', href: href[id], icon: I[id], mark: '',
+        iconColor: on ? accent : '#A1A1AA',
+        svgStyle: 'display: block',
+        leadStyle: 'width: 18px; display: flex; align-items: center; justify-content: center; flex: none',
+        badgeStyle: badge(bColor || '#8A8A93'),
+        rowStyle: base + (on ? 'background: rgba(255,255,255,0.07); color: #F4F4F5; font-weight: 500; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);' : 'color: #A1A1AA;'),
+        railStyle: 'width: 36px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px; ' + (on ? 'background: rgba(255,255,255,0.08);' : '')
+      };
+    };
+    const proj = (id, label, initials, hue, tint, meta) => {
+      const on = id === active;
+      return {
+        id, label, badge: meta, href: 'ProjectWorkspace.dc.html', icon: '', mark: initials,
+        iconColor: hue, svgStyle: 'display: none',
+        leadStyle: 'width: 18px; height: 18px; border-radius: 5px; background: ' + tint + '; color: ' + hue + '; font-size: 8px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none',
+        badgeStyle: badge(meta ? '#FBBF24' : '#8A8A93'),
+        rowStyle: base + (on ? 'background: rgba(255,255,255,0.07); color: #F4F4F5; font-weight: 500; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);' : 'color: #D4D4D8;')
+      };
+    };
+    const host = (label, dot, tag, tagColor, link) => ({
+      label, badge: tag, href: link, icon: '', mark: '', iconColor: dot, svgStyle: 'display: none',
+      leadStyle: 'width: 18px; display: flex; align-items: center; justify-content: center; flex: none; ' +
+        '--d: 0; background: radial-gradient(circle, ' + dot + ' 0 3px, transparent 3.5px); height: 18px',
+      badgeStyle: 'font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; color: ' + tagColor + ';',
+      rowStyle: base + 'color: #A1A1AA;'
+    });
+    const sections = [
+      { title: 'WORKSPACE', add: false, items: [nav('overview', 'Overview'), nav('projects', 'Projects', '6'), nav('recent', 'Recent Files')] },
+      { title: 'DEVELOPMENT', add: false, items: [nav('terminals', 'Terminals', '3', '#4ADE80'), nav('git', 'Git', '7', '#FBBF24'), nav('databases', 'Databases')] },
+      { title: 'INFRASTRUCTURE', add: false, items: [nav('ssh', 'SSH Connections', '2', '#4ADE80'), nav('servers', 'Servers'), nav('dbconn', 'Database Connections')] },
+      { title: 'PROJECTS', add: true, items: [
+        proj('atlas-web', 'atlas-web', 'AW', '#A78BFA', 'rgba(167,139,250,0.16)', '7'),
+        proj('atlas-api', 'atlas-api', 'AA', '#22D3EE', 'rgba(34,211,238,0.14)', ''),
+        proj('billing', 'billing-service', 'BS', '#FB923C', 'rgba(251,146,60,0.15)', '2'),
+        proj('ml', 'ml-pipelines', 'MP', '#F472B6', 'rgba(244,114,182,0.15)', '1')
+      ] },
+      { title: 'HOSTS', add: true, items: [
+        host('Development Server', '#4ADE80', 'DEV', '#60A5FA', 'SSH.dc.html'),
+        host('Staging Server', '#FBBF24', 'STAGE', '#FBBF24', 'SSH.dc.html'),
+        host('Production Server', '#5E5E66', 'PROD', '#F87171', 'SSH.dc.html'),
+        host('Home Lab', '#4ADE80', 'PERSONAL', '#A78BFA', 'SSH.dc.html')
+      ] }
+    ];
+    const railNav = ['overview', 'projects', 'terminals', 'git', 'databases', 'ssh', 'servers'].map((id) => nav(id, id));
+    const rp = (name, initials, hue, tint, id) => ({
+      name, initials,
+      ring: 'width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 11px; text-decoration: none; ' + (id === active ? 'box-shadow: 0 0 0 1.5px ' + hue + ';' : ''),
+      style: 'width: 30px; height: 30px; border-radius: 9px; background: ' + tint + '; border: 1px solid ' + hue + '55; color: ' + hue + '; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center'
+    });
+    return {
+      isFull: variant === 'full',
+      isRail: variant === 'rail',
+      width: variant === 'rail' ? '56px' : '232px',
+      accent,
+      sections,
+      railNav,
+      railProjects: [
+        rp('atlas-web', 'AW', '#A78BFA', 'rgba(167,139,250,0.16)', 'atlas-web'),
+        rp('atlas-api', 'AA', '#22D3EE', 'rgba(34,211,238,0.14)', 'atlas-api'),
+        rp('billing-service', 'BS', '#FB923C', 'rgba(251,146,60,0.15)', 'billing'),
+        rp('ml-pipelines', 'MP', '#F472B6', 'rgba(244,114,182,0.15)', 'ml')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

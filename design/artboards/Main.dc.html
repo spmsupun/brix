@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — Overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="screen" title="Overview" preset="none" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" active="overview" accent="{{accent}}" hint-size="232px,822px"></dc-import>
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden">
+
+      <section aria-label="Today" style="flex: none; display: flex; align-items: center; gap: 20px; padding: 16px 18px; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4); flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; gap: 3px; min-width: 220px">
+          <span style="font-size: 11px; color: #8A8A93; font-weight: 500">Tuesday, 27 October</span>
+          <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">Good morning, Supun</h1>
+        </div>
+        <div style="display: flex; gap: 22px; flex: 1; min-width: 300px">
+          <sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: {{s.color}}">{{s.value}}</span>
+              <span style="font-size: 11px; color: #8A8A93">{{s.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap">
+          <button style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: {{accent}}; color: #09090B; border: 0; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.4z"></path></svg>
+            New Agent Session
+            <span style="font-size: 10.5px; opacity: 0.6">⇧⌘T</span>
+          </button>
+          <sc-for list="{{actions}}" as="a" hint-placeholder-count="3">
+            <button style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 11px; background: rgba(255,255,255,0.05); color: #F4F4F5; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font: inherit; font-size: 12px; font-weight: 500">
+              {{a.label}}
+              <span style="font-size: 10.5px; color: #8A8A93">{{a.key}}</span>
+            </button>
+          </sc-for>
+        </div>
+      </section>
+
+      <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 6px">
+
+        <section aria-label="Agents" style="grid-column: span 2; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4); overflow: hidden; min-height: 0">
+          <header style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <span style="font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: #A1A1AA">AGENTS &amp; SESSIONS</span>
+            <span style="font-size: 10px; font-weight: 600; color: #A1A1AA; background: rgba(255,255,255,0.06); border-radius: 999px; padding: 1px 7px">3 live</span>
+            <span style="flex: 1"></span>
+            <a href="Terminals.dc.html" style="font-size: 11.5px; text-decoration: none">All terminals →</a>
+          </header>
+          <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: rgba(255,255,255,0.05)">
+            <sc-for list="{{agents}}" as="g" hint-placeholder-count="4">
+              <a href="{{g.href}}" style="display: flex; flex-direction: column; gap: 9px; padding: 14px; background: #121214; text-decoration: none; color: #F4F4F5; min-width: 0">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span style="width: 20px; height: 20px; border-radius: 6px; background: {{g.tint}}; border: 1px solid {{g.line}}; color: {{g.hue}}; font-size: 8.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none">{{g.initials}}</span>
+                  <span style="font-weight: 600">{{g.name}}</span>
+                  <span style="font-size: 11.5px; color: #8A8A93">{{g.project}}</span>
+                  <span style="flex: 1"></span>
+                  <span style="width: 7px; height: 7px; border-radius: 50%; background: {{g.dot}}; box-shadow: 0 0 0 3px {{g.dotRing}}"></span>
+                  <span style="font-size: 11px; color: #A1A1AA">{{g.status}}</span>
+                </div>
+                <div style="font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11.5px; line-height: 1.55; color: #D4D4D8; background: #0F0F12; border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; padding: 8px 10px; white-space: pre-wrap; min-height: 54px">{{g.preview}}</div>
+                <div style="display: flex; align-items: center; gap: 10px; font-size: 11px; color: #8A8A93">
+                  <div style="flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden">
+                    <div style="height: 4px; width: {{g.progress}}; background: {{g.hue}}; border-radius: 99px"></div>
+                  </div>
+                  <span>{{g.meta}}</span>
+                </div>
+              </a>
+            </sc-for>
+          </div>
+        </section>
+
+        <section aria-label="Uncommitted changes" style="display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4); overflow: hidden; min-height: 0">
+          <header style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <span style="font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: #A1A1AA">GIT ACTIVITY</span>
+            <span style="flex: 1"></span>
+            <a href="Git.dc.html" style="font-size: 11.5px; text-decoration: none">Review →</a>
+          </header>
+          <div style="padding: 10px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <sc-for list="{{dirty}}" as="d" hint-placeholder-count="3">
+              <div style="display: flex; flex-direction: column; gap: 5px">
+                <div style="display: flex; align-items: center; gap: 7px; font-size: 12.5px">
+                  <span style="width: 8px; height: 8px; border-radius: 2px; background: {{d.hue}}"></span>
+                  <span style="font-weight: 500">{{d.name}}</span>
+                  <span style="font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11px; color: #8A8A93">{{d.branch}}</span>
+                  <span style="flex: 1"></span>
+                  <span style="font-size: 11px; color: #FBBF24; font-weight: 600">{{d.count}}</span>
+                </div>
+                <div style="display: flex; height: 4px; border-radius: 99px; overflow: hidden; gap: 2px">
+                  <div style="width: {{d.add}}; background: #4ADE80"></div>
+                  <div style="width: {{d.del}}; background: #F87171"></div>
+                  <div style="flex: 1; background: rgba(255,255,255,0.06)"></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex: 1; min-height: 0; padding: 6px 8px; display: flex; flex-direction: column">
+            <sc-for list="{{commits}}" as="c" hint-placeholder-count="4">
+              <div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 12px; min-width: 0">
+                <span style="font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11px; color: {{c.hue}}">{{c.hash}}</span>
+                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.msg}}</span>
+                <span style="font-size: 11px; color: #8A8A93">{{c.when}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section aria-label="Continue" style="grid-column: span 2; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4); overflow: hidden; min-height: 0">
+          <header style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <span style="font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: #A1A1AA">CONTINUE WHERE YOU LEFT OFF</span>
+            <span style="flex: 1"></span>
+            <a href="Projects.dc.html" style="font-size: 11.5px; text-decoration: none">All projects →</a>
+          </header>
+          <div style="flex: 1; min-height: 0; padding: 6px; display: flex; flex-direction: column; gap: 1px; overflow: hidden">
+            <sc-for list="{{projects}}" as="p" hint-placeholder-count="5">
+              <a href="ProjectWorkspace.dc.html" style="height: 44px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 10px; border-radius: 8px; text-decoration: none; color: #F4F4F5; {{p.rowBg}}">
+                <span style="width: 28px; height: 28px; border-radius: 8px; background: {{p.tint}}; border: 1px solid {{p.line}}; color: {{p.hue}}; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none">{{p.initials}}</span>
+                <div style="display: flex; flex-direction: column; gap: 1px; min-width: 150px">
+                  <span style="font-weight: 600">{{p.name}}</span>
+                  <span style="font-size: 11px; color: #8A8A93">{{p.framework}}</span>
+                </div>
+                <span style="flex: 1; font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11px; color: #8A8A93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.path}}</span>
+                <span style="font-family: 'SF Mono', 'JetBrains Mono', Menlo, monospace; font-size: 11px; color: #A1A1AA; width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">⎇ {{p.branch}}</span>
+                <span style="width: 70px; font-size: 11px; color: {{p.stateColor}}; font-weight: 500">{{p.state}}</span>
+                <span style="width: 64px; text-align: right; font-size: 11px; color: #8A8A93">{{p.when}}</span>
+              </a>
+            </sc-for>
+          </div>
+        </section>
+
+        <section aria-label="Connections" style="display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.4); overflow: hidden; min-height: 0">
+          <header style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <span style="font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: #A1A1AA">CONNECTIONS</span>
+            <span style="flex: 1"></span>
+            <a href="SSH.dc.html" style="font-size: 11.5px; text-decoration: none">Manage →</a>
+          </header>
+          <div style="flex: 1; min-height: 0; padding: 6px 8px; display: flex; flex-direction: column">
+            <sc-for list="{{connections}}" as="c" hint-placeholder-count="7">
+              <a href="{{c.href}}" style="height: 31px; flex: none; display: flex; align-items: center; gap: 9px; padding: 0 6px; border-radius: 7px; text-decoration: none; color: #F4F4F5; font-size: 12.5px">
+                <span style="width: 22px; height: 22px; border-radius: 6px; background: {{c.tint}}; color: {{c.color}}; font-size: 8.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none">{{c.badge}}</span>
+                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</span>
+                <span style="font-size: 9px; font-weight: 700; letter-spacing: 0.04em; color: {{c.tagColor}}">{{c.tag}}</span>
+                <span style="width: 7px; height: 7px; border-radius: 50%; background: {{c.dot}}" role="img" aria-label="{{c.status}}"></span>
+              </a>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 0 3px rgba(74,222,128,0.2)"></span>3 running</span>
+    <span>✦ Claude · Editing PaymentForm.tsx in atlas-web</span>
+    <span style="flex: 1"></span>
+    <span>2 hosts</span>
+    <span>3 databases</span>
+    <span>Code layout</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const hue = {
+      aw: ['#A78BFA', 'rgba(167,139,250,0.16)', 'rgba(167,139,250,0.4)'],
+      aa: ['#22D3EE', 'rgba(34,211,238,0.14)', 'rgba(34,211,238,0.38)'],
+      bs: ['#FB923C', 'rgba(251,146,60,0.15)', 'rgba(251,146,60,0.38)'],
+      mp: ['#F472B6', 'rgba(244,114,182,0.15)', 'rgba(244,114,182,0.38)'],
+      ic: ['#60A5FA', 'rgba(96,165,250,0.15)', 'rgba(96,165,250,0.38)']
+    };
+    const agent = (h, initials, name, project, status, dot, preview, progress, meta, href) => ({
+      hue: h[0], tint: h[1], line: h[2], initials, name, project, status, dot,
+      dotRing: dot === '#4ADE80' ? 'rgba(74,222,128,0.18)' : 'rgba(255,255,255,0.06)',
+      preview, progress, meta, href
+    });
+    const proj = (h, initials, name, framework, path, branch, state, stateColor, when, first) => ({
+      hue: h[0], tint: h[1], line: h[2], initials, name, framework, path, branch, state, stateColor, when,
+      rowBg: first ? 'background: rgba(255,255,255,0.05);' : ''
+    });
+    return {
+      accent,
+      stats: [
+        { value: '3', label: 'sessions running', color: '#4ADE80' },
+        { value: '10', label: 'uncommitted files', color: '#F4F4F5' },
+        { value: '5 / 11', label: 'connections live', color: '#F4F4F5' },
+        { value: '2', label: 'commits to push', color: '#F4F4F5' }
+      ],
+      actions: [
+        { label: 'Open Project', key: '⌘O' },
+        { label: 'New Terminal', key: '⌘T' },
+        { label: 'Connect to Server', key: '⇧⌘S' }
+      ],
+      agents: [
+        agent(hue.aw, 'AW', 'Claude Code', 'atlas-web', 'Working', '#4ADE80', '⏺ Update(src/components/PaymentForm.tsx)\n  ⎿ +24 −6  ✶ Wiring wallet buttons… 48s', '50%', '2 of 4 tasks · 26 min', 'WorkspaceAgent.dc.html'),
+        agent(hue.aw, 'AW', 'dev server', 'atlas-web', 'Serving', '#4ADE80', '✓ Ready in 1182ms\nGET /checkout 200 in 41ms', '100%', 'localhost:3000 · 48 min', 'ProjectWorkspace.dc.html'),
+        agent(hue.aa, 'AA', 'Claude Code', 'atlas-api', 'Needs input', '#FBBF24', 'Done. Migration adds payment_intents.\nWant me to wire the handler next?', '100%', 'Waiting for you · 1 h', 'WorkspaceAgent.dc.html'),
+        agent(['#22D3EE', 'rgba(34,211,238,0.10)', 'rgba(34,211,238,0.3)'], 'DS', 'api logs', 'deploy@dev-server', 'Streaming', '#4ADE80', '08:41:07 WARN slow query table=audit_log\n08:41:12 ERROR stripe webhook signature', '70%', 'tail -f api.log · 12 min', 'Terminals.dc.html')
+      ],
+      dirty: [
+        { name: 'atlas-web', branch: 'feat/checkout-v2', count: '7 files', add: '58%', del: '18%', hue: '#A78BFA' },
+        { name: 'billing-service', branch: 'fix/invoice-rounding', count: '2 files', add: '30%', del: '8%', hue: '#FB923C' },
+        { name: 'ml-pipelines', branch: 'develop', count: '1 file', add: '14%', del: '3%', hue: '#F472B6' }
+      ],
+      commits: [
+        { hash: '9f1c2ab', msg: 'Add payment intent endpoint', when: '2 h', hue: '#A78BFA' },
+        { hash: '4e0d913', msg: 'Refactor cart totals into hook', when: '5 h', hue: '#A78BFA' },
+        { hash: 'c19e2d4', msg: 'Round tax per invoice', when: '1 d', hue: '#FB923C' },
+        { hash: 'b7a2c01', msg: 'Merge PR #212 fix-tax-rounding', when: '1 d', hue: '#A78BFA' }
+      ],
+      projects: [
+        proj(hue.aw, 'AW', 'atlas-web', 'Next.js 15 · TypeScript', '~/Developer/atlas-web', 'feat/checkout-v2', '7 changed', '#FBBF24', '5 min', true),
+        proj(hue.aa, 'AA', 'atlas-api', 'Go 1.23 · chi', '~/Developer/atlas-api', 'main', 'Clean', '#4ADE80', '1 h', false),
+        proj(hue.bs, 'BS', 'billing-service', 'Laravel 11 · PHP', '~/Developer/billing-service', 'fix/invoice-rounding', '2 changed', '#FBBF24', 'Yesterday', false),
+        proj(hue.mp, 'MP', 'ml-pipelines', 'Python 3.12 · Prefect', '~/Developer/ml-pipelines', 'develop', '1 changed', '#FBBF24', '2 d', false),
+        proj(hue.ic, 'IC', 'ios-companion', 'SwiftUI', '~/Developer/ios-companion', 'release/2.4', 'Clean', '#4ADE80', '1 wk', false)
+      ],
+      connections: [
+        { name: 'Development Server', badge: 'SSH', tint: 'rgba(255,255,255,0.06)', color: '#A1A1AA', tag: 'DEV', tagColor: '#60A5FA', dot: '#4ADE80', status: 'Connected', href: 'SSH.dc.html' },
+        { name: 'Staging Server', badge: 'SSH', tint: 'rgba(255,255,255,0.06)', color: '#A1A1AA', tag: 'STAGE', tagColor: '#FBBF24', dot: '#FBBF24', status: 'Idle', href: 'SSH.dc.html' },
+        { name: 'Production Server', badge: 'SSH', tint: 'rgba(255,255,255,0.06)', color: '#A1A1AA', tag: 'PROD', tagColor: '#F87171', dot: '#5E5E66', status: 'Disconnected', href: 'SSH.dc.html' },
+        { name: 'atlas_dev', badge: 'PG', tint: 'rgba(255,255,255,0.06)', color: '#A1A1AA', tag: 'DEV', tagColor: '#60A5FA', dot: '#4ADE80', status: 'Connected', href: 'Database.dc.html' },
+        { name: 'billing', badge: 'MY', tint: 'rgba(255,255,255,0.06)', color: '#A1A1AA', tag: 'DEV', tagColor: '#60A5FA', dot: '#4ADE80', status: 'Connected', href: 'Database.dc.html' },
+        { name: 'analytics.sqlite', badge: 'SQ', tint: 'rgba(255,255,255,0.06)', color: '#A1A1AA', tag: 'LOCAL', tagColor: '#22D3EE', dot: '#4ADE80', status: 'Connected', href: 'Database.dc.html' },
+        { name: 'atlas_prod_replica', badge: 'PG', tint: 'rgba(255,255,255,0.06)', color: '#A1A1AA', tag: 'PROD', tagColor: '#F87171', dot: '#F87171', status: 'Error: timeout', href: 'Database.dc.html' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

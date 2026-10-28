@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — atlas-web project resources</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="project" title="atlas-web" branch="feat/checkout-v2" initials="AW" hue="#A78BFA" preset="none" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" active="atlas-web" accent="{{accent}}" hint-size="232px,822px"></dc-import>
+
+    <section aria-label="Project settings" style="flex: 1; min-width: 0; display: flex; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <nav aria-label="Project settings sections" style="width: 196px; flex: none; padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid rgba(255,255,255,0.06)">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 6px 14px">
+          <span style="width: 30px; height: 30px; border-radius: 9px; background: rgba(167,139,250,0.16); border: 1px solid rgba(167,139,250,0.38); color: #A78BFA; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center">AW</span>
+          <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+            <span style="font-weight: 600">atlas-web</span>
+            <span style="font-size: 11px; color: #8A8A93">Project settings</span>
+          </div>
+        </div>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="6">
+          <a href="{{n.href}}" style="{{n.style}}">{{n.label}}<span style="margin-left: auto; font-size: 11px; color: #8A8A93">{{n.count}}</span></a>
+        </sc-for>
+      </nav>
+
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden">
+        <header style="flex: none; display: flex; align-items: flex-end; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+            <h1 style="margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em">Resources</h1>
+            <span style="font-size: 12.5px; color: #8A8A93">Servers, databases and containers this project uses. One resource can belong to many projects.</span>
+          </div>
+          <span style="font-size: 12px; color: #A1A1AA">{{summary}}</span>
+        </header>
+
+        <div style="flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 1px; background: rgba(255,255,255,0.05)">
+          <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+            <div style="{{g.cell}}">
+              <div style="height: 44px; flex: none; display: flex; align-items: center; gap: 9px; padding: 0 16px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{g.icon}}"></path></svg>
+                <span style="font-size: 13px; font-weight: 600">{{g.title}}</span>
+                <span style="font-size: 11.5px; color: #8A8A93">{{g.count}}</span>
+                <span style="flex: 1"></span>
+                <button style="height: 26px; display: flex; align-items: center; gap: 5px; padding: 0 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; color: #D4D4D8; font: inherit; font-size: 11.5px">+ {{g.add}}</button>
+              </div>
+              <div style="flex: 1; min-height: 0; overflow: hidden; padding: 0 8px 8px">
+                <sc-for list="{{g.items}}" as="r" hint-placeholder-count="4">
+                  <div style="{{r.row}}">
+                    <button role="switch" aria-checked="{{r.on}}" aria-label="Link {{r.name}}" onClick="{{r.toggle}}" style="{{r.switchStyle}}"><span style="{{r.knob}}"></span></button>
+                    <span style="{{r.badgeStyle}}">{{r.badge}}</span>
+                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                      <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 500; color: {{r.nameColor}}">
+                        {{r.name}}
+                        <span style="font-size: 8.5px; font-weight: 700; color: {{r.tagColor}}">{{r.tag}}</span>
+                      </span>
+                      <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 10.5px; color: #8A8A93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.sub}}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0" aria-label="Also used by">
+                      <sc-for list="{{r.shared}}" as="s" hint-placeholder-count="2">
+                        <span title="{{s.name}}" style="{{s.style}}">{{s.initials}}</span>
+                      </sc-for>
+                    </div>
+                    <span style="width: 6px; height: 6px; border-radius: 50%; background: {{r.dot}}; flex: none"></span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+
+          <div style="display: flex; flex-direction: column; background: #121214; padding: 16px; gap: 12px">
+            <span style="font-size: 13px; font-weight: 600">How atlas-web shows them</span>
+            <sc-for list="{{uses}}" as="u" hint-placeholder-count="4">
+              <div style="display: flex; align-items: flex-start; gap: 10px">
+                <span style="width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; flex: none">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{u.icon}}"></path></svg>
+                </span>
+                <div style="display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-size: 12.5px; font-weight: 500">{{u.title}}</span>
+                  <span style="font-size: 11.5px; color: #8A8A93; line-height: 1.45">{{u.body}}</span>
+                </div>
+              </div>
+            </sc-for>
+            <a href="WorkspaceCustom.dc.html" style="margin-top: auto; align-self: flex-start; height: 30px; display: flex; align-items: center; padding: 0 14px; background: {{accent}}; border-radius: 8px; color: #09090B; font-size: 12.5px; font-weight: 600; text-decoration: none">Open workspace →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span>Toggle a switch to link or unlink · stacked marks show the other projects sharing a resource</span>
+    <span style="flex: 1"></span>
+    <span>Saved to .conduit/project.json</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { linked: { dev: true, staging: true, prod: true, bastion: false, runner: false, home: false, atlas_dev: true, atlas_staging: true, prod_replica: false, billing: false, analytics: false, d_db: true, d_redis: true, d_api: true, d_worker: false } };
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const L = this.state.linked;
+    const P = {
+      AA: ['atlas-api', '#22D3EE', 'rgba(34,211,238,0.16)'],
+      BS: ['billing-service', '#FB923C', 'rgba(251,146,60,0.16)'],
+      MP: ['ml-pipelines', '#F472B6', 'rgba(244,114,182,0.16)'],
+      DF: ['dotfiles', '#4ADE80', 'rgba(74,222,128,0.14)']
+    };
+    const TAG = { DEV: '#60A5FA', STAGE: '#FBBF24', PROD: '#F87171', PERSONAL: '#A78BFA', LOCAL: '#22D3EE', COMPOSE: '#A1A1AA', REMOTE: '#60A5FA' };
+    const item = (id, name, sub, tag, badge, dot, shared) => {
+      const on = !!L[id];
+      return {
+        name, sub, tag, badge, dot, tagColor: TAG[tag] || '#8A8A93', on: on ? 'true' : 'false',
+        toggle: () => { const linked = Object.assign({}, L); linked[id] = !on; this.setState({ linked }); },
+        nameColor: on ? '#F4F4F5' : '#A1A1AA',
+        row: 'height: 46px; display: flex; align-items: center; gap: 11px; padding: 0 10px; border-radius: 8px; ' + (on ? 'background: rgba(255,255,255,0.035);' : ''),
+        switchStyle: 'width: 30px; height: 18px; flex: none; border: 0; border-radius: 99px; padding: 2px; display: flex; cursor: pointer; transition: background 0.15s; ' + (on ? 'background: ' + accent + '; justify-content: flex-end;' : 'background: #2A2A2E; justify-content: flex-start;'),
+        knob: 'width: 14px; height: 14px; border-radius: 50%; background: ' + (on ? '#09090B' : '#8A8A93'),
+        badgeStyle: 'width: 26px; height: 26px; border-radius: 7px; flex: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); color: #A1A1AA; font-size: 8.5px; font-weight: 800; display: flex; align-items: center; justify-content: center',
+        shared: shared.map((k, i) => ({
+          name: P[k][0], initials: k,
+          style: 'width: 20px; height: 20px; border-radius: 6px; background: ' + P[k][2] + '; color: ' + P[k][1] + '; border: 2px solid #121214; font-size: 7px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-left: ' + (i ? '-6px' : '0')
+        }))
+      };
+    };
+    const groups = [
+      { key: 'ssh', title: 'SSH servers', add: 'Server', icon: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01', items: [
+        item('dev', 'Development Server', 'deploy@dev.atlas.internal', 'DEV', 'SSH', '#4ADE80', ['AA', 'BS']),
+        item('staging', 'Staging Server', 'ubuntu@staging.atlas.io', 'STAGE', 'SSH', '#FBBF24', ['BS']),
+        item('prod', 'Production Server', 'deploy@prod-web-01.atlas.io:2222', 'PROD', 'SSH', '#52525B', ['AA']),
+        item('bastion', 'Prod Bastion', 'ec2-user@bastion.atlas.io', 'PROD', 'SSH', '#52525B', ['AA']),
+        item('runner', 'Build Runner', 'ci@ci-runner-03.internal', 'DEV', 'SSH', '#FBBF24', ['MP'])
+      ] },
+      { key: 'db', title: 'Databases', add: 'Database', icon: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6', items: [
+        item('atlas_dev', 'atlas_dev', 'postgres://localhost:5432/atlas_dev', 'DEV', 'PG', '#4ADE80', ['AA']),
+        item('atlas_staging', 'atlas_staging', 'staging-db.atlas.io:5432/atlas', 'STAGE', 'PG', '#FBBF24', ['AA', 'BS']),
+        item('prod_replica', 'atlas_prod_replica', 'replica.atlas.io:5432 · read-only', 'PROD', 'PG', '#F87171', ['AA']),
+        item('billing', 'billing', 'mysql://127.0.0.1:3306/billing', 'DEV', 'MY', '#4ADE80', ['BS']),
+        item('analytics', 'analytics.sqlite', '~/Developer/ml-pipelines/data', 'LOCAL', 'SQ', '#4ADE80', ['MP'])
+      ] },
+      { key: 'docker', title: 'Docker', add: 'Container', icon: 'M3 12h18v3a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6zM6 9h3v3H6zM9 9h3v3H9zM12 9h3v3h-3zM9 6h3v3H9z', items: [
+        item('d_db', 'db · postgres:16', 'docker-compose.yml · up 2 h · :5432', 'COMPOSE', 'DK', '#4ADE80', []),
+        item('d_redis', 'redis · redis:7-alpine', 'docker-compose.yml · up 2 h · :6379', 'COMPOSE', 'DK', '#4ADE80', ['AA']),
+        item('d_api', 'atlas-api on dev', 'Development Server · container 1824', 'REMOTE', 'DK', '#4ADE80', ['AA']),
+        item('d_worker', 'queue-worker on dev', 'Development Server · exited (0)', 'REMOTE', 'DK', '#52525B', ['AA', 'BS'])
+      ] }
+    ];
+    const count = (g) => g.items.filter((i) => i.on === 'true').length + ' of ' + g.items.length + ' linked';
+    const total = groups.reduce((n, g) => n + g.items.filter((i) => i.on === 'true').length, 0);
+    return {
+      accent,
+      summary: total + ' resources linked',
+      nav: ['General', 'Resources', 'Layout', 'Environment', 'Agents', 'Danger zone'].map((label) => ({
+        label, href: label === 'Layout' ? 'Customize.dc.html' : 'ProjectResources.dc.html', count: label === 'Resources' ? String(total) : '',
+        style: 'height: 30px; display: flex; align-items: center; padding: 0 10px; border-radius: 7px; text-decoration: none; font-size: 12.5px; ' +
+          (label === 'Resources' ? 'background: rgba(255,255,255,0.07); color: #F4F4F5; font-weight: 500;' : (label === 'Danger zone' ? 'color: #F87171;' : 'color: #A1A1AA;'))
+      })),
+      groups: groups.map((g, i) => Object.assign({}, g, {
+        count: count(g),
+        cell: 'display: flex; flex-direction: column; background: #121214; min-height: 0;' + (i < 0 ? '' : '')
+      })),
+      uses: [
+        { icon: 'M5 8l4 4-4 4M12 17h7', title: 'Terminals', body: 'New terminal → pick a linked server to open an SSH shell inside this workspace.' },
+        { icon: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z', title: 'Database panel', body: 'Linked databases appear in the panel picker and in ⌘K.' },
+        { icon: 'M3 12h18v3a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6z', title: 'Docker panel', body: 'Start, stop and tail logs for linked containers, local or remote.' },
+        { icon: 'M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z', title: 'Claude context', body: 'Agents get connection names (never secrets) so they can reason about your stack.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

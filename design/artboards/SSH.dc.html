@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — SSH connections</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; position: relative; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="screen" title="SSH Connections" preset="none" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" active="ssh" accent="{{accent}}" hint-size="232px,822px"></dc-import>
+
+    <section aria-label="Connections" style="width: 360px; flex: none; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <div style="padding: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <div style="display: flex; gap: 6px">
+          <label style="flex: 1; height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 9px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; color: #8A8A93">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+            <input placeholder="Search hosts, users, tags" aria-label="Search connections" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font: inherit; font-size: 12.5px">
+          </label>
+          <button aria-label="New connection" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: {{accent}}; border: 0; border-radius: 8px; color: #09090B">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+        </div>
+        <div style="display: flex; gap: 4px; flex-wrap: wrap">
+          <sc-for list="{{filters}}" as="f" hint-placeholder-count="5">
+            <button style="{{f.style}}"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{f.c}}"></span>{{f.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 6px">
+        <sc-for list="{{hosts}}" as="h" hint-placeholder-count="6">
+          <div style="{{h.row}}">
+            <span style="width: 32px; height: 32px; border-radius: 9px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; flex: none; position: relative">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"></path></svg>
+              <span style="position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%; background: {{h.dot}}; border: 2px solid #121214"></span>
+            </span>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+              <div style="display: flex; align-items: center; gap: 7px">
+                <span style="font-weight: 600; white-space: nowrap">{{h.name}}</span>
+                <span style="font-size: 9px; font-weight: 700; color: {{h.tagColor}}; background: {{h.tagBg}}; border-radius: 4px; padding: 1px 5px">{{h.tag}}</span>
+              </div>
+              <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11px; color: #8A8A93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{h.addr}}</span>
+            </div>
+            <span style="font-size: 11px; color: #8A8A93; white-space: nowrap">{{h.when}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-label="Development Server details" style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <header style="flex: none; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="width: 44px; height: 44px; border-radius: 12px; background: rgba(96,165,250,0.10); border: 1px solid rgba(96,165,250,0.28); display: flex; align-items: center; justify-content: center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"></path></svg>
+        </span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="font-size: 16px; font-weight: 600">Development Server</span>
+            <span style="font-size: 9px; font-weight: 700; color: #60A5FA; background: rgba(96,165,250,0.12); border-radius: 4px; padding: 2px 5px">DEV</span>
+          </div>
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #A1A1AA"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80"></span>Connected · Ubuntu 24.04 · up 23 days</span>
+        </div>
+        <button style="height: 30px; padding: 0 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12.5px">Edit</button>
+        <button style="height: 30px; padding: 0 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12.5px">Duplicate</button>
+        <a href="Terminals.dc.html" style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 14px; background: {{accent}}; border-radius: 8px; color: #09090B; font-size: 12.5px; font-weight: 600; text-decoration: none">Open Terminal <span style="opacity: 0.55; font-size: 10.5px">↩</span></a>
+      </header>
+      <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0">
+        <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; border-right: 1px solid rgba(255,255,255,0.06)">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 11px; font-weight: 600; color: #8A8A93; margin-bottom: 6px">Connection</span>
+            <sc-for list="{{details}}" as="d" hint-placeholder-count="5">
+              <div style="height: 30px; display: flex; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12.5px">
+                <span style="width: 120px; color: #8A8A93">{{d.k}}</span>
+                <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 12px; color: #F4F4F5">{{d.v}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <span style="font-size: 11px; font-weight: 600; color: #8A8A93">Health</span>
+            <sc-for list="{{meters}}" as="m" hint-placeholder-count="3">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 12px">
+                <span style="width: 60px; color: #A1A1AA">{{m.label}}</span>
+                <div style="flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden"><div style="height: 5px; width: {{m.v}}; background: {{m.c}}; border-radius: 99px"></div></div>
+                <span style="width: 36px; text-align: right; font-variant-numeric: tabular-nums">{{m.v}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-size: 11px; font-weight: 600; color: #8A8A93">Open sessions</span>
+          <sc-for list="{{sessions}}" as="s" hint-placeholder-count="2">
+            <a href="Terminals.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #0E0E10; border: 1px solid rgba(255,255,255,0.06); border-radius: 9px; text-decoration: none; color: #F4F4F5">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: #4ADE80"></span>
+              <span style="font-weight: 500">{{s.name}}</span>
+              <span style="flex: 1; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 11px; color: #8A8A93">{{s.cmd}}</span>
+              <span style="font-size: 11px; color: #8A8A93">{{s.when}}</span>
+            </a>
+          </sc-for>
+          <span style="font-size: 11px; font-weight: 600; color: #8A8A93; margin-top: 10px">Linked projects</span>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap">
+            <span style="height: 26px; display: flex; align-items: center; gap: 7px; padding: 0 10px 0 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; font-size: 12px"><span style="width: 18px; height: 18px; border-radius: 5px; background: rgba(167,139,250,0.16); color: #A78BFA; font-size: 7.5px; font-weight: 800; display: flex; align-items: center; justify-content: center">AW</span>atlas-web</span>
+            <span style="height: 26px; display: flex; align-items: center; gap: 7px; padding: 0 10px 0 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; font-size: 12px"><span style="width: 18px; height: 18px; border-radius: 5px; background: rgba(34,211,238,0.14); color: #22D3EE; font-size: 7.5px; font-weight: 800; display: flex; align-items: center; justify-content: center">AA</span>atlas-api</span>
+          </div>
+          <span style="font-size: 11px; font-weight: 600; color: #8A8A93; margin-top: 10px">Notes</span>
+          <p style="margin: 0; font-size: 12.5px; line-height: 1.5; color: #D4D4D8">Shared dev box. Docker compose stack lives in /srv/atlas.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div style="height: 26px; flex: none"></div>
+
+  <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.55); display: flex; justify-content: center; align-items: flex-start; padding-top: 96px; box-sizing: border-box">
+    <div role="dialog" aria-label="Edit SSH connection" style="width: 520px; max-width: calc(100% - 32px); background: #161618; border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06); overflow: hidden">
+      <header style="padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 3px">
+        <span style="font-size: 15px; font-weight: 600">Edit Connection</span>
+        <span style="font-size: 12px; color: #8A8A93">Credentials stay in your Keychain. Conduit stores only references.</span>
+      </header>
+      <div style="padding: 4px 20px 16px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{fields}}" as="f" hint-placeholder-count="6">
+          <label style="{{f.span}}">
+            <span style="font-size: 11.5px; font-weight: 500; color: #A1A1AA">{{f.label}}</span>
+            <input value="{{f.value}}" style="height: 32px; box-sizing: border-box; padding: 0 10px; background: #0C0C0E; border: 1px solid {{f.border}}; border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12.5px; outline: none; box-shadow: {{f.ring}}">
+          </label>
+        </sc-for>
+        <div style="grid-column: span 6; display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11.5px; font-weight: 500; color: #A1A1AA">Authentication</span>
+          <div role="radiogroup" aria-label="Authentication" style="display: flex; gap: 2px; padding: 2px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px">
+            <button role="radio" aria-checked="true" style="flex: 1; height: 26px; border: 0; border-radius: 6px; background: rgba(255,255,255,0.10); color: #F4F4F5; font: inherit; font-size: 12px; font-weight: 500">SSH Key</button>
+            <button role="radio" aria-checked="false" style="flex: 1; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #8A8A93; font: inherit; font-size: 12px; font-weight: 500">SSH Agent</button>
+            <button role="radio" aria-checked="false" style="flex: 1; height: 26px; border: 0; border-radius: 6px; background: transparent; color: #8A8A93; font: inherit; font-size: 12px; font-weight: 500">Password</button>
+          </div>
+          <div style="height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 10px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; font-size: 12.5px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M17 6l3 3"></path></svg>
+            <span style="font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: 12px">~/.ssh/id_ed25519</span>
+            <span style="font-size: 11px; color: #8A8A93">ED25519 · reference only</span>
+            <span style="flex: 1"></span>
+            <button style="height: 24px; padding: 0 9px; background: rgba(255,255,255,0.06); border: 0; border-radius: 6px; color: #D4D4D8; font: inherit; font-size: 11.5px">Choose…</button>
+          </div>
+        </div>
+        <div style="grid-column: span 6; display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 11.5px; font-weight: 500; color: #A1A1AA">Environment</span>
+          <div style="display: flex; gap: 6px">
+            <sc-for list="{{envs}}" as="e" hint-placeholder-count="4">
+              <button style="{{e.style}}"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{e.c}}"></span>{{e.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <footer style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: rgba(255,255,255,0.02); border-top: 1px solid rgba(255,255,255,0.06)">
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4ADE80">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
+          Reachable · 24 ms · key accepted
+        </span>
+        <span style="flex: 1"></span>
+        <button style="height: 30px; padding: 0 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #F4F4F5; font: inherit; font-size: 12.5px">Test</button>
+        <button style="height: 30px; padding: 0 12px; background: transparent; border: 0; border-radius: 8px; color: #A1A1AA; font: inherit; font-size: 12.5px">Cancel</button>
+        <button style="height: 30px; padding: 0 16px; background: {{accent}}; border: 0; border-radius: 8px; color: #09090B; font: inherit; font-size: 12.5px; font-weight: 600">Save</button>
+      </footer>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const TAG = { DEV: ['#60A5FA', 'rgba(96,165,250,0.12)'], STAGE: ['#FBBF24', 'rgba(251,191,36,0.12)'], PROD: ['#F87171', 'rgba(248,113,113,0.12)'], PERSONAL: ['#A78BFA', 'rgba(167,139,250,0.12)'] };
+    const host = (name, addr, tag, dot, when, sel) => ({
+      name, addr, tag, dot, when, tagColor: TAG[tag][0], tagBg: TAG[tag][1],
+      row: 'height: 56px; display: flex; align-items: center; gap: 11px; padding: 0 10px; border-radius: 8px; ' + (sel ? 'background: rgba(255,255,255,0.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);' : '')
+    });
+    const chip = (label, c, on) => ({
+      label, c,
+      style: 'height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 9px; border-radius: 99px; font: inherit; font-size: 11.5px; font-weight: 500; ' +
+        (on ? 'background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.14); color: #F4F4F5;' : 'background: transparent; border: 1px solid rgba(255,255,255,0.07); color: #A1A1AA;')
+    });
+    const field = (label, value, span, focus) => ({
+      label, value, span: 'grid-column: span ' + span + '; display: flex; flex-direction: column; gap: 6px',
+      border: focus ? accent : 'rgba(255,255,255,0.08)',
+      ring: focus ? '0 0 0 3px ' + accent + '33' : 'none'
+    });
+    return {
+      accent,
+      filters: [chip('All', '#A1A1AA', true), chip('Production', '#F87171'), chip('Staging', '#FBBF24'), chip('Development', '#60A5FA'), chip('Personal', '#A78BFA')],
+      hosts: [
+        host('Development Server', 'deploy@dev.atlas.internal', 'DEV', '#4ADE80', '12m', true),
+        host('Staging Server', 'ubuntu@staging.atlas.io', 'STAGE', '#FBBF24', '2h', false),
+        host('Production Server', 'deploy@prod-web-01.atlas.io:2222', 'PROD', '#52525B', '1d', false),
+        host('Prod Bastion', 'ec2-user@bastion.atlas.io', 'PROD', '#52525B', '4d', false),
+        host('Build Runner', 'ci@ci-runner-03.internal', 'DEV', '#FBBF24', '6h', false),
+        host('Home Lab', 'admin@nas.local', 'PERSONAL', '#4ADE80', '40m', false)
+      ],
+      details: [
+        { k: 'Host', v: 'dev.atlas.internal' },
+        { k: 'User', v: 'deploy' },
+        { k: 'Port', v: '22' },
+        { k: 'Auth', v: 'SSH key · ~/.ssh/id_ed25519' },
+        { k: 'Last connected', v: '12 minutes ago' }
+      ],
+      meters: [{ label: 'CPU', v: '34%', c: '#4ADE80' }, { label: 'Memory', v: '61%', c: '#FBBF24' }, { label: 'Disk', v: '48%', c: '#60A5FA' }],
+      sessions: [
+        { name: 'api logs', cmd: 'tail -f /var/log/atlas/api.log', when: '12m' },
+        { name: 'htop', cmd: 'htop', when: '9m' }
+      ],
+      fields: [
+        field('Name', 'Development Server', 6, false),
+        field('Host', 'dev.atlas.internal', 4, true),
+        field('Port', '22', 2, false),
+        field('User', 'deploy', 6, false)
+      ],
+      envs: [
+        { label: 'Development', c: '#60A5FA', style: 'height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 8px; font: inherit; font-size: 12px; background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.4); color: #F4F4F5' },
+        { label: 'Staging', c: '#FBBF24', style: 'height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 8px; font: inherit; font-size: 12px; background: transparent; border: 1px solid rgba(255,255,255,0.08); color: #A1A1AA' },
+        { label: 'Production', c: '#F87171', style: 'height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 8px; font: inherit; font-size: 12px; background: transparent; border: 1px solid rgba(255,255,255,0.08); color: #A1A1AA' },
+        { label: 'Personal', c: '#A78BFA', style: 'height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 8px; font: inherit; font-size: 12px; background: transparent; border: 1px solid rgba(255,255,255,0.08); color: #A1A1AA' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

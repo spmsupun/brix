@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — Command palette</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; position: relative; overflow: hidden; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px">
+  <div aria-hidden="true" style="position: absolute; inset: 0">
+    <dc-import name="ProjectWorkspace" hint-size="100%,900px"></dc-import>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(5,5,6,0.62); display: flex; justify-content: center; align-items: flex-start; padding: 104px 16px 16px; box-sizing: border-box">
+    <div role="dialog" aria-label="Command palette" style="width: 100%; max-width: 660px; display: flex; flex-direction: column; background: #161618; border: 1px solid rgba(255,255,255,0.11); border-radius: 14px; box-shadow: 0 40px 100px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.06); overflow: hidden">
+      <div style="height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid rgba(255,255,255,0.07)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <label for="cmdk" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search everything</label>
+        <input id="cmdk" value="pay" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F4F5; font: inherit; font-size: 17px">
+        <span style="height: 22px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: rgba(167,139,250,0.12); border-radius: 6px; font-size: 11.5px; color: #C4B5FD"><span style="width: 6px; height: 6px; border-radius: 2px; background: #A78BFA"></span>atlas-web</span>
+        <span style="font-size: 10.5px; color: #8A8A93; border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; padding: 1px 6px">esc</span>
+      </div>
+      <div style="padding: 6px 6px 8px; max-height: 500px; overflow: hidden">
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+          <div style="padding: 10px 10px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: #8A8A93">{{g.title}}</div>
+          <sc-for list="{{g.items}}" as="i" hint-placeholder-count="2">
+            <a href="{{i.href}}" style="{{i.row}}">
+              <span style="{{i.iconBox}}">{{i.glyph}}</span>
+              <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1">
+                <span style="font-size: 13px; color: #F4F4F5">{{i.title}}</span>
+                <span style="font-size: 11px; color: #8A8A93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{i.sub}}</span>
+              </span>
+              <span style="font-size: 10.5px; color: #8A8A93; border: 1px solid rgba(255,255,255,0.09); border-radius: 5px; padding: 1px 6px; {{i.keyStyle}}">{{i.key}}</span>
+            </a>
+          </sc-for>
+        </sc-for>
+      </div>
+      <div style="height: 36px; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-top: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.02); font-size: 11px; color: #8A8A93">
+        <span>↑↓ navigate</span><span>↩ open</span><span>⌘↩ open in split</span><span>⇥ scope to project</span>
+        <span style="flex: 1"></span>
+        <span>8 results</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#C8F560';
+    const it = (title, sub, glyph, color, tint, key, href, hi) => ({
+      title, sub, glyph, key, href,
+      keyStyle: key ? '' : 'display: none;',
+      iconBox: 'width: 28px; height: 28px; border-radius: 8px; background: ' + tint + '; color: ' + color + '; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex: none',
+      row: 'height: 46px; display: flex; align-items: center; gap: 12px; padding: 0 10px; border-radius: 9px; text-decoration: none; ' + (hi ? 'background: rgba(255,255,255,0.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);' : '')
+    });
+    return {
+      accent,
+      groups: [
+        { title: 'FILES IN ATLAS-WEB', items: [
+          it('PaymentForm.tsx', 'src/components · modified', 'TS', '#60A5FA', 'rgba(96,165,250,0.12)', '↩', 'ProjectWorkspace.dc.html', true),
+          it('page.tsx', 'src/app/checkout · modified', 'TS', '#60A5FA', 'rgba(96,165,250,0.12)', '', 'ProjectWorkspace.dc.html', false)
+        ] },
+        { title: 'ACTIONS', items: [
+          it('Ask Claude: review payment flow', 'New agent session in atlas-web', '✦', '#C4B5FD', 'rgba(167,139,250,0.16)', '⇧⌘T', 'WorkspaceAgent.dc.html', false),
+          it('Add panel: Database · payments', 'Dock a query panel for atlas_dev', 'PG', '#93B4FF', 'rgba(125,167,255,0.14)', '', 'WorkspaceCustom.dc.html', false),
+          it('Layout: Review', 'Diff centre, changes left, inspector right', '▦', '#D4D4D8', 'rgba(255,255,255,0.06)', '⌃⌘3', 'Git.dc.html', false)
+        ] },
+        { title: 'DATA', items: [
+          it('payments', 'atlas_dev · public · 88,402 rows', 'TB', '#D4D4D8', 'rgba(255,255,255,0.06)', '', 'Database.dc.html', false),
+          it('payment_intents migration', 'atlas-api · migrations/0042_add_payment_intents.sql', 'SQL', '#C4B5FD', 'rgba(167,139,250,0.12)', '', 'SQL.dc.html', false)
+        ] },
+        { title: 'SERVERS', items: [
+          it('Tail payment logs on Development Server', 'deploy@dev.atlas.internal · linked to atlas-web', 'SSH', '#93C5FD', 'rgba(96,165,250,0.12)', '', 'Terminals.dc.html', false)
+        ] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

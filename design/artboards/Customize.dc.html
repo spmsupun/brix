@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conduit — Customize layout and appearance</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+a{color:#C8F560}a:hover{color:#DDFB8F}
+</style>
+</helmet>
+<div style="width: 100%; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #09090B; font-family: Inter, -apple-system, 'SF Pro Text', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; color: #F4F4F5; font-size: 13px; overflow: hidden">
+  <dc-import name="Toolbar" mode="screen" title="Customize" preset="none" accent="{{accent}}" hint-size="100%,52px"></dc-import>
+  <div style="height: 822px; display: flex; gap: 6px; padding: 0 6px; min-width: 0">
+    <dc-import name="Sidebar" active="none" accent="{{accent}}" hint-size="232px,822px"></dc-import>
+
+    <section aria-label="Layout" style="flex: 1.35; min-width: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <header style="height: 44px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="font-size: 13px; font-weight: 600">Layout</span>
+        <span style="font-size: 12px; color: #8A8A93">Drag panel headers between docks, or set them here.</span>
+        <span style="flex: 1"></span>
+        <button onClick="{{reset}}" style="height: 26px; padding: 0 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; color: #D4D4D8; font: inherit; font-size: 12px">Reset</button>
+      </header>
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px; display: flex; flex-direction: column; gap: 16px">
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+          <sc-for list="{{presets}}" as="p" hint-placeholder-count="4">
+            <button onClick="{{p.pick}}" style="{{p.card}}">
+              <span style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: #F4F4F5">
+                <span style="{{p.radio}}"></span>{{p.title}}
+              </span>
+              <span style="font-size: 11px; color: #8A8A93; line-height: 1.35; text-align: left">{{p.sub}}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div aria-label="Live layout preview" style="{{prev.frame}}">
+          <div style="{{prev.sidebar}}">
+            <span style="font-size: 9.5px; font-weight: 600; color: #8A8A93; writing-mode: {{prev.sidebarWriting}}">{{prev.sidebarLabel}}</span>
+          </div>
+          <div style="flex: 1; min-width: 0; display: flex; gap: {{prev.gap}}">
+            <sc-if value="{{prev.hasLeft}}" hint-placeholder-val="{{ true }}">
+              <div style="width: 118px; flex: none; display: flex; flex-direction: column; gap: {{prev.gap}}">
+                <sc-for list="{{prev.left}}" as="d" hint-placeholder-count="1">
+                  <div style="{{d.style}}">{{d.label}}</div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: {{prev.gap}}">
+              <div style="{{prev.center}}">
+                <span style="font-size: 11px; font-weight: 600; color: #D4D4D8">{{prev.centerLabel}}</span>
+                <span style="font-size: 10px; color: #8A8A93">Centre</span>
+              </div>
+              <sc-if value="{{prev.hasBottom}}" hint-placeholder-val="{{ true }}">
+                <div style="height: 74px; flex: none; display: flex; gap: {{prev.gap}}">
+                  <sc-for list="{{prev.bottom}}" as="d" hint-placeholder-count="1">
+                    <div style="{{d.style}}">{{d.label}}</div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+            <sc-if value="{{prev.hasRight}}" hint-placeholder-val="{{ true }}">
+              <div style="width: 118px; flex: none; display: flex; flex-direction: column; gap: {{prev.gap}}">
+                <sc-for list="{{prev.right}}" as="d" hint-placeholder-count="1">
+                  <div style="{{d.style}}">{{d.label}}</div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; overflow: hidden">
+          <div style="height: 32px; display: grid; grid-template-columns: minmax(0, 1fr) 260px; align-items: center; padding: 0 12px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 11px; font-weight: 600; color: #8A8A93">
+            <span>Panel</span><span>Dock position</span>
+          </div>
+          <sc-for list="{{panels}}" as="r" hint-placeholder-count="5">
+            <div style="height: 40px; display: grid; grid-template-columns: minmax(0, 1fr) 260px; align-items: center; padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,0.05)">
+              <span style="display: flex; align-items: center; gap: 9px; font-size: 12.5px">
+                <span style="width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{r.icon}}"></path></svg>
+                </span>
+                {{r.name}}
+                <span style="font-size: 10.5px; color: #74747E">{{r.key}}</span>
+              </span>
+              <div role="radiogroup" aria-label="{{r.name}} position" style="display: flex; gap: 2px; padding: 2px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px">
+                <sc-for list="{{r.options}}" as="o" hint-placeholder-count="4">
+                  <button role="radio" aria-checked="{{o.on}}" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Appearance" style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #121214; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); overflow: hidden">
+      <header style="height: 44px; flex: none; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+        <span style="font-size: 13px; font-weight: 600">Appearance</span>
+      </header>
+      <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column">
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <span style="font-size: 12.5px; font-weight: 500">Accent</span>
+          <div style="display: flex; gap: 10px">
+            <sc-for list="{{accents}}" as="a" hint-placeholder-count="6">
+              <button aria-label="{{a.name}}" onClick="{{a.pick}}" style="{{a.style}}"></button>
+            </sc-for>
+          </div>
+          <span style="font-size: 11.5px; color: #8A8A93">Used for primary actions, focus and live indicators only.</span>
+        </div>
+        <sc-for list="{{segments}}" as="s" hint-placeholder-count="4">
+          <div style="padding: 14px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 12.5px; font-weight: 500">{{s.title}}</span>
+              <span style="font-size: 11.5px; color: #8A8A93">{{s.sub}}</span>
+            </div>
+            <div role="radiogroup" aria-label="{{s.title}}" style="display: flex; gap: 2px; padding: 2px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; flex: none">
+              <sc-for list="{{s.options}}" as="o" hint-placeholder-count="3">
+                <button role="radio" aria-checked="{{o.on}}" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+        <div style="padding: 14px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.06)">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 12.5px; font-weight: 500">Terminal font</span>
+            <span style="font-size: 11.5px; color: #8A8A93">SF Mono · ligatures off</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 2px; padding: 2px; background: #0C0C0E; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px">
+            <button aria-label="Smaller" onClick="{{smaller}}" style="width: 28px; height: 24px; background: transparent; border: 0; border-radius: 6px; color: #D4D4D8; font: inherit; font-size: 14px">−</button>
+            <span style="width: 44px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums">{{fontSize}} pt</span>
+            <button aria-label="Larger" onClick="{{larger}}" style="width: 28px; height: 24px; background: transparent; border: 0; border-radius: 6px; color: #D4D4D8; font: inherit; font-size: 14px">+</button>
+          </div>
+        </div>
+        <div style="margin: 16px; padding: 12px 14px; background: #0B0B0D; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; font-family: 'SF Mono','JetBrains Mono',Menlo,monospace; font-size: {{fontSize}}px; line-height: 1.6; color: #D4D4D8">
+          <div><span style="color: #22D3EE">atlas-web</span> <span style="color: #8A8A93">on</span> <span style="color: #A78BFA">⎇ feat/checkout-v2</span> <span style="color: {{accent}}">❯</span> claude</div>
+          <div><span style="color: #A78BFA">✻</span> <span style="font-weight: 600; color: #F4F4F5">Claude Code</span> <span style="color: #74747E">ready</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <footer style="height: 26px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 11px; color: #8A8A93">
+    <span>Changes apply instantly and are saved per Mac</span>
+    <span style="flex: 1"></span>
+    <span>⌘, to open Customize</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","options":["#C8F560","#A78BFA","#22D3EE","#FBBF24"],"default":"#C8F560"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      preset: 'code',
+      docks: { explorer: 'L', source: 'R', terminal: 'B', inspector: 'H', connections: 'H' },
+      accent: null, gap: 'islands', density: 'compact', side: 'left', style: 'full', fontSize: 12
+    };
+  }
+  renderVals() {
+    const st = this.state;
+    const accent = st.accent || this.props.accent || '#C8F560';
+    const PRESETS = {
+      code: { title: 'Code', sub: 'Files left, changes right, terminal below', center: 'Editor', docks: { explorer: 'L', source: 'R', terminal: 'B', inspector: 'H', connections: 'H' } },
+      agent: { title: 'Agent', sub: 'AI sessions centre, files docked right', center: 'Agent sessions', docks: { explorer: 'R', source: 'H', terminal: 'H', inspector: 'H', connections: 'R' } },
+      review: { title: 'Review', sub: 'Diff centre, changes and files left', center: 'Diff review', docks: { explorer: 'L', source: 'L', terminal: 'H', inspector: 'R', connections: 'H' } },
+      focus: { title: 'Focus', sub: 'Only the editor, everything else hidden', center: 'Editor', docks: { explorer: 'H', source: 'H', terminal: 'H', inspector: 'H', connections: 'H' } }
+    };
+    const PANELS = [
+      ['explorer', 'Explorer', '⌥⌘E', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['source', 'Source Control', '⌥⌘G', 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9'],
+      ['terminal', 'Terminal', '⌥⌘J', 'M5 8l4 4-4 4M12 17h7'],
+      ['inspector', 'Inspector', '⌥⌘I', 'M4 5h16v14H4zM15 5v14'],
+      ['connections', 'Connections', '⌥⌘L', 'M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1']
+    ];
+    const gapPx = { seamless: 1, islands: 6, airy: 10 }[st.gap];
+    const radius = st.gap === 'seamless' ? 2 : 6;
+    const seg = (on) => 'height: 24px; padding: 0 10px; border: 0; border-radius: 6px; font: inherit; font-size: 11.5px; font-weight: 500; ' +
+      (on ? 'background: rgba(255,255,255,0.10); color: #F4F4F5; box-shadow: 0 1px 2px rgba(0,0,0,0.4);' : 'background: transparent; color: #8A8A93;');
+
+    const presets = Object.keys(PRESETS).map((id) => {
+      const on = st.preset === id;
+      return {
+        title: PRESETS[id].title, sub: PRESETS[id].sub,
+        pick: () => this.setState({ preset: id, docks: Object.assign({}, PRESETS[id].docks) }),
+        card: 'display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; border-radius: 10px; font: inherit; cursor: pointer; ' +
+          (on ? 'background: rgba(255,255,255,0.06); border: 1px solid ' + accent + ';' : 'background: #0E0E10; border: 1px solid rgba(255,255,255,0.07);'),
+        radio: 'width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; ' + (on ? 'border: 3.5px solid ' + accent + ';' : 'border: 1.5px solid #52525B;')
+      };
+    });
+
+    const dockOf = (side) => PANELS.filter((p) => st.docks[p[0]] === side).map((p) => ({
+      label: p[1],
+      style: 'flex: 1; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px; background: #17171A; border: 1px solid rgba(255,255,255,0.08); border-radius: ' + radius + 'px; font-size: 10.5px; font-weight: 600; color: #D4D4D8'
+    }));
+    const left = dockOf('L'), right = dockOf('R'), bottom = dockOf('B');
+    const preset = PRESETS[st.preset] || { center: 'Editor' };
+    const prev = {
+      gap: gapPx + 'px',
+      frame: 'height: 300px; flex: none; display: flex; gap: ' + gapPx + 'px; padding: ' + gapPx + 'px; background: #050506; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; flex-direction: ' + (st.side === 'right' ? 'row-reverse' : 'row') + ';',
+      sidebar: 'width: ' + (st.style === 'rail' ? 22 : 70) + 'px; flex: none; display: flex; align-items: center; justify-content: center; background: #121214; border: 1px solid rgba(255,255,255,0.08); border-radius: ' + radius + 'px',
+      sidebarLabel: st.style === 'rail' ? 'Rail' : 'Sidebar',
+      sidebarWriting: st.style === 'rail' ? 'vertical-rl' : 'horizontal-tb',
+      center: 'flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: #0E0E10; border: 1px solid ' + accent + '55; border-radius: ' + radius + 'px',
+      centerLabel: preset.center,
+      hasLeft: left.length > 0, hasRight: right.length > 0, hasBottom: bottom.length > 0,
+      left, right, bottom
+    };
+
+    const panels = PANELS.map(([id, name, key, icon]) => ({
+      name, key, icon,
+      options: [['L', 'Left'], ['R', 'Right'], ['B', 'Bottom'], ['H', 'Hidden']].map(([v, label]) => ({
+        label, on: st.docks[id] === v ? 'true' : 'false', style: seg(st.docks[id] === v) + ' flex: 1;',
+        pick: () => {
+          const docks = Object.assign({}, st.docks);
+          docks[id] = v;
+          this.setState({ docks, preset: 'custom' });
+        }
+      }))
+    }));
+
+    const accents = [['Lime', '#C8F560'], ['Violet', '#A78BFA'], ['Cyan', '#22D3EE'], ['Amber', '#FBBF24'], ['Pink', '#F472B6'], ['Blue', '#60A5FA']].map(([name, hex]) => ({
+      name,
+      pick: () => this.setState({ accent: hex }),
+      style: 'width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; background: ' + hex + '; ' +
+        (hex === accent ? 'box-shadow: 0 0 0 2px #121214, 0 0 0 4px ' + hex + ';' : 'box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);')
+    }));
+
+    const segment = (title, sub, key, opts) => ({
+      title, sub,
+      options: opts.map(([v, label]) => ({ label, on: st[key] === v ? 'true' : 'false', style: seg(st[key] === v), pick: () => this.setState({ [key]: v }) }))
+    });
+
+    return {
+      accent,
+      presets, prev, panels, accents,
+      segments: [
+        segment('Panel spacing', 'How far apart the islands float', 'gap', [['seamless', 'Seamless'], ['islands', 'Islands'], ['airy', 'Airy']]),
+        segment('Density', 'Row height in lists and trees', 'density', [['compact', 'Compact'], ['comfortable', 'Comfortable']]),
+        segment('Sidebar position', 'Put navigation on either edge', 'side', [['left', 'Left'], ['right', 'Right']]),
+        segment('Sidebar style', 'Full labels or a slim icon rail', 'style', [['full', 'Full'], ['rail', 'Rail']])
+      ],
+      fontSize: st.fontSize,
+      smaller: () => this.setState({ fontSize: Math.max(10, st.fontSize - 1) }),
+      larger: () => this.setState({ fontSize: Math.min(16, st.fontSize + 1) }),
+      reset: () => this.setState({ preset: 'code', docks: Object.assign({}, PRESETS.code.docks), accent: null, gap: 'islands', density: 'compact', side: 'left', style: 'full', fontSize: 12 })
+    };
+  }
+}
+</script>
+</body>
+</html>
