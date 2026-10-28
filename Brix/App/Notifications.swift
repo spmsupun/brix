@@ -43,13 +43,13 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
             send()
         }
         // Always show an in-app toast too, so nothing is missed when banners are off.
-        store.toast(.info, title, detail: body.components(separatedBy: "\n").first)
+        store.toast(.info, title, detail: body.components(separatedBy: "\n").first, session: sessionID)
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let id = response.notification.request.content.userInfo["session"] as? String
         Task { @MainActor in
-            NSApp.activate(ignoringOtherApps: true)
+            AppDelegate.bringToFront()
             if let id { self.store?.reveal(session: id) }
             completionHandler()
         }

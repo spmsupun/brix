@@ -387,6 +387,11 @@ private struct FullSidebar: View {
                     Text("Input").font(Typo.ui(10, .semibold)).foregroundStyle(Color(hex: 0x09090B))
                         .padding(.horizontal, 7).padding(.vertical, 1)
                         .background(Capsule().fill(Theme.amber))
+                } else if s.unseen {
+                    Text("Done").font(Typo.ui(10, .semibold)).foregroundStyle(Theme.onAccent)
+                        .padding(.horizontal, 7).padding(.vertical, 1)
+                        .background(Capsule().fill(Theme.green))
+                        .help("Finished while you weren't looking")
                 } else {
                     StatusDot(color: s.state.color, size: 6, ring: s.state == .running, pulse: s.state == .running)
                 }
@@ -557,7 +562,7 @@ private struct FullSidebar: View {
                 }
             } else {
                 HStack(spacing: 6) {
-                    if working { LiveDot(color: Theme.green, size: 6, ring: 5) }
+                    if working { WorkingSpinner(size: 10) }
                     if let g, g.ahead > 0 { Text("↑\(g.ahead)").font(Typo.mono(10)).foregroundStyle(Theme.text2) }
                     if let g, g.behind > 0 { Text("↓\(g.behind)").font(Typo.mono(10)).foregroundStyle(Theme.amber) }
                     Group {

@@ -779,6 +779,8 @@ struct TerminalSession: Identifiable, Hashable {
     /// Title the agent gave the conversation, read from its transcript.
     var sessionName: String?
     var isLive: Bool = false
+    /// Finished or waiting while you weren't looking at it; cleared when you do.
+    var unseen = false
     /// Mock sessions loaded from the sample workspace.
     var isSampleSession: Bool = false
 

@@ -155,6 +155,8 @@ struct Toast: Identifiable, Equatable {
     var kind: Kind
     var title: String
     var detail: String? = nil
+    /// Clicking the toast opens this session.
+    var sessionID: String? = nil
 }
 
 /// Native alert for destructive and production actions.

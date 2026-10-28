@@ -55,6 +55,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// clicking the Dock icon brings it back. ⌘Q quits.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
+    /// Shows the main window even when its close button hid it, and activates Brix.
+    @MainActor
+    static func bringToFront() {
+        NSApp.unhide(nil)
+        if let w = NSApp.windows.first(where: { $0.canBecomeMain }) {
+            if w.isMiniaturized { w.deminiaturize(nil) }
+            w.makeKeyAndOrderFront(nil)
+        }
+        NSApp.activate()
+        // activate() only asks; from a notification click Brix should come forward regardless.
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        MainActor.assumeIsolated { store?.markWatchedSeen() }
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag, let w = NSApp.windows.first(where: { $0.canBecomeMain }) {
             w.makeKeyAndOrderFront(nil)

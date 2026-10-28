@@ -122,14 +122,19 @@ struct KeyframeLoop<Content: View>: NSViewRepresentable {
         guard key != context.coordinator.key || host.layer?.animation(forKey: "loop") == nil else { return }
         context.coordinator.key = key
         // Wait for a real size: the anchor and the layer's centre depend on it.
-        DispatchQueue.main.async { apply(to: host, animate: animate) }
+        DispatchQueue.main.async { apply(to: host, animate: animate, tries: 20) }
     }
 
-    private func apply(to host: NSView, animate: Bool) {
+    private func apply(to host: NSView, animate: Bool, tries: Int) {
         guard let layer = host.layer else { return }
+        let size = host.bounds.size
+        // Not laid out yet: the centre isn't known, so wait for a size (up to 1 s).
+        if size == .zero, tries > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { apply(to: host, animate: animate, tries: tries - 1) }
+            return
+        }
         layer.removeAllAnimations()
         let k = keyframes
-        let size = host.bounds.size
         // A layer-backed view's layer turns about its corner (anchorPoint 0,0),
         // not its centre, so the offset is from there; y follows the superlayer.
         let ap = layer.anchorPoint
@@ -201,6 +206,26 @@ struct LiveDot: View {
                 .frame(width: size, height: size)
             }
             .accessibilityHidden(true)
+    }
+}
+
+/// An agent is working: a fast spinning arc, readable at a glance where a soft
+/// pulse wasn't. Core Animation, so it costs the app nothing per frame.
+struct WorkingSpinner: View {
+    var color: Color = Theme.green
+    var size: CGFloat = 10
+
+    var body: some View {
+        KeyframeLoop(keyframes: Keyframes(stops: [(0, [0]), (1, [360])], duration: 0.7, curve: .linear), still: [0],
+                     pose: { v in LayerPose(rotate: v[0]) }) {
+            ZStack {
+                Circle().stroke(color.opacity(0.25), lineWidth: 1.8)
+                Circle().trim(from: 0, to: 0.3).stroke(color, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+            }
+            .padding(1)
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Working")
     }
 }
 

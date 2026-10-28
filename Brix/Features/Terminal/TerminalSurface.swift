@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Renders a session: a real PTY for live sessions, the lazy mock renderer
 /// for sample sessions. Swap point for SwiftTerm is LiveTerminalSurface.
@@ -7,7 +8,18 @@ struct TerminalSurface: View {
     let sessionID: String
     var showInput = true
 
+    /// On screen while Brix is in front: a finished session counts as seen.
     var body: some View {
+        content
+            .onAppear {
+                store.onScreen[sessionID, default: 0] += 1
+                if NSApp.isActive { store.markSeen(sessionID) }
+            }
+            .onDisappear { store.onScreen[sessionID, default: 1] -= 1 }
+            .onChange(of: store.session(sessionID)?.unseen) { _, u in if u == true, NSApp.isActive { store.markSeen(sessionID) } }
+    }
+
+    @ViewBuilder private var content: some View {
         if let s = store.session(sessionID) {
             if s.isLive {
                 LiveTerminalSurface(sessionID: sessionID)
@@ -21,6 +33,7 @@ struct TerminalSurface: View {
         }
     }
 }
+
 
 extension TermLine {
     var attributed: AttributedString {

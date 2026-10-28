@@ -67,6 +67,8 @@ final class AppStore {
     var selectedProjectInList: ProjectID?
     var pendingQuery: (connection: ResourceID, sql: String)?
     var focusedSessionID: String?
+    /// Sessions drawn on screen right now (any panel, card or pane), by count.
+    @ObservationIgnored var onScreen: [String: Int] = [:]
     var popover: PopoverRequest?
     /// Tabs on the global Terminals screen.
     var terminalTree = PaneTree()
@@ -254,8 +256,8 @@ final class AppStore {
     // MARK: Toasts and confirmations
 
     @discardableResult
-    func toast(_ kind: Toast.Kind, _ title: String, detail: String? = nil) -> UUID {
-        let t = Toast(kind: kind, title: title, detail: detail)
+    func toast(_ kind: Toast.Kind, _ title: String, detail: String? = nil, session: String? = nil) -> UUID {
+        let t = Toast(kind: kind, title: title, detail: detail, sessionID: session)
         toasts.append(t)
         if toasts.count > 4 { toasts.removeFirst(toasts.count - 4) }
         if kind != .progress {
@@ -409,11 +411,14 @@ final class AppStore {
                 }
             },
             Task { [weak self] in
-                // Commits made outside Brix (a terminal, another app) reach the build site.
+                // Projects opened this session refresh when their files or .git
+                // change (folder watcher), and on launch, on the Git screen and with
+                // Refresh. The rest catch commits made outside Brix once a day:
+                // every 45 s was about 180 git runs for 31 repositories.
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 45_000_000_000)
+                    try? await Task.sleep(nanoseconds: 86_400_000_000_000)
                     guard let self else { return }
-                    for p in self.library.projects where !p.isSample { self.refreshGit(p.id) }
+                    for p in self.library.projects where !p.isSample && self.workspaces[p.id]?.watchesFiles != true { self.refreshGit(p.id) }
                 }
             },
             Task { [weak self] in

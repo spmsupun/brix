@@ -21,6 +21,8 @@ final class WorkspaceStore {
     var cursor: (Int, Int) = (1, 1)
     var cursorPath: String?
     private var watcher: AnyObject?
+    /// Its folder watcher is running, so Git refreshes when the project changes.
+    var watchesFiles: Bool { watcher != nil }
     private var activated = false
     /// Tabs closed in the tiled centre this run, newest last (⇧⌘T reopens).
     var closedTabs: [ClosedTab] = []

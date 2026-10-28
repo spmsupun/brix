@@ -181,8 +181,8 @@ struct StatusBar: View {
     /// Working first, then waiting, then finished ones ready to review.
     private var chips: [TerminalSession] {
         let a = store.sessions.filter { $0.kind == .agent && ($0.state == .running || $0.state == .needsInput || ($0.state == .idle && !$0.task.isEmpty) || $0.state == .finished) }
-        let rank: (SessionState) -> Int = { $0 == .running ? 0 : $0 == .needsInput ? 1 : 2 }
-        return a.enumerated().sorted { (rank($0.element.state), $0.offset) < (rank($1.element.state), $1.offset) }.map(\.element)
+        let rank: (TerminalSession) -> Int = { $0.state == .needsInput ? 0 : $0.unseen ? 1 : $0.state == .running ? 2 : 3 }
+        return a.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
 
     @ViewBuilder private var agents: some View {
@@ -277,14 +277,17 @@ private struct AgentChip: View {
 
     var body: some View {
         let s = session
-        let waiting = s.state == .needsInput, working = s.state == .running
+        let waiting = s.state == .needsInput, working = s.state == .running, fresh = s.unseen && !waiting && !working
         Button { store.reveal(session: s.id) } label: {
             HStack(spacing: 6) {
                 if waiting {
                     Text("!").font(.system(size: 9, weight: .black)).foregroundStyle(Theme.amber)
                         .frame(width: 13, height: 13).background(Circle().fill(Color(hex: 0x09090B)))
                 } else if working {
-                    LiveDot(size: 6, ring: 5)
+                    WorkingSpinner(size: 10)
+                } else if fresh {
+                    Image(systemName: "checkmark").font(.system(size: 8, weight: .black)).foregroundStyle(Theme.onAccent)
+                        .frame(width: 13, height: 13).background(Circle().fill(Theme.green))
                 } else {
                     Circle().fill(Theme.disabled).frame(width: 6, height: 6)
                 }
@@ -293,7 +296,8 @@ private struct AgentChip: View {
             }
             .fixedSize()
             .padding(.horizontal, 8).frame(height: 20)
-            .background(RoundedRectangle(cornerRadius: 6).fill(waiting ? Theme.amber : Color.white(0.05)))
+            .background(RoundedRectangle(cornerRadius: 6).fill(waiting ? Theme.amber : fresh ? Theme.green.opacity(0.18) : Color.white(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(fresh ? Theme.green.opacity(0.5) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -307,7 +311,7 @@ private struct AgentChip: View {
         switch session.state {
         case .needsInput: "Waiting for you"
         case .running: session.touched.last.map { "Editing \(($0.path as NSString).lastPathComponent)" } ?? "Working"
-        default: "Done · ready to review"
+        default: session.unseen ? "Done · not opened yet" : "Done · ready to review"
         }
     }
 }
@@ -384,6 +388,9 @@ struct ToastStack: View {
                 .padding(.vertical, 10)
                 .frame(width: 320, alignment: .leading)
                 .popoverSurface(Theme.popover, radius: 10)
+                .contentShape(Rectangle())
+                .onTapGesture { if let s = t.sessionID { store.dismissToast(t.id); store.reveal(session: s) } }
+                .modifier(OptionalHandCursor(on: t.sessionID != nil))
                 .transition(.move(edge: .trailing).combined(with: .opacity))
                 .accessibilityElement(children: .combine)
             }
@@ -424,5 +431,12 @@ struct TypeToConfirmSheet: View {
         }
         .padding(20)
         .frame(width: 420)
+    }
+}
+
+private struct OptionalHandCursor: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on { content.handCursor() } else { content }
     }
 }

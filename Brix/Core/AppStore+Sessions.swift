@@ -305,6 +305,11 @@ extension AppStore {
         let old = sessions[i].state
         sessions[i].state = state
         guard old != state, sessions[i].kind == .agent else { return }
+        if state == .running {
+            sessions[i].unseen = false
+        } else if (old == .running || state == .needsInput || state == .finished), !isWatching(id) {
+            sessions[i].unseen = true
+        }
         let s = sessions[i]
         trackAgentTime(s, from: old, to: state)
         if state == .needsInput {
@@ -322,8 +327,20 @@ extension AppStore {
         updateDockBadge()
     }
 
+    /// You looked at it: no longer flagged as finished-unseen.
+    func markSeen(_ id: String) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].unseen else { return }
+        sessions[i].unseen = false
+        updateDockBadge()
+    }
+
+    /// Brix came to the front: sessions already on screen count as seen.
+    func markWatchedSeen() {
+        for s in sessions where s.unseen && (isWatching(s.id) || onScreen[s.id, default: 0] > 0) { markSeen(s.id) }
+    }
+
     func updateDockBadge() {
-        let n = waitingSessions.count
+        let n = sessions.filter { $0.kind == .agent && ($0.state == .needsInput || $0.unseen) }.count
         NSApp?.dockTile.badgeLabel = settings.badgeDock && n > 0 ? "\(n)" : nil
     }
 
@@ -338,6 +355,7 @@ extension AppStore {
         }
         focusedSessionID = id
         inspector = .session(id)
+        markSeen(id)
     }
 
     /// Called by the live terminal when output arrives or the process exits.

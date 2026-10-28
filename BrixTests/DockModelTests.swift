@@ -196,3 +196,21 @@ final class RenameTests: XCTestCase {
         XCTAssertEqual(ws.state.panes.allTabs.filter { $0 == GridItemID.file("src/lib/pay/intent.ts") }.count, 1)
     }
 }
+
+@MainActor
+final class UnseenSessionTests: XCTestCase {
+    func testFinishedAgentStaysFlaggedUntilOpened() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        store.loadSampleWorkspace()
+        let s = store.newTerminal(project: "atlas-web", kind: .agent, attach: false)
+        store.setSessionState(s.id, .running)
+        XCTAssertFalse(store.session(s.id)!.unseen)
+        store.setSessionState(s.id, .idle)
+        XCTAssertTrue(store.session(s.id)!.unseen, "done while not on screen")
+        store.reveal(session: s.id)
+        XCTAssertFalse(store.session(s.id)!.unseen, "opening it clears the flag")
+    }
+}

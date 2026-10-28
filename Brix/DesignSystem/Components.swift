@@ -216,9 +216,9 @@ struct StatusDot: View {
 
     var body: some View {
         if pulse && !reduceMotion {
-            // Core Animation pulse: a SwiftUI repeatForever animation here re-rendered
+            // Core Animation: a SwiftUI repeatForever animation here re-rendered
             // the whole window every frame while any session was running.
-            LiveDot(color: color, size: size, ring: ring ? 4 : 3)
+            WorkingSpinner(color: color, size: size + 4)
         } else {
             Circle()
                 .fill(color)
