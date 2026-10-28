@@ -209,7 +209,7 @@ final class AppStore {
         WindowVisibility.shared.start { [weak self] v in self?.windowVisible = v }
         if !restoreDisabled { startGitHubPolling() }
         AgentDBGateway.shared.start(store: self)
-        if !restoreDisabled { Task { @MainActor [weak self] in try? await Task.sleep(nanoseconds: 1_500_000_000); self?.offerRecovery() } }
+        if !restoreDisabled { Task { @MainActor [weak self] in try? await Task.sleep(nanoseconds: 1_500_000_000); self?.offerRecovery(); self?.offerDevCopy() } }
         updateDockBadge()
     }
 

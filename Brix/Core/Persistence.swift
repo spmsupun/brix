@@ -11,11 +11,20 @@ struct Persistence {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             return dir
         }
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = base.appendingPathComponent("Brix", isDirectory: true)
+        let dir = applicationSupport.appendingPathComponent(dataFolderName, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
+
+    static var applicationSupport: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0] }
+
+    /// "Brix" for the installed app, "Brix Dev" for development builds (from Info.plist).
+    static var dataFolderName: String {
+        (Bundle.main.object(forInfoDictionaryKey: "BrixDataFolder") as? String).flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : $0 } ?? "Brix"
+    }
+
+    /// True for a Brix Dev build.
+    static var isDevBuild: Bool { dataFolderName != "Brix" }
 
     static let standard = Persistence(directory: supportDirectory)
 
@@ -61,7 +70,10 @@ struct Persistence {
 struct Keychain {
     let service: String
 
-    static let standard = Keychain(service: "com.brix.credentials")
+    /// Development builds use their own entries (from Info.plist), so they never
+    /// read or change the installed app's passwords.
+    static let standard = Keychain(service: (Bundle.main.object(forInfoDictionaryKey: "BrixKeychainService") as? String)
+        .flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : $0 } ?? "com.brix.credentials")
 
     /// Secrets already read this run. A Keychain read is a system call (and on
     /// a freshly signed debug build it can prompt), so each one is read once.

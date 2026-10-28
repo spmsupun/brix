@@ -68,4 +68,40 @@ extension AppStore {
             try? FileManager.default.moveItem(at: f, to: to)
         }
     }
+
+    // MARK: Brix Dev
+
+    /// Brix Dev keeps its own data. On its first run it offers a copy of the
+    /// installed Brix's projects, servers and databases, so development starts
+    /// from real data. The installed app's files are only read, never changed;
+    /// passwords stay with the installed app.
+    func offerDevCopy() {
+        guard Persistence.isDevBuild, persistence.directory == Persistence.supportDirectory,
+              !FileManager.default.fileExists(atPath: persistence.url(".dev-copy-asked").path),
+              library.projects.allSatisfy(\.isSample), library.hosts.allSatisfy(\.isSample) else { return }
+        let stable = Persistence(directory: Persistence.applicationSupport.appendingPathComponent("Brix", isDirectory: true))
+        guard let found = try? stable.load(Library.self, from: "library.json"), !found.projects.isEmpty || !found.hosts.isEmpty else { return }
+        FileManager.default.createFile(atPath: persistence.url(".dev-copy-asked").path, contents: nil)
+        let what = "\(found.projects.filter { $0.parentID == nil }.count) projects, \(found.hosts.count) servers and \(found.databases.count) databases"
+        confirm("Start Brix Dev with a copy of your Brix data?",
+                "Brix Dev keeps its own data, so it can't change the Brix you use every day. Copy \(what) from Brix now? Passwords aren't copied; Brix Dev asks for them when needed.",
+                confirm: "Copy", destructive: false) { [weak self] in
+            guard let self else { return }
+            do {
+                let fm = FileManager.default
+                for name in ["library.json", "settings.json", "workspaces"] {
+                    let from = stable.url(name), to = persistence.url(name)
+                    guard fm.fileExists(atPath: from.path) else { continue }
+                    if fm.fileExists(atPath: to.path) { try fm.removeItem(at: to) }
+                    try fm.copyItem(at: from, to: to)
+                }
+                if let lib = try persistence.load(Library.self, from: "library.json") { library = lib }
+                if let st = try persistence.load(AppSettings.self, from: "settings.json") { settings = st }
+                for p in library.projects { refreshGit(p.id) }
+                toast(.success, "Copied your Brix data", detail: what)
+            } catch {
+                toast(.error, "Couldn't copy your Brix data", detail: error.localizedDescription)
+            }
+        }
+    }
 }

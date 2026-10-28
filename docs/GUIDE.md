@@ -20,6 +20,8 @@ open build/dd/Build/Products/Debug/Brix.app
 
 Or run `xcodegen generate` and open `Brix.xcodeproj` in Xcode. If `xcode-select` points at the Command Line Tools, `build.sh` uses `/Applications/Xcode.app` automatically.
 
+Builds from source (Debug) are **Brix Dev**: a separate app with an orange DEV badge, its own data folder (`~/Library/Application Support/Brix Dev`) and its own Keychain entries, so it can run beside an installed Brix without touching it. On its first run it offers to copy the installed Brix's projects, servers and databases (never passwords).
+
 On first launch Brix shows a short welcome: add a project folder, an SSH host or a database, or choose **Load sample workspace** to explore with demo data (Help menu has the same option, plus **Remove Sample Workspace**).
 
 ## Why App Sandbox is off

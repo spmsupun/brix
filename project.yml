@@ -37,8 +37,10 @@ targets:
     info:
       path: Brix/Resources/Info.plist
       properties:
-        CFBundleDisplayName: Brix
-        CFBundleName: Brix
+        CFBundleDisplayName: "$(BRIX_APP_NAME)"
+        CFBundleName: "$(BRIX_APP_NAME)"
+        BrixDataFolder: "$(BRIX_APP_NAME)"
+        BrixKeychainService: "$(BRIX_KEYCHAIN_SERVICE)"
         CFBundleShortVersionString: "0.1.0-beta.1"
         CFBundleVersion: "1"
         LSApplicationCategoryType: public.app-category.developer-tools
@@ -52,6 +54,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.spmsupun.brix
+        BRIX_APP_NAME: Brix
+        BRIX_KEYCHAIN_SERVICE: com.brix.credentials
         PRODUCT_NAME: Brix
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Automatic
@@ -60,6 +64,15 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         COMBINE_HIDPI_IMAGES: YES
         GENERATE_INFOPLIST_FILE: NO
+      # Debug builds are "Brix Dev": their own bundle id, name, icon, data folder
+      # and Keychain entries, so they run beside an installed Brix without sharing
+      # anything with it.
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.spmsupun.brix.dev
+          BRIX_APP_NAME: Brix Dev
+          BRIX_KEYCHAIN_SERVICE: com.brix.credentials.dev
+          ASSETCATALOG_COMPILER_APPICON_NAME: AppIconDev
   BrixTests:
     type: bundle.unit-test
     platform: macOS

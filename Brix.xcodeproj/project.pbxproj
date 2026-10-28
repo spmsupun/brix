@@ -900,6 +900,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BRIX_APP_NAME = Brix;
+				BRIX_KEYCHAIN_SERVICE = com.brix.credentials;
 				CODE_SIGN_ENTITLEMENTS = Brix/Resources/Brix.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
@@ -938,8 +940,10 @@
 		6308EF586E19F553DFA1887F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconDev;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BRIX_APP_NAME = "Brix Dev";
+				BRIX_KEYCHAIN_SERVICE = com.brix.credentials.dev;
 				CODE_SIGN_ENTITLEMENTS = Brix/Resources/Brix.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
@@ -951,7 +955,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.spmsupun.brix;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spmsupun.brix.dev;
 				PRODUCT_NAME = Brix;
 				SDKROOT = macosx;
 			};
