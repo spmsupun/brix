@@ -21,10 +21,10 @@ command -v xcodegen >/dev/null && xcodegen generate --quiet
 
 APP=build/release/Build/Products/Release/Brix.app
 ZIP="build/dist/Brix-$VERSION-macOS.zip"
-rm -rf build/release build/dist
+rm -rf build/release
 mkdir -p build/dist
 
-echo "Building $VERSION…"
+echo "Building ${VERSION}..."
 xcodebuild -project Brix.xcodeproj -scheme Brix -configuration Release \
   -derivedDataPath build/release -clonedSourcePackagesDirPath build/spm \
   -skipPackagePluginValidation -skipMacroValidation \
@@ -37,7 +37,7 @@ xcodebuild -project Brix.xcodeproj -scheme Brix -configuration Release \
 codesign --force --options runtime --timestamp --entitlements Brix/Resources/Brix.entitlements -s "$SIGN_IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"
 
-echo "Notarising…"
+echo "Notarising..."
 ditto -c -k --keepParent "$APP" build/dist/notarize.zip
 xcrun notarytool submit build/dist/notarize.zip --keychain-profile "$NOTARY_PROFILE" --wait
 rm build/dist/notarize.zip
@@ -46,7 +46,7 @@ spctl -a -vv -t exec "$APP"
 
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 
-echo "Making the disk image…"
+echo "Making the disk image..."
 DMG="build/dist/Brix-$VERSION.dmg"
 rm -rf build/dmg && mkdir -p build/dmg
 ditto "$APP" build/dmg/Brix.app

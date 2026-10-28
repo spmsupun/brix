@@ -213,22 +213,22 @@ struct StatusDot: View {
     var ring = false
     var pulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var on = false
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: size, height: size)
-            .overlay {
-                if ring {
-                    Circle().stroke(color.opacity(on && pulse && !reduceMotion ? 0.05 : 0.2), lineWidth: 3)
-                        .frame(width: size + 3, height: size + 3)
+        if pulse && !reduceMotion {
+            // Core Animation pulse: a SwiftUI repeatForever animation here re-rendered
+            // the whole window every frame while any session was running.
+            LiveDot(color: color, size: size, ring: ring ? 4 : 3)
+        } else {
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .overlay {
+                    if ring {
+                        Circle().stroke(color.opacity(0.2), lineWidth: 3).frame(width: size + 3, height: size + 3)
+                    }
                 }
-            }
-            .onAppear {
-                guard pulse, !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 1.2).repeatForever()) { on = true }
-            }
+        }
     }
 }
 
