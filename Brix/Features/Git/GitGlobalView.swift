@@ -483,11 +483,14 @@ struct BranchesList: View {
 struct GitGlobalView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.islandGap) private var gap
-    @State private var projectID: ProjectID?
+    @State var projectID: ProjectID?
     @State private var tab = 0
-    @State private var selectedCommit: String?
+    @State var selectedCommit: String?
+    /// Panel widths, dragged from the gaps between them; kept across launches.
+    @AppStorage("git.listWidth") private var listWidth: Double = 286
+    @AppStorage("git.repoWidth") private var repoWidth: Double = 300
 
-    private var current: ProjectID? {
+    var current: ProjectID? {
         projectID ?? store.sortedProjects.first { store.changeCount($0.id) > 0 }?.id ?? store.sortedProjects.first?.id
     }
 
@@ -496,14 +499,16 @@ struct GitGlobalView: View {
             EmptyState(symbol: "arrow.triangle.branch", message: "Add a project to see its changes here.", actionTitle: "Add Project") { store.sheet = .addProject }
                 .island()
         } else {
-            HStack(spacing: gap) {
-                summary.frame(width: 286)
+            HStack(spacing: 0) {
+                summary.frame(width: listWidth)
+                ResizeHandle(axis: .horizontal, thickness: gap) { listWidth = min(max(listWidth + $0, 220), 520) }
                 if let id = current {
                     let ws = store.workspace(for: id)
                     VStack(spacing: gap) {
                         ReviewView(ws: ws)
                     }
                     .frame(maxWidth: .infinity)
+                    ResizeHandle(axis: .horizontal, thickness: gap) { repoWidth = min(max(repoWidth - $0, 240), 560) }
                     VStack(spacing: 0) {
                         HStack(spacing: 8) {
                             Text("Repository").font(Typo.panelTitle).tracking(0.4).foregroundStyle(Theme.text2)
@@ -517,7 +522,7 @@ struct GitGlobalView: View {
                         default: BranchesList(projectID: id)
                         }
                     }
-                    .frame(width: 300)
+                    .frame(width: repoWidth)
                     .island()
                 }
             }
@@ -551,37 +556,88 @@ struct GitGlobalView: View {
             }
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(store.sortedProjects) { p in
-                        let g = store.git[p.id]
-                        let on = p.id == current
-                        Button { projectID = p.id; selectedCommit = nil } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 8) {
-                                    ProjectMark(project: p, size: 22)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(p.name).font(Typo.ui(12.5, .semibold)).foregroundStyle(Theme.text)
-                                        Text(g?.isRepo == false ? "Not a repository" : "⎇ \(g?.branch ?? "…")").font(Typo.mono(10.5)).foregroundStyle(Theme.text3).lineLimit(1)
-                                    }
-                                    Spacer(minLength: 0)
-                                    VStack(alignment: .trailing, spacing: 1) {
-                                        let n = g?.changedFileCount ?? 0
-                                        Text(n == 0 ? "Clean" : "\(n) changed").font(Typo.ui(11, .medium)).foregroundStyle(n == 0 ? Theme.green : Theme.amber)
-                                        if let a = g?.ahead, a > 0 { Text("↑\(a) to push").font(Typo.ui(10.5)).foregroundStyle(Theme.text3) }
-                                    }
-                                }
-                                if let g, !g.isClean { ChangeBar(changes: g.changes, hue: p.hue.color) }
-                            }
-                            .padding(.horizontal, 10).padding(.vertical, 9)
-                            .rowBackground(selected: on, radius: 8)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu { ProjectContextMenu(project: p) }
+                    // Top-level projects, each followed by its repositories on a
+                    // guide line, so a repo is always read under its parent.
+                    ForEach(store.sortedProjects.filter { $0.parentID == nil }) { p in
+                        let repos = store.children(of: p.id)
+                        projectRow(p, repos: repos)
+                        ForEach(repos) { r in repoRow(r, parent: p, last: r.id == repos.last?.id) }
                     }
                 }
                 .padding(6)
             }
         }
         .island()
+    }
+}
+
+extension GitGlobalView {
+    /// A parent folder of several repositories is not a repo itself: it shows
+    /// the totals of its repos instead of "Not a repository".
+    fileprivate func projectRow(_ p: Project, repos: [Project]) -> some View {
+        let g = store.git[p.id]
+        let isGroup = !repos.isEmpty && g?.isRepo != true
+        let n = isGroup ? repos.reduce(0) { $0 + (store.git[$1.id]?.changedFileCount ?? 0) } : (g?.changedFileCount ?? 0)
+        let ahead = isGroup ? repos.reduce(0) { $0 + (store.git[$1.id]?.ahead ?? 0) } : (g?.ahead ?? 0)
+        let sub = isGroup ? "\(repos.count) repositor\(repos.count == 1 ? "y" : "ies")" : (g?.isRepo == false ? "Not a repository" : "⎇ \(g?.branch ?? "…")")
+        return Button { projectID = isGroup ? (repos.first?.id ?? p.id) : p.id; selectedCommit = nil } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    ProjectMark(project: p, size: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(p.name).font(Typo.ui(12.5, .semibold)).foregroundStyle(Theme.text)
+                        Text(sub).font(isGroup ? Typo.ui(10.5) : Typo.mono(10.5)).foregroundStyle(Theme.text3).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(n == 0 ? "Clean" : "\(n) changed").font(Typo.ui(11, .medium)).foregroundStyle(n == 0 ? Theme.green : Theme.amber)
+                        if ahead > 0 { Text("↑\(ahead) to push").font(Typo.ui(10.5)).foregroundStyle(Theme.text3) }
+                    }
+                }
+                if !isGroup, let g, !g.isClean { ChangeBar(changes: g.changes, hue: p.hue.color) }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .rowBackground(selected: p.id == current, radius: 8)
+        }
+        .buttonStyle(.plain)
+        .contextMenu { ProjectContextMenu(project: p) }
+        .padding(.top, 4)
+    }
+
+    /// A repository under its project: indented on the parent's guide line.
+    fileprivate func repoRow(_ r: Project, parent p: Project, last: Bool) -> some View {
+        let g = store.git[r.id]
+        let n = g?.changedFileCount ?? 0
+        return Button { projectID = r.id; selectedCommit = nil } label: {
+            HStack(spacing: 0) {
+                // ├ or └ in the parent's colour.
+                ZStack(alignment: .topLeading) {
+                    Rectangle().fill(p.hue.color.opacity(0.35)).frame(width: 1.5).frame(maxHeight: last ? 22 : .infinity, alignment: .top)
+                    Rectangle().fill(p.hue.color.opacity(0.35)).frame(width: 10, height: 1.5).offset(y: 21)
+                }
+                .frame(width: 14, alignment: .leading).frame(maxHeight: .infinity, alignment: .top)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        ProjectMark(project: r, size: 18)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(r.name).font(Typo.ui(12, .medium)).foregroundStyle(Theme.text)
+                            Text(g?.isRepo == false ? "Not a repository" : "⎇ \(g?.branch ?? "…")").font(Typo.mono(10)).foregroundStyle(Theme.text3).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(n == 0 ? "Clean" : "\(n) changed").font(Typo.ui(10.5, .medium)).foregroundStyle(n == 0 ? Theme.green : Theme.amber)
+                            if let a = g?.ahead, a > 0 { Text("↑\(a) to push").font(Typo.ui(10)).foregroundStyle(Theme.text3) }
+                        }
+                    }
+                    if let g, !g.isClean { ChangeBar(changes: g.changes, hue: r.hue.color) }
+                }
+                .padding(.horizontal, 8).padding(.vertical, 7)
+                .rowBackground(selected: r.id == current, radius: 8)
+            }
+            .padding(.leading, 20)
+        }
+        .buttonStyle(.plain)
+        .contextMenu { ProjectContextMenu(project: r) }
     }
 }
 

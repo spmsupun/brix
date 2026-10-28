@@ -142,18 +142,26 @@ private struct SessionList: View {
         .island()
     }
 
+    /// Two lines under the group, joined to it by a guide line: the session's
+    /// name, then where it runs and what it's doing.
     private func row(_ s: TerminalSession) -> some View {
         let on = store.inspector == .session(s.id)
+        let place = s.cwd.split(separator: "/").last.map(String.init) ?? s.cwd
         return Button { open(s.id) } label: {
             HStack(spacing: 8) {
-                SessionIcon(session: s, size: 13).frame(width: 14)
-                Text(store.displayTitle(s)).font(Typo.row).foregroundStyle(on ? Theme.text : Theme.body).lineLimit(1)
-                Spacer(minLength: 0)
-                Text(meta(s)).font(Typo.ui(10.5)).foregroundStyle(Theme.text3)
-                Circle().fill(s.state.color).frame(width: 6, height: 6)
+                Rectangle().fill(Theme.border).frame(width: 1).padding(.vertical, -2)
+                SessionIcon(session: s, size: 13).frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(store.displayTitle(s)).font(Typo.ui(12.5, .medium)).foregroundStyle(on ? Theme.text : Theme.body)
+                        .lineLimit(1).truncationMode(.middle)
+                    Text(place.isEmpty ? meta(s) : "\(place) · \(meta(s))").font(Typo.ui(10.5)).foregroundStyle(Theme.text3).lineLimit(1)
+                }
+                .help(store.displayTitle(s))
+                Spacer(minLength: 4)
+                state(s)
             }
-            .padding(.leading, 14).padding(.trailing, 8)
-            .frame(height: 28)
+            .padding(.leading, 16).padding(.trailing, 8)
+            .frame(height: 40)
             .rowBackground(selected: on, radius: 6)
         }
         .buttonStyle(.plain)
@@ -168,10 +176,24 @@ private struct SessionList: View {
         .accessibilityLabel("\(s.title), \(s.state.label)")
     }
 
+    @ViewBuilder private func state(_ s: TerminalSession) -> some View {
+        if s.state == .needsInput {
+            Text("Input").font(Typo.ui(10, .semibold)).foregroundStyle(Color(hex: 0x09090B))
+                .padding(.horizontal, 7).padding(.vertical, 1).background(Capsule().fill(Theme.amber))
+        } else if s.unseen {
+            Text("Done").font(Typo.ui(10, .semibold)).foregroundStyle(Theme.onAccent)
+                .padding(.horizontal, 7).padding(.vertical, 1).background(Capsule().fill(Theme.green))
+        } else if s.state == .running {
+            WorkingSpinner(size: 10)
+        } else {
+            Circle().fill(s.state.color).frame(width: 6, height: 6)
+        }
+    }
+
     private func meta(_ s: TerminalSession) -> String {
         switch s.state {
-        case .needsInput: "input"
-        case .idle: "idle"
+        case .needsInput: "waiting for you"
+        case .idle: s.unseen ? "done, not opened" : "idle"
         case .running: s.kind == .agent ? AgentPane.duration(since: s.startedAt).replacingOccurrences(of: " min", with: "m") : (s.kind == .logs ? "tail" : (s.process.contains("dev") ? ":3000" : ""))
         default: s.state.label.lowercased()
         }

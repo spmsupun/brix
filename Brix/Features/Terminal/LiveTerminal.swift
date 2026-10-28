@@ -53,6 +53,20 @@ final class BrixTerminalView: LocalProcessTerminalView {
         applyTheme(fontSize: font.pointSize, accent: accent)
     }
 
+    /// Back on screen after another screen was shown (Git, Settings): SwiftTerm
+    /// only redraws rows that changed, so an idle session stayed black until new
+    /// output arrived. Draw the whole view once.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil { needsDisplay = true }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        let grew = newSize != frame.size
+        super.setFrameSize(newSize)
+        if grew { needsDisplay = true }
+    }
+
     override func dataReceived(slice: ArraySlice<UInt8>) {
         super.dataReceived(slice: slice)
         lastData = Date()
