@@ -107,12 +107,10 @@ Paste a connection URL, a `.env` line, a `psql` command or a compose service and
 
 ## Install the beta
 
-1. Download **Brix-…-macOS.zip** from the [releases page](https://github.com/spmsupun/brix/releases), unzip it and move **Brix.app** to Applications.
-2. This beta is not notarised by Apple yet, so macOS asks before the first launch:
-   - **macOS 15 or later:** open Brix once, then go to **System Settings › Privacy & Security** and click **Open Anyway**.
-   - **macOS 14:** right-click **Brix.app**, choose **Open**, then **Open** again.
-   - Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Brix.app`
-3. On first launch, add a project folder, or choose **Load sample workspace** to look around with demo data.
+1. Download **Brix-…-macOS.zip** from the [releases page](https://github.com/spmsupun/brix/releases).
+2. Unzip it and move **Brix.app** to Applications.
+3. Open it. Builds are signed with a Developer ID and notarised by Apple, so macOS opens them like any other app.
+4. Add a project folder, or choose **Load sample workspace** to look around with demo data.
 
 Brix runs on macOS 14 Sonoma or later, on Apple silicon and Intel.
 
@@ -146,7 +144,7 @@ Want every detail (keyboard shortcuts, where each file lives, how agents are det
 
 ## Roadmap
 
-- Notarised builds and a Homebrew cask (`brew install --cask brix`)
+- A Homebrew cask (`brew install --cask brix`)
 - Automatic updates
 - More agents' usage and limits in the status bar
 - Your ideas: [open an issue](https://github.com/spmsupun/brix/issues)
