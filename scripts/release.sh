@@ -1,6 +1,6 @@
 #!/bin/sh
-# Builds a universal, Developer ID–signed, notarised Brix.app and zips it for a
-# GitHub Release.
+# Builds a universal, Developer ID–signed, notarised Brix.app, then a notarised
+# disk image (open it, drag Brix to Applications) and a zip for Homebrew.
 #
 #   scripts/release.sh 0.1.0-beta.2
 #
@@ -45,9 +45,21 @@ xcrun stapler staple "$APP"
 spctl -a -vv -t exec "$APP"
 
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
-(cd build/dist && shasum -a 256 "$(basename "$ZIP")" > "$(basename "$ZIP").sha256")
-echo "Ready: $ZIP"
-cat "$ZIP.sha256"
+
+echo "Making the disk image…"
+DMG="build/dist/Brix-$VERSION.dmg"
+rm -rf build/dmg && mkdir -p build/dmg
+ditto "$APP" build/dmg/Brix.app
+ln -s /Applications build/dmg/Applications
+hdiutil create -volname "Brix $VERSION" -srcfolder build/dmg -ov -format UDZO -fs HFS+ "$DMG" >/dev/null
+codesign --force --timestamp -s "$SIGN_IDENTITY" "$DMG"
+xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$DMG"
+rm -rf build/dmg
+
+(cd build/dist && for f in "$(basename "$DMG")" "$(basename "$ZIP")"; do shasum -a 256 "$f" > "$f.sha256"; done)
+echo "Ready: $DMG (for people) and $ZIP (for Homebrew)"
+cat build/dist/*.sha256
 echo
 echo "After publishing the GitHub release, update the Homebrew cask (spmsupun/homebrew-tap, Casks/brix.rb):"
 echo "  version \"$VERSION\""

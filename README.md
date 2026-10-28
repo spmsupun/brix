@@ -115,9 +115,9 @@ brew install --cask spmsupun/tap/brix
 
 Or by hand:
 
-1. Download **Brix-…-macOS.zip** from the [releases page](https://github.com/spmsupun/brix/releases).
-2. Unzip it and move **Brix.app** to Applications.
-3. Open it. Builds are signed with a Developer ID and notarised by Apple, so macOS opens them like any other app.
+1. Download **Brix-….dmg** from the [latest release](https://github.com/spmsupun/brix/releases).
+2. Open it and drag **Brix** onto **Applications**.
+3. Open Brix. It's signed with a Developer ID and notarised by Apple, so macOS opens it like any other app.
 4. Add a project folder, or choose **Load sample workspace** to look around with demo data.
 
 Brix runs on macOS 14 Sonoma or later, on Apple silicon and Intel.
