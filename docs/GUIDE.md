@@ -15,7 +15,7 @@ Requirements: Xcode 16 or later (built and tested with Xcode 26.5), [XcodeGen](h
 ```sh
 ./build.sh          # generates Brix.xcodeproj from project.yml, then builds Debug
 ./build.sh test     # runs the unit tests
-open build/dd/Build/Products/Debug/Brix.app
+open "build/dd/Build/Products/Debug/Brix Dev.app"
 ```
 
 Or run `xcodegen generate` and open `Brix.xcodeproj` in Xcode. If `xcode-select` points at the Command Line Tools, `build.sh` uses `/Applications/Xcode.app` automatically.

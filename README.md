@@ -132,7 +132,7 @@ git clone https://github.com/spmsupun/brix.git
 cd brix
 ./build.sh                 # generates the Xcode project and builds Debug
 ./build.sh test            # runs the unit tests
-open build/dd/Build/Products/Debug/Brix.app
+open "build/dd/Build/Products/Debug/Brix Dev.app"
 ```
 
 Or run `xcodegen generate` and open `Brix.xcodeproj` in Xcode.

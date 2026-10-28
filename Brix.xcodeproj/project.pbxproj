@@ -907,6 +907,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				EXECUTABLE_NAME = Brix;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Brix/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -914,6 +915,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.spmsupun.brix;
+				PRODUCT_MODULE_NAME = Brix;
 				PRODUCT_NAME = Brix;
 				SDKROOT = macosx;
 			};
@@ -933,7 +935,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.spmsupun.brix.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Brix.app/Contents/MacOS/Brix";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Brix Dev.app/Contents/MacOS/Brix";
 			};
 			name = Debug;
 		};
@@ -949,6 +951,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				EXECUTABLE_NAME = Brix;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Brix/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -956,7 +959,8 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.spmsupun.brix.dev;
-				PRODUCT_NAME = Brix;
+				PRODUCT_MODULE_NAME = Brix;
+				PRODUCT_NAME = "Brix Dev";
 				SDKROOT = macosx;
 			};
 			name = Debug;
