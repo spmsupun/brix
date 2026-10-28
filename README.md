@@ -107,6 +107,14 @@ Paste a connection URL, a `.env` line, a `psql` command or a compose service and
 
 ## Install the beta
 
+With [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask spmsupun/tap/brix
+```
+
+Or by hand:
+
 1. Download **Brix-…-macOS.zip** from the [releases page](https://github.com/spmsupun/brix/releases).
 2. Unzip it and move **Brix.app** to Applications.
 3. Open it. Builds are signed with a Developer ID and notarised by Apple, so macOS opens them like any other app.
@@ -144,7 +152,6 @@ Want every detail (keyboard shortcuts, where each file lives, how agents are det
 
 ## Roadmap
 
-- A Homebrew cask (`brew install --cask brix`)
 - Automatic updates
 - More agents' usage and limits in the status bar
 - Your ideas: [open an issue](https://github.com/spmsupun/brix/issues)

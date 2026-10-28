@@ -48,3 +48,7 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 (cd build/dist && shasum -a 256 "$(basename "$ZIP")" > "$(basename "$ZIP").sha256")
 echo "Ready: $ZIP"
 cat "$ZIP.sha256"
+echo
+echo "After publishing the GitHub release, update the Homebrew cask (spmsupun/homebrew-tap, Casks/brix.rb):"
+echo "  version \"$VERSION\""
+echo "  sha256 \"$(cut -d' ' -f1 "$ZIP.sha256")\""
