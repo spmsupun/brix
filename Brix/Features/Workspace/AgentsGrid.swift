@@ -185,7 +185,8 @@ struct SessionActions: View {
     }
 }
 
-/// A Claude Code session: transcript plus composer with @-attachments.
+/// A Claude Code session. Input goes straight to its terminal, so pasting
+/// images and every agent shortcut work as in a normal terminal.
 struct AgentPane: View {
     @Environment(AppStore.self) private var store
     @Environment(\.accent) private var accent
@@ -193,9 +194,6 @@ struct AgentPane: View {
     let ws: WorkspaceStore
     let sessionID: String
     var compact: Bool
-    @State private var draft = ""
-    @State private var attachments: [String] = []
-    @FocusState private var focused: Bool
 
     var body: some View {
         if let s = store.session(sessionID) {
@@ -204,17 +202,13 @@ struct AgentPane: View {
             let active = s.state == .running || s.state == .needsInput
             if inTile {
                 // The tab carries the name, logo and state; the body is just the session.
-                VStack(spacing: 0) {
-                    TerminalSurface(sessionID: s.id, showInput: false)
-                    if store.settings.agentComposer { composer(s) }
-                }
-                .background(Theme.terminal)
+                TerminalSurface(sessionID: s.id, showInput: false)
+                    .background(Theme.terminal)
                 .onTapGesture { store.inspector = .session(s.id) }
             } else {
                 VStack(spacing: 0) {
                     header(s, project: p, hue: hue)
                     TerminalSurface(sessionID: s.id, showInput: false)
-                    if store.settings.agentComposer { composer(s) }
                 }
                 .background(Theme.terminal)
                 .clipShape(RoundedRectangle(cornerRadius: Metrics.islandRadius))
@@ -266,84 +260,6 @@ struct AgentPane: View {
     static func duration(since d: Date) -> String {
         let m = Int(Date().timeIntervalSince(d) / 60)
         return m < 60 ? "\(max(m, 1)) min" : "\(m / 60) h"
-    }
-
-    private func composer(_ s: TerminalSession) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !attachments.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(attachments, id: \.self) { a in
-                        HStack(spacing: 4) {
-                            Text("@ \(a)").font(Typo.ui(11)).foregroundStyle(Theme.text2)
-                            Button { attachments.removeAll { $0 == a } } label: {
-                                Image(systemName: "xmark").font(.system(size: 7.5, weight: .bold)).foregroundStyle(Theme.meta)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Remove \(a)")
-                        }
-                        .padding(.horizontal, 8).frame(height: 22)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white(0.05)))
-                    }
-                }
-            }
-            HStack(spacing: 10) {
-                MenuButton(items: { attachMenu(s) }) {
-                    Text("@").font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text3).frame(width: 22, height: 22).contentShape(Rectangle())
-                }
-                .accessibilityLabel("Attach file, table or host")
-                TextField(s.state == .needsInput ? "Reply to \(s.title), / commands, @ to attach files…" : "Message \(s.title), / commands, @ to attach files…", text: $draft)
-                    .textFieldStyle(.plain)
-                    .font(Typo.ui(13))
-                    .foregroundStyle(Theme.text)
-                    .focused($focused)
-                    .onSubmit(send)
-                    .accessibilityLabel("Message \(s.title)")
-                AccentButton(title: "Send", shortcut: "↩", height: 28) { send() }
-                    .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.island))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(s.state == .needsInput ? Theme.amber.opacity(0.4) : Theme.controlStroke))
-        .padding(.horizontal, 12).padding(.bottom, 12).padding(.top, 4)
-    }
-
-    private func attachMenu(_ s: TerminalSession) -> [MenuSpec] {
-        var items: [MenuSpec] = [.header("Files")]
-        let files = Array(Set(ws.state.openFiles + s.touched.map(\.path))).sorted()
-        items += files.prefix(12).map { f in MenuSpec(title: f) { attach((f as NSString).lastPathComponent, ref: f) } }
-        let dbs = store.linkedDatabases(ws.projectID)
-        if !dbs.isEmpty {
-            items += [.separator, .header("Tables")]
-            for d in dbs {
-                let tables = MockDatabaseService.tables(for: d).values.flatMap { $0 }.filter { $0.kind == .table }
-                items.append(MenuSpec(title: d.name, children: tables.map { t in MenuSpec(title: t.name) { attach("\(d.name) · \(t.name)", ref: "\(d.name).\(t.name)") } }))
-            }
-        }
-        let hosts = store.linkedHosts(ws.projectID)
-        if !hosts.isEmpty {
-            items += [.separator, .header("Hosts")]
-            items += hosts.map { h in MenuSpec(title: h.name) { attach(h.name, ref: h.name) } }
-        }
-        return items
-    }
-
-    private func attach(_ label: String, ref: String) {
-        if !attachments.contains(label) { attachments.append(label) }
-        refs[label] = ref
-        focused = true
-    }
-
-    @State private var refs: [String: String] = [:]
-
-    private func send() {
-        let text = draft.trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty else { return }
-        // Attachments are passed as @references by name; never with secrets.
-        let prefix = attachments.map { "@\(refs[$0] ?? $0)" }.joined(separator: " ")
-        store.sendInput(sessionID, prefix.isEmpty ? text : prefix + " " + text)
-        draft = ""
-        attachments = []
     }
 }
 

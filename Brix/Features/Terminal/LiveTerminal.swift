@@ -210,8 +210,12 @@ final class TerminalRegistry {
         environment["TERM_PROGRAM"] = "Brix"
         environment.removeValue(forKey: "GIT_TERMINAL_PROMPT")
         let dir = FileManager.default.fileExists(atPath: cwd) ? cwd : NSHomeDirectory()
-        view.startProcess(executable: argv[0], args: Array(argv.dropFirst()),
-                          environment: environment.map { "\($0.key)=\($0.value)" }, execName: nil, currentDirectory: dir)
+        // forkpty passes every open descriptor on; see ProcessRunner.spawnLock.
+        ProcessRunner.spawnLock.withLock {
+            ProcessRunner.markAllCloseOnExec()
+            view.startProcess(executable: argv[0], args: Array(argv.dropFirst()),
+                              environment: environment.map { "\($0.key)=\($0.value)" }, execName: nil, currentDirectory: dir)
+        }
     }
 
     func view(_ id: String) -> BrixTerminalView? { views[id] }

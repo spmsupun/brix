@@ -227,7 +227,7 @@ extension AppStore {
         }
     }
 
-    /// Input from a mock terminal's prompt line or an agent composer.
+    /// Input from a mock terminal's prompt line or Brix sending a prompt.
     func sendInput(_ id: String, _ text: String) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         let s = sessions[i]

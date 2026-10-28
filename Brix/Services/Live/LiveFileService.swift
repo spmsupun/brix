@@ -8,6 +8,13 @@ final class LiveFileService: FileService {
     static let heavyDirs: Set<String> = ["node_modules", ".git", ".next", "build", "dist", "DerivedData", ".build", "vendor", "__pycache__", ".venv", "Pods", "target"]
     static let maxNodes = 20_000
 
+    /// `*.noindex` too: build output kept out of Spotlight is just as large.
+    static func isHeavy(_ name: String) -> Bool { heavyDirs.contains(name) || isGenerated(name) }
+    /// Never tracked by Git, so changes inside them don't even refresh Git.
+    static func isGenerated(_ name: String) -> Bool {
+        ["node_modules", "DerivedData", ".build", "__pycache__", ".venv", ".next"].contains(name) || name.hasSuffix(".noindex")
+    }
+
     var gitStatusProvider: (@MainActor (Project) -> [String: GitStatus])?
 
     func tree(_ project: Project) async throws -> [FileNode] {
@@ -36,7 +43,7 @@ final class LiveFileService: FileService {
             let path = rel.isEmpty ? name : rel + "/" + name
             let dir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if dir {
-                let kids = heavyDirs.contains(name) ? [] : walk(item, rel: path, status: status, count: &count)
+                let kids = isHeavy(name) ? [] : walk(item, rel: path, status: status, count: &count)
                 let inner = status.filter { $0.key.hasPrefix(path + "/") }.map(\.value)
                 let st: GitStatus? = inner.isEmpty ? nil : (Set(inner).count == 1 ? inner[0] : .M)
                 nodes.append(FileNode(name: name, path: path, isDirectory: true, children: kids, gitStatus: st))
@@ -110,41 +117,65 @@ final class LiveFileService: FileService {
         }
     }
 
-    func watch(_ project: Project, onChange: @escaping () -> Void) -> AnyObject? {
+    func watch(_ project: Project, onChange: @escaping (_ files: Bool) -> Void) -> AnyObject? {
         FolderWatcher(path: project.expandedPath, onChange: onChange)
     }
 }
 
 /// FSEvents stream for one folder. Coalesces bursts into one callback.
+/// Changes inside build output and dependency folders are ignored: a build or
+/// `npm install` writes thousands of files there, and each burst re-walked the
+/// tree (a full CPU core while a build ran). Inside `.git` only Git is refreshed,
+/// so `git status` touching its own index can't loop into a tree walk.
 final class FolderWatcher {
     private var stream: FSEventStreamRef?
-    private let onChange: () -> Void
-    private var pending = false
+    private let root: String
+    private let onChange: (_ files: Bool) -> Void
+    private var pending: Bool?
 
-    init?(path: String, onChange: @escaping () -> Void) {
+    init?(path: String, onChange: @escaping (_ files: Bool) -> Void) {
+        root = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
         self.onChange = onChange
         var ctx = FSEventStreamContext(version: 0, info: nil, retain: nil, release: nil, copyDescription: nil)
         ctx.info = Unmanaged.passUnretained(self).toOpaque()
-        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+        let callback: FSEventStreamCallback = { _, info, count, paths, _, _ in
             guard let info else { return }
             let me = Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue()
-            me.fire()
+            let list = Unmanaged<CFArray>.fromOpaque(paths).takeUnretainedValue() as? [String] ?? []
+            me.fire(list.prefix(count))
         }
-        guard let s = FSEventStreamCreate(nil, callback, &ctx, [path] as CFArray,
+        guard let s = FSEventStreamCreate(nil, callback, &ctx, [root] as CFArray,
                                           FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.5,
-                                          FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer))
+                                          FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagUseCFTypes))
         else { return nil }
         stream = s
         FSEventStreamSetDispatchQueue(s, DispatchQueue.main)
         FSEventStreamStart(s)
     }
 
-    private func fire() {
-        guard !pending else { return }
-        pending = true
+    /// nil: ignore; false: refresh Git only; true: project files.
+    /// Inside build, dist or vendor folders (sometimes tracked) Git is still
+    /// refreshed, but the file tree isn't re-walked.
+    static func kind(_ path: String, root: String) -> Bool? {
+        // FSEvents reports /private/tmp for a project opened as /tmp.
+        let rel = path.hasPrefix(root) ? path.dropFirst(root.count)
+            : path.hasPrefix("/private" + root) ? path.dropFirst(root.count + 8) : nil
+        guard let rel else { return true }
+        let dirs = rel.split(separator: "/").map(String.init).dropLast()
+        if dirs.contains(where: LiveFileService.isGenerated) { return nil }
+        return dirs.contains { $0 == ".git" || LiveFileService.heavyDirs.contains($0) } ? false : true
+    }
+
+    private func fire(_ paths: ArraySlice<String>) {
+        let kinds = paths.compactMap { Self.kind($0, root: root) }
+        guard !kinds.isEmpty else { return }
+        let files = kinds.contains(true)
+        if let p = pending { pending = p || files; return }
+        pending = files
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            self?.pending = false
-            self?.onChange()
+            guard let self, let files = self.pending else { return }
+            self.pending = nil
+            self.onChange(files)
         }
     }
 

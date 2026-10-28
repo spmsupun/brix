@@ -45,7 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var store: AppStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // A tool that exits before reading its stdin would otherwise kill Brix with SIGPIPE.
+        signal(SIGPIPE, SIG_IGN)
         AgentNotifier.shared.install()
+        PerfMonitor.shared.start()
     }
 
     /// The close button hides the window; terminals and agents keep running and

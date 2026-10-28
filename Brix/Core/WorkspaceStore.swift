@@ -100,9 +100,10 @@ final class WorkspaceStore {
             restoreLiveSessions()
             loadTree()
             if let p = project, !p.isSample {
-                watcher = app.svc(p).files.watch(p) { [weak self] in
+                watcher = app.svc(p).files.watch(p) { [weak self] files in
                     Task { @MainActor in
                         self?.app.refreshGit(p.id)
+                        guard files else { return }
                         self?.loadTree()
                         self?.reloadOpenFiles()
                     }

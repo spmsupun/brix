@@ -23,6 +23,34 @@ enum ProcessRunner {
         return (base + env).filter { seen.insert($0).inserted }.joined(separator: ":")
     }()
 
+    /// Terminals start with forkpty, which hands the child every open descriptor.
+    /// An agent holding the write end of a tool's output pipe keeps
+    /// `readDataToEndOfFile` waiting forever, one worker thread each, until GCD
+    /// runs out of threads and Brix stops responding. Pipes are made
+    /// close-on-exec as they are created, under the lock a terminal holds while
+    /// it marks every other descriptor and forks.
+    static let spawnLock = NSLock()
+
+    static func pipe() -> Pipe {
+        spawnLock.withLock {
+            let p = Pipe()
+            for h in [p.fileHandleForReading, p.fileHandleForWriting] { closeOnExec(h.fileDescriptor) }
+            return p
+        }
+    }
+
+    /// ponytail: descriptors opened elsewhere between this sweep and the fork
+    /// (a socket, say) can still reach the child; only pipes made by `pipe()`
+    /// are covered for certain.
+    static func markAllCloseOnExec() {
+        for fd in 3..<min(getdtablesize(), 1 << 16) { closeOnExec(fd) }
+    }
+
+    private static func closeOnExec(_ fd: Int32) {
+        let flags = fcntl(fd, F_GETFD)
+        if flags >= 0, flags & FD_CLOEXEC == 0 { _ = fcntl(fd, F_SETFD, flags | FD_CLOEXEC) }
+    }
+
     static func which(_ tool: String) -> String? {
         if tool.hasPrefix("/") { return FileManager.default.isExecutableFile(atPath: tool) ? tool : nil }
         for dir in searchPath.split(separator: ":") {
@@ -54,44 +82,76 @@ enum ProcessRunner {
                 p.arguments = args
                 if let cwd { p.currentDirectoryURL = cwd }
                 p.environment = environment(extra: env)
-                let out = Pipe(), err = Pipe()
+                let out = pipe(), err = pipe()
                 p.standardOutput = out
                 p.standardError = err
-                let inPipe = Pipe()
+                let inPipe = pipe()
                 p.standardInput = inPipe
 
-                // Read pipes concurrently so a full buffer never blocks the child.
-                var outData = Data(), errData = Data()
-                let group = DispatchGroup()
-                group.enter()
-                DispatchQueue.global().async { outData = out.fileHandleForReading.readDataToEndOfFile(); group.leave() }
-                group.enter()
-                DispatchQueue.global().async { errData = err.fileHandleForReading.readDataToEndOfFile(); group.leave() }
+                // Nothing here blocks a thread. Blocking reads and waitUntilExit held
+                // three GCD workers per tool; with about 20 tools at once (git for
+                // every repository at launch) all 64 workers were waiting for
+                // readers that could never be scheduled, and Brix stalled.
+                let lock = NSLock()
+                var outData = Data(), errData = Data(), done = false
+                let handles = [out.fileHandleForReading, err.fileHandleForReading]
+                // Closed here rather than when the pipes deallocate: the timeout's
+                // work item keeps them alive for the full timeout even after a
+                // fast exit, which held hundreds of descriptors open.
+                func stopReading() { handles.forEach { $0.readabilityHandler = nil; try? $0.close() } }
+                // Resumes once: on exit plus end of output, or on the timeout.
+                func finish(_ r: Result<ProcessOutput, Error>) {
+                    guard lock.withLock({ () -> Bool in defer { done = true }; return !done }) else { return }
+                    stopReading()
+                    cont.resume(with: r)
+                }
 
+                let group = DispatchGroup()
+                for (h, isOut) in zip(handles, [true, false]) {
+                    group.enter()
+                    var ended = false
+                    h.readabilityHandler = { h in
+                        let d = h.availableData
+                        // Readability fires again after EOF until the handler is gone.
+                        let leave = lock.withLock { () -> Bool in
+                            if d.isEmpty { defer { ended = true }; return !ended }
+                            if isOut { outData.append(d) } else { errData.append(d) }
+                            return false
+                        }
+                        if leave { h.readabilityHandler = nil; group.leave() }
+                    }
+                }
+                group.enter()
+                p.terminationHandler = { _ in group.leave() }
+
+                // Armed before stdin is written, which can block on a tool that never reads it.
+                let timer = DispatchWorkItem {
+                    if p.isRunning {
+                        p.terminate()
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { if p.isRunning { kill(p.processIdentifier, SIGKILL) } }
+                    }
+                    // Also when the tool exited but something it started still holds its output open.
+                    finish(.failure(ServiceError("\(tool) timed out after \(Int(timeout)) s")))
+                }
                 do {
                     try p.run()
                 } catch {
-                    cont.resume(throwing: ServiceError("Could not start \(tool): \(error.localizedDescription)"))
+                    finish(.failure(ServiceError("Could not start \(tool): \(error.localizedDescription)")))
                     return
                 }
+                DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timer)
                 if let input, let d = input.data(using: .utf8) {
-                    inPipe.fileHandleForWriting.write(d)
+                    try? inPipe.fileHandleForWriting.write(contentsOf: d)
                 }
                 try? inPipe.fileHandleForWriting.close()
 
-                var timedOut = false
-                let timer = DispatchWorkItem { if p.isRunning { timedOut = true; p.terminate() } }
-                DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timer)
-                p.waitUntilExit()
-                timer.cancel()
-                group.wait()
-                if timedOut {
-                    cont.resume(throwing: ServiceError("\(tool) timed out after \(Int(timeout)) s"))
-                    return
+                group.notify(queue: .global()) {
+                    timer.cancel()
+                    let (o, e) = lock.withLock { (outData, errData) }
+                    finish(.success(ProcessOutput(stdout: String(decoding: o, as: UTF8.self),
+                                                  stderr: String(decoding: e, as: UTF8.self),
+                                                  status: p.terminationStatus)))
                 }
-                cont.resume(returning: ProcessOutput(stdout: String(decoding: outData, as: UTF8.self),
-                                                     stderr: String(decoding: errData, as: UTF8.self),
-                                                     status: p.terminationStatus))
             }
         }
     }

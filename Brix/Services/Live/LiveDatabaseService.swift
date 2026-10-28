@@ -528,7 +528,7 @@ final class SSHTunnel {
             for (k, v) in try SSHCommand.askpassEnv(password: password) { env[k] = v }
         }
         p.environment = env
-        let err = Pipe()
+        let err = ProcessRunner.pipe()
         p.standardError = err
         p.standardOutput = FileHandle.nullDevice
         do { try p.run() } catch { throw ServiceError("Could not start ssh: \(error.localizedDescription)") }

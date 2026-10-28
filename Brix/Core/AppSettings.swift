@@ -122,8 +122,6 @@ struct AppSettings: Codable, Equatable {
     var defaultAgent: String?
     /// Plan and files column beside an agent session.
     var agentSidePanel = true
-    /// The message box under agent sessions (typing in the terminal still works).
-    var agentComposer = true
     /// Tool window bars on the workspace edges.
     var showToolStrips = true
     var uiFont: UIFontChoice = .system
@@ -156,7 +154,6 @@ struct AppSettings: Codable, Equatable {
         agents = AgentConfig.mergingBuiltins((try? c.decode([AgentConfig].self, forKey: .agents)) ?? d.agents)
         defaultAgent = try? c.decode(String.self, forKey: .defaultAgent)
         agentSidePanel = (try? c.decode(Bool.self, forKey: .agentSidePanel)) ?? d.agentSidePanel
-        agentComposer = (try? c.decode(Bool.self, forKey: .agentComposer)) ?? d.agentComposer
         showToolStrips = (try? c.decode(Bool.self, forKey: .showToolStrips)) ?? d.showToolStrips
         uiFont = (try? c.decode(UIFontChoice.self, forKey: .uiFont)) ?? d.uiFont
         codeFont = (try? c.decode(String.self, forKey: .codeFont)) ?? d.codeFont

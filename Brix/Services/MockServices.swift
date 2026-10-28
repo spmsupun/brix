@@ -226,7 +226,7 @@ final class MockFileService: FileService {
         renamed[project.id, default: [:]][from] = to
     }
 
-    func watch(_ project: Project, onChange: @escaping () -> Void) -> AnyObject? { nil }
+    func watch(_ project: Project, onChange: @escaping (_ files: Bool) -> Void) -> AnyObject? { nil }
 }
 
 enum FileKinds {

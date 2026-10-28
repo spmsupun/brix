@@ -130,10 +130,14 @@ struct KeyframeLoop<Content: View>: NSViewRepresentable {
         layer.removeAllAnimations()
         let k = keyframes
         let size = host.bounds.size
+        // A layer-backed view's layer turns about its corner (anchorPoint 0,0),
+        // not its centre, so the offset is from there; y follows the superlayer.
+        let ap = layer.anchorPoint
+        let down = layer.superlayer?.isGeometryFlipped ?? true
+        let ax = (anchor.x - ap.x) * size.width
+        let ay = ((down ? anchor.y : 1 - anchor.y) - ap.y) * size.height
         func transform(_ v: [Double]) -> CATransform3D {
             let p = pose(v)
-            // About the anchor, in the layer's own (flipped, top-left) space.
-            let ax = (anchor.x - 0.5) * size.width, ay = (anchor.y - 0.5) * size.height
             var t = CATransform3DMakeTranslation(p.tx + ax, p.ty + ay, 0)
             t = CATransform3DRotate(t, p.rotate * .pi / 180, 0, 0, 1)
             t = CATransform3DScale(t, p.sx, p.sy, 1)

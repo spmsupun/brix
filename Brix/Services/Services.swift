@@ -33,7 +33,8 @@ protocol FileService: AnyObject {
     func create(_ project: Project, path: String, isDirectory: Bool) async throws
     func rename(_ project: Project, from: String, to: String) async throws
     /// Starts watching the project folder. Returns a token; release it to stop.
-    func watch(_ project: Project, onChange: @escaping () -> Void) -> AnyObject?
+    /// `onChange(files)`: files is false when only Git's own data changed.
+    func watch(_ project: Project, onChange: @escaping (_ files: Bool) -> Void) -> AnyObject?
 }
 
 /// Mock terminals answer typed commands. Live terminals run in a PTY

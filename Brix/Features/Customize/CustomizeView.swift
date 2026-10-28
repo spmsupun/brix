@@ -431,8 +431,6 @@ private struct AppearanceSettings: View {
             Toggle("When a session needs input", isOn: $store.settings.notifyNeedsInput).toggleStyle(.bx)
             Toggle("Badge the Dock icon with sessions waiting", isOn: $store.settings.badgeDock).toggleStyle(.bx)
             Toggle("Play a sound", isOn: $store.settings.notifySound).toggleStyle(.bx)
-            Text("Agents").font(Typo.ui(12.5, .medium)).foregroundStyle(Theme.text).padding(.top, 6)
-            Toggle("Show a message box under agent sessions", isOn: $store.settings.agentComposer).toggleStyle(.bx)
         }
         .font(Typo.ui(12.5)).foregroundStyle(Theme.body)
         .padding(16)

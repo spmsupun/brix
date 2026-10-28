@@ -100,6 +100,11 @@ struct BrixCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
+            Button("Performance Log") {
+                try? FileManager.default.createDirectory(at: PerfMonitor.directory, withIntermediateDirectories: true)
+                NSWorkspace.shared.open(PerfMonitor.directory)
+            }
+            Divider()
             Button("Load Sample Workspace") { store.loadSampleWorkspace() }
             Button("Remove Sample Workspace") { store.removeSampleWorkspace() }
                 .disabled(!store.library.projects.contains(where: \.isSample))

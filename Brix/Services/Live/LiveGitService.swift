@@ -3,7 +3,9 @@ import Foundation
 /// Git through the `git` CLI using porcelain v2 output.
 final class LiveGitService: GitService {
     private func git(_ p: Project, _ args: [String], timeout: TimeInterval = 30) async throws -> String {
-        try await ProcessRunner.check("git", ["-C", p.expandedPath] + args, timeout: timeout)
+        // No optional locks: a background `git status` rewriting the index would
+        // wake the folder watcher (another refresh) and race the user's own git.
+        try await ProcessRunner.check("git", ["-C", p.expandedPath] + args, env: ["GIT_OPTIONAL_LOCKS": "0"], timeout: timeout)
     }
 
     func status(_ project: Project) async throws -> GitRepoState {
