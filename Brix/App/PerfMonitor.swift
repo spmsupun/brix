@@ -138,6 +138,9 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
 
     // MARK: Log file
 
+    /// A one-line event from elsewhere in Brix, for diagnosing problems later.
+    func note(_ line: String) { log(line) }
+
     private func log(_ line: String) {
         let now = Date()
         queue.async {

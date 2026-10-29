@@ -299,6 +299,33 @@ final class TerminalRegistry {
 
     func containers(for id: String) -> [TerminalContainer] { places[id]?.allObjects ?? [] }
 
+    private var pendingPlace: Set<String> = []
+
+    /// Puts a session's terminal in the biggest place that is really on screen.
+    /// A session can be shown in several places at once (a pane, a card, a
+    /// second window); the newest place used to take it, and when that place was
+    /// hidden or off screen the visible one stayed black. Runs on the next turn,
+    /// since it's called from layout.
+    func placeSoon(_ id: String) {
+        guard pendingPlace.insert(id).inserted else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pendingPlace.remove(id)
+            self.place(id)
+        }
+    }
+
+    private func place(_ id: String) {
+        guard let term = views[id] else { return }
+        // A container reused for another tab stays in this table: skip it.
+        let shown = containers(for: id).filter { $0.sessionID == id && $0.isShowing }
+        guard let best = shown.max(by: { $0.shownArea < $1.shownArea }) else { return }
+        if let current = term.superview as? TerminalContainer, current.isShowing, current.shownArea >= best.shownArea { return }
+        let from = (term.superview as? TerminalContainer).map { $0.isShowing ? "a smaller place" : "a hidden place" } ?? "nowhere"
+        LiveTerminalSurface.attach(id, to: best, focus: false)
+        PerfMonitor.shared.note("terminal \(id) moved on screen from \(from)")
+    }
+
     func stop(_ id: String) {
         places[id] = nil
         if let v = views.removeValue(forKey: id) {
@@ -339,8 +366,8 @@ struct LiveTerminalSurface: NSViewRepresentable {
         guard let container = container as? TerminalContainer else { return }
         // Re-renders don't steal the terminal back from another visible place;
         // they only pick it up when it has no window (its last place went away).
-        let term = TerminalRegistry.shared.view(sessionID)
-        if container.sessionID != sessionID || term?.window == nil { Self.attach(sessionID, to: container) }
+        if container.sessionID != sessionID { Self.attach(sessionID, to: container) }
+        TerminalRegistry.shared.placeSoon(sessionID)
     }
 
     /// When the place showing a terminal goes away (a layout or tab switch), the
@@ -350,12 +377,12 @@ struct LiveTerminalSurface: NSViewRepresentable {
               let term = TerminalRegistry.shared.view(id), term.superview === container else { return }
         term.removeFromSuperview()
         container.sessionID = nil
-        if let next = TerminalRegistry.shared.containers(for: id).first(where: { $0 !== container && $0.window != nil }) {
-            attach(id, to: next)
-        }
+        TerminalRegistry.shared.placeSoon(id)
     }
 
-    static func attach(_ sessionID: String, to container: TerminalContainer) {
+    /// `focus`: give the terminal the keyboard. Off for re-placement, which must
+    /// not pull typing away from a search box or another pane.
+    static func attach(_ sessionID: String, to container: TerminalContainer, focus: Bool = true) {
         // The container is reused when SwiftUI shows another session in the same
         // place (switching tabs), so drop whatever terminal it held before.
         for v in container.subviews where v !== TerminalRegistry.shared.view(sessionID) { v.removeFromSuperview() }
@@ -372,7 +399,8 @@ struct LiveTerminalSurface: NSViewRepresentable {
                 term.topAnchor.constraint(equalTo: container.topAnchor, constant: 6),
                 term.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -4)
             ])
-            DispatchQueue.main.async { term.window?.makeFirstResponder(term) }
+            let had = (term.window?.firstResponder as? NSView).map { $0 === term || $0.isDescendant(of: term) } ?? false
+            if focus || had { DispatchQueue.main.async { term.window?.makeFirstResponder(term) } }
         }
     }
 }
@@ -381,11 +409,44 @@ struct LiveTerminalSurface: NSViewRepresentable {
 final class TerminalContainer: NSView {
     var sessionID: String?
 
-    /// Arriving on screen while the terminal has no window: pick it up.
+    /// In a visible window, not hidden, and big enough to read.
+    var isShowing: Bool {
+        guard let w = window, w.isVisible, w.occlusionState.contains(.visible), !isHiddenOrHasHiddenAncestor else { return false }
+        let r = shownRect
+        return r.width >= 60 && r.height >= 40
+    }
+    var shownArea: CGFloat { shownRect.width * shownRect.height }
+
+    /// The part inside the window: views don't clip their children on macOS 14,
+    /// so visibleRect alone counts parts outside the window.
+    private var shownRect: CGRect {
+        guard let content = window?.contentView else { return .zero }
+        let mine = visibleRect.intersection(bounds)
+        guard !mine.isNull else { return .zero }
+        let r = convert(mine, to: nil).intersection(content.convert(content.bounds, to: nil))
+        return r.isNull ? .zero : r
+    }
+
+    private func replace() { if let id = sessionID { TerminalRegistry.shared.placeSoon(id) } }
+    private var occlusion: NSObjectProtocol?
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard window != nil, let id = sessionID, let term = TerminalRegistry.shared.view(id), term.window == nil else { return }
-        LiveTerminalSurface.attach(id, to: self)
+        if let o = occlusion { NotificationCenter.default.removeObserver(o); occlusion = nil }
+        if let w = window {
+            // Back from another Space, minimised or covered: place again.
+            occlusion = NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: w, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.replace() }
+            }
+        }
+        replace()
+    }
+    deinit { if let o = occlusion { NotificationCenter.default.removeObserver(o) } }
+    override func viewDidUnhide() { super.viewDidUnhide(); replace() }
+    override func viewDidHide() { super.viewDidHide(); replace() }
+    override func setFrameSize(_ newSize: NSSize) {
+        let changed = newSize != frame.size
+        super.setFrameSize(newSize)
+        if changed { replace() }
     }
 
     override func updateLayer() {

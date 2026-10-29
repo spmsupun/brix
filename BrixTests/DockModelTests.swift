@@ -231,3 +231,46 @@ final class LoopBoxTests: XCTestCase {
         XCTAssertEqual(restarts, 2)
     }
 }
+
+@MainActor
+final class TerminalPlacementTests: XCTestCase {
+    /// The black-terminal bug: the session's terminal sat in a place that was
+    /// hidden or tiny while the place on screen stayed empty.
+    func testTerminalMovesToThePlaceOnScreen() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        let id = "t-\(UUID().uuidString.prefix(6))"
+        TerminalRegistry.shared.start(sessionID: id, argv: ["/bin/cat"], cwd: "/tmp", env: [:], fontSize: 12, store: store)
+        defer { TerminalRegistry.shared.stop(id) }
+        let term = try XCTUnwrap(TerminalRegistry.shared.view(id))
+
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        win.orderFrontRegardless()
+        defer { win.orderOut(nil) }
+        // Occlusion is reported a moment after the window appears.
+        for _ in 0..<20 where !win.occlusionState.contains(.visible) { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+        try XCTSkipUnless(win.occlusionState.contains(.visible), "the test window isn't on screen (headless run)")
+        // A hidden place and one scrolled out of the window, both newer than the one on screen.
+        let shown = TerminalContainer(frame: NSRect(x: 0, y: 0, width: 600, height: 280))
+        let hidden = TerminalContainer(frame: NSRect(x: 0, y: 300, width: 400, height: 280))
+        let offscreen = TerminalContainer(frame: NSRect(x: 2000, y: 2000, width: 400, height: 280))
+        for c in [shown, hidden, offscreen] { win.contentView?.addSubview(c) }
+        hidden.isHidden = true
+        XCTAssertTrue(shown.isShowing)
+        XCTAssertFalse(hidden.isShowing)
+        XCTAssertFalse(offscreen.isShowing)
+
+        LiveTerminalSurface.attach(id, to: shown)
+        LiveTerminalSurface.attach(id, to: hidden)
+        TerminalRegistry.shared.placeSoon(id)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertTrue(term.superview === shown, "out of a hidden place")
+
+        LiveTerminalSurface.attach(id, to: offscreen)
+        TerminalRegistry.shared.placeSoon(id)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertTrue(term.superview === shown, "the terminal belongs where it can be seen")
+    }
+}
