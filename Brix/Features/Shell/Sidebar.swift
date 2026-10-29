@@ -368,15 +368,14 @@ private struct FullSidebar: View {
         let hovering = hoveredSession == s.id
         return Button { store.reveal(session: s.id) } label: {
             HStack(spacing: 8) {
-                SessionIcon(session: s, size: 12)
-                    .frame(width: 22, height: 22)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(s.kind == .agent ? Color(hex: 0xE07B53).opacity(0.12) : Color.white(0.05)))
+                // The icon on its own, no tile behind it; one line: name and age.
+                SessionIcon(session: s, size: 15)
+                    .frame(width: 18, height: 18)
                     .foregroundStyle(s.isRemote ? Theme.blue : Theme.text2)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(store.displayTitle(s)).font(Typo.ui(12.5, on ? .semibold : .medium)).foregroundStyle(on ? Theme.text : Theme.body).lineLimit(1)
-                    ((repo.map { Text($0.name).foregroundColor($0.hue.color) + Text(" · ") } ?? Text("")) + Text(sessionSub(s)))
-                        .font(Typo.ui(10.5)).foregroundColor(Theme.text3).lineLimit(1)
-                }
+                (Text(store.displayTitle(s)).font(Typo.ui(12, on ? .semibold : .medium)).foregroundColor(on ? Theme.text : Theme.body)
+                    + Text("  \(Self.age(since: s.startedAt))").font(Typo.ui(11)).foregroundColor(Theme.text3))
+                    .lineLimit(1).truncationMode(.tail)
+                    .help([repo?.name, store.displayTitle(s), sessionSub(s)].compactMap { $0 }.joined(separator: " · "))
                 Spacer(minLength: 0)
                 if hovering {
                     SidebarCloseButton(label: "Close \(s.title)") { store.closeSession(s.id) }
@@ -394,7 +393,7 @@ private struct FullSidebar: View {
                 }
             }
             .padding(.leading, Tree.child).padding(.trailing, 8)
-            .frame(height: 38)
+            .frame(height: 28)
             .background(alignment: .leading) { elbow(hue) }
             .background(RoundedRectangle(cornerRadius: 7).fill(on ? Theme.selected : (hovering ? Theme.hover : .clear)))
             .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(on ? Color.white(0.06) : .clear))

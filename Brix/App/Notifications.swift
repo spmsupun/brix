@@ -34,13 +34,21 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
                 }
             }
         }
-        if !store.library.notificationsAsked {
-            store.library.notificationsAsked = true
-            center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-                if granted { send() }
+        // Asked per app, not per library: a new build (Brix Dev, a signed
+        // release) starts with no permission even when the library was asked.
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in if granted { send() } }
+            case .denied:
+                Task { @MainActor in
+                    guard !store.library.notificationsAsked else { return }
+                    store.library.notificationsAsked = true
+                    store.toast(.info, "Notifications are off for Brix", detail: "Turn them on in System Settings > Notifications > Brix to hear when agents finish.")
+                }
+            default:
+                send()
             }
-        } else {
-            send()
         }
         // Always show an in-app toast too, so nothing is missed when banners are off.
         store.toast(.info, title, detail: body.components(separatedBy: "\n").first, session: sessionID)

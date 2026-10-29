@@ -6,21 +6,13 @@ import SwiftUI
 struct AgentMark: View {
     let agent: AgentConfig?
     var size: CGFloat = 14
+    /// Kept for callers; the mark no longer moves (the spinner beside it says
+    /// "working"). It used a TimelineView that redrew every frame on the main thread.
     var working = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Group {
-            if working && !reduceMotion {
-                TimelineView(.animation) { t in
-                    let phase = t.date.timeIntervalSinceReferenceDate
-                    glyph.rotationEffect(.degrees(phase.truncatingRemainder(dividingBy: 2) / 2 * 360))
-                }
-            } else {
-                glyph
-            }
-        }
-        .frame(width: size, height: size)
+        glyph
+            .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 
@@ -153,10 +145,16 @@ extension AppStore {
 
     /// Session name shown in tabs and headers: a rename, the agent's own title,
     /// the first task, then the agent's name.
+    private static let unnamedShell: Set<String> = ["zsh", "bash", "Terminal"]
+
     func displayTitle(_ s: TerminalSession) -> String {
-        if s.kind == .shell, s.hostID == nil, ["zsh", "bash", "Terminal"].contains(s.title) {
-            // An unnamed local terminal: what it's running, else "Terminal".
-            return s.state == .running && !["zsh", "bash", "login"].contains(s.process) ? s.process : "Terminal"
+        if s.kind == .shell, s.hostID == nil, Self.unnamedShell.contains(s.title) {
+            // An unnamed local terminal: what it's running, else "Terminal",
+            // "Terminal 2", … in the order they were opened in the project.
+            if s.state == .running, !["zsh", "bash", "login"].contains(s.process) { return s.process }
+            let peers = sessions.filter { $0.kind == .shell && $0.hostID == nil && $0.projectID == s.projectID && Self.unnamedShell.contains($0.title) }
+            let n = (peers.firstIndex { $0.id == s.id } ?? 0) + 1
+            return n == 1 ? "Terminal" : "Terminal \(n)"
         }
         guard s.kind == .agent else { return s.title }
         let agentName = agent(for: s)?.name ?? "Agent"

@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Brix
 
 final class DockModelTests: XCTestCase {
@@ -272,5 +273,80 @@ final class TerminalPlacementTests: XCTestCase {
         TerminalRegistry.shared.placeSoon(id)
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         XCTAssertTrue(term.superview === shown, "the terminal belongs where it can be seen")
+    }
+}
+
+@MainActor
+final class SpinnerAnimationTests: XCTestCase {
+    /// The working spinner must actually turn on screen, not just be drawn.
+    func testSpinnerTurns() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+        win.contentView = NSHostingView(rootView: WorkingSpinner(size: 40).environment(store).frame(width: 100, height: 100))
+        win.orderFrontRegardless()
+        defer { win.orderOut(nil) }
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+        func loopLayers(_ v: NSView) -> [CALayer] {
+            (v.layer.map { $0.animation(forKey: "loop") != nil ? [$0] : [] } ?? []) + v.subviews.flatMap(loopLayers)
+        }
+        let layers = loopLayers(win.contentView!)
+        let l = try XCTUnwrap(layers.first, "no running loop animation on any layer")
+        let a = l.presentation()?.transform
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        let b = l.presentation()?.transform
+        XCTAssertNotNil(a)
+        XCTAssertFalse(CATransform3DEqualToTransform(a!, b!), "the layer's on-screen transform doesn't change")
+        XCTAssertEqual(layers.count, 4, "the group turns and each of the three balls moves")
+    }
+}
+
+@MainActor
+final class SpinnerCostTests: XCTestCase {
+    /// Ten spinners on screen must cost the app next to nothing: Core Animation
+    /// runs them out of process. The old SwiftUI pulse cost about 22% idle.
+    func testTenSpinnersStayCheap() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
+        win.orderFrontRegardless()
+        defer { win.orderOut(nil) }
+        func cpu() -> Double {
+            var u = rusage(); getrusage(RUSAGE_SELF, &u)
+            return Double(u.ru_utime.tv_sec + u.ru_stime.tv_sec) + Double(u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1e6
+        }
+        func measure(_ seconds: Double) -> Double {
+            let a = cpu(); RunLoop.current.run(until: Date().addingTimeInterval(seconds)); return (cpu() - a) / seconds * 100
+        }
+        win.contentView = NSHostingView(rootView: Color.clear.frame(width: 400, height: 300))
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let idle = measure(3)
+        win.contentView = NSHostingView(rootView: VStack { ForEach(0..<10, id: \.self) { _ in WorkingSpinner(size: 14) } }.environment(store))
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let spinning = measure(3)
+        XCTAssertLessThan(spinning - idle, 3, "spinners should cost under 3% CPU")
+    }
+}
+
+@MainActor
+final class TerminalNameTests: XCTestCase {
+    func testUnnamedTerminalsAreNumberedPerProject() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        store.loadSampleWorkspace()
+        store.sessions.removeAll { $0.kind == .shell }
+        let a = store.newTerminal(project: "atlas-web", attach: false)
+        let b = store.newTerminal(project: "atlas-web", attach: false)
+        let other = store.newTerminal(project: "atlas-api", attach: false)
+        for id in [a.id, b.id, other.id] { if let i = store.sessions.firstIndex(where: { $0.id == id }) { store.sessions[i].state = .idle } }
+        XCTAssertEqual(store.displayTitle(store.session(a.id)!), "Terminal")
+        XCTAssertEqual(store.displayTitle(store.session(b.id)!), "Terminal 2")
+        XCTAssertEqual(store.displayTitle(store.session(other.id)!), "Terminal", "numbered per project")
     }
 }

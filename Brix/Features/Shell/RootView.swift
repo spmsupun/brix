@@ -178,11 +178,10 @@ struct StatusBar: View {
 
     // MARK: Agents
 
-    /// Agents that need you (waiting) first, then working ones. Finished agents
-    /// are marked in the sidebar and on the Dock badge instead.
+    /// Only agents waiting for you. Working and finished ones are shown in the
+    /// sidebar, so the status bar stays quiet.
     private var chips: [TerminalSession] {
-        let a = store.sessions.filter { $0.kind == .agent && ($0.state == .running || $0.state == .needsInput) }
-        return a.enumerated().sorted { ($0.element.state == .needsInput ? 0 : 1, $0.offset) < ($1.element.state == .needsInput ? 0 : 1, $1.offset) }.map(\.element)
+        store.sessions.filter { $0.kind == .agent && $0.state == .needsInput }
     }
 
     @ViewBuilder private var agents: some View {

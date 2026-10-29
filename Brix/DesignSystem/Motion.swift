@@ -172,15 +172,23 @@ struct KeyframeLoop<Content: View>: NSViewRepresentable {
         if k.delay > 0 { hold(k.rest ?? k.stops[0].1, until: k.delay, key: "rest") }
         let c = k.curve.points
         let curve = CAMediaTimingFunction(controlPoints: Float(c.0), Float(c.1), Float(c.2), Float(c.3))
-        let times = k.stops.map { NSNumber(value: $0.0) }
+        // Core Animation blends matrices, and a turn of 360° is the same matrix
+        // as 0°, so a spin between those stops never moved. Spins are cut into
+        // 30° steps (sampled through the curve), which it blends correctly.
+        let turn = zip(k.stops, k.stops.dropFirst()).map { abs(pose($1.1).rotate - pose($0.1).rotate) }.max() ?? 0
+        let stops: [(Double, [Double])] = turn > 90
+            ? (0...max(2, Int(turn / 30))).map { i in let t = Double(i) / Double(max(2, Int(turn / 30))); return (t, k.values(at: k.delay + t * k.duration * 0.999999)) }
+            : k.stops
+        let timing = turn > 90 ? CAMediaTimingFunction(name: .linear) : curve
+        let times = stops.map { NSNumber(value: $0.0) }
         let group = CAAnimationGroup()
         let move = CAKeyframeAnimation(keyPath: "transform")
-        move.values = k.stops.map { NSValue(caTransform3D: transform($0.1)) }
+        move.values = stops.map { NSValue(caTransform3D: transform($0.1)) }
         let fade = CAKeyframeAnimation(keyPath: "opacity")
-        fade.values = k.stops.map { pose($0.1).opacity }
+        fade.values = stops.map { pose($0.1).opacity }
         for a in [move, fade] {
             a.keyTimes = times
-            a.timingFunctions = Array(repeating: curve, count: max(1, k.stops.count - 1))
+            a.timingFunctions = Array(repeating: timing, count: max(1, stops.count - 1))
             a.duration = k.duration
         }
         group.animations = [move, fade]
@@ -225,23 +233,36 @@ struct LiveDot: View {
     }
 }
 
-/// An agent is working: a fast spinning arc, readable at a glance where a soft
-/// pulse wasn't. Core Animation, so it costs the app nothing per frame.
+/// An agent is working: three balls that spread into a triangle and gather
+/// again while the group turns. All Core Animation: no per-frame work in the
+/// app, unlike SwiftUI's repeatForever, which redrew the window every frame.
 struct WorkingSpinner: View {
     var color: Color = Theme.green
-    var size: CGFloat = 10
+    var size: CGFloat = 12
 
     var body: some View {
-        KeyframeLoop(keyframes: Keyframes(stops: [(0, [0]), (1, [360])], duration: 0.7, curve: .linear), still: [0],
+        let s = max(size, 12)
+        KeyframeLoop(keyframes: Keyframes(stops: [(0, [0]), (1, [360])], duration: 1.6, curve: .easeInOut), still: [0],
                      pose: { v in LayerPose(rotate: v[0]) }) {
-            // No track behind the arc: with one it read as a half-full progress ring.
-            Circle().trim(from: 0, to: 0.72)
-                .stroke(AngularGradient(colors: [color.opacity(0), color], center: .center, startAngle: .degrees(0), endAngle: .degrees(260)),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .padding(1)
+            ZStack {
+                ball(0, -1, s)
+                ball(-0.87, 0.5, s)
+                ball(0.87, 0.5, s)
+            }
+            .frame(width: s, height: s)
         }
-        .frame(width: size, height: size)
+        .frame(width: s, height: s)
         .accessibilityLabel("Working")
+    }
+
+    /// One ball: from the centre out to its corner of the triangle and back.
+    private func ball(_ dx: Double, _ dy: Double, _ s: CGFloat) -> some View {
+        let reach = Double(s) / 3
+        return KeyframeLoop(keyframes: Keyframes(stops: [(0, [0.25]), (0.5, [1]), (1, [0.25])], duration: 0.8, curve: .easeInOut), still: [1],
+                            pose: { v in LayerPose(tx: dx * reach * v[0], ty: dy * reach * v[0]) }) {
+            Circle().fill(color)
+        }
+        .frame(width: s / 3, height: s / 3)
     }
 }
 
