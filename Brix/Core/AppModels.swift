@@ -70,6 +70,10 @@ struct Library: Codable {
     var hasOnboarded = false
     var openProjects: [ProjectID] = []
     var notificationsAsked = false
+    /// The first-launch guide was shown (or skipped).
+    var guideSeen = false
+    /// Agent alerts (done, waiting), newest first, so missed ones can be read later.
+    var notices: [AgentNotice] = []
     /// Terminals not tied to a project (Terminals screen), restarted on launch.
     var globalSessions: [SessionDescriptor] = []
     /// Compose stacks the user attached to projects.
@@ -107,6 +111,8 @@ struct Library: Codable {
         hasOnboarded = (try? c.decode(Bool.self, forKey: .hasOnboarded)) ?? false
         openProjects = (try? c.decode([ProjectID].self, forKey: .openProjects)) ?? []
         notificationsAsked = (try? c.decode(Bool.self, forKey: .notificationsAsked)) ?? false
+        guideSeen = (try? c.decode(Bool.self, forKey: .guideSeen)) ?? false
+        notices = (try? c.decode([AgentNotice].self, forKey: .notices)) ?? []
         globalSessions = (try? c.decode([SessionDescriptor].self, forKey: .globalSessions)) ?? []
         stacks = try c.decodeIfPresent([ComposeStack].self, forKey: .stacks) ?? []
         globalTree = (try? c.decode(PaneTree.self, forKey: .globalTree)) ?? PaneTree()
@@ -313,4 +319,14 @@ struct PopoverRequest: Identifiable {
     var projectID: ProjectID?
     /// Centre in the window instead of anchoring (used by toolbar and menus).
     var centred = false
+}
+
+/// One agent alert, kept in the notification list.
+struct AgentNotice: Codable, Identifiable, Hashable {
+    var id = UUID().uuidString
+    var date = Date()
+    var title: String
+    var body: String
+    var sessionID: String
+    var read = false
 }

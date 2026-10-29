@@ -28,6 +28,10 @@ final class AppStore {
     /// Last reachability check per server, and the ones being checked now.
     var hostPing: [ResourceID: PingResult] = [:]
     var pinging: Set<ResourceID> = []
+    /// One-off health reads (CPU, memory, disk) without opening a shell.
+    var healthChecking: Set<ResourceID> = []
+    var healthError: [ResourceID: String] = [:]
+    var healthAt: [ResourceID: Date] = [:]
     var dbStatus: [ResourceID: ConnectionStatus] = [:]
     var discoveredDocker: [DockerTarget] = []
     var dockerBusy: Set<ResourceID> = []
@@ -62,6 +66,8 @@ final class AppStore {
     var toasts: [Toast] = []
     var confirmation: Confirmation?
     var sheet: ActiveSheet?
+    /// The first-launch guide's current step; nil when it isn't showing.
+    var guideStep: Int?
     var paletteOpen = false
     var paletteScopeToProject = false
     var inspector: InspectorSelection = .none
@@ -405,6 +411,7 @@ final class AppStore {
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     await self?.refreshMetrics()
+                    await self?.refreshPlans()
                 }
             },
             Task { [weak self] in
@@ -441,7 +448,7 @@ final class AppStore {
     func refreshMetrics() async {
         for h in library.hosts where hostStatus[h.id] == .connected || hostStatus[h.id] == .idle {
             guard h.isSample || hostStatus[h.id] == .connected else { continue }
-            if let m = try? await svc(h).metrics.metrics(h) { hostMetrics[h.id] = m; rememberOS(h.id, m.os) }
+            if let m = try? await svc(h).metrics.metrics(h) { hostMetrics[h.id] = m; healthAt[h.id] = Date(); rememberOS(h.id, m.os) }
         }
     }
 

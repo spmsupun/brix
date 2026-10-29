@@ -87,7 +87,7 @@ struct HostEditorSheet: View {
                 TextField("~/.ssh/id_ed25519", text: $keyPath).textFieldStyle(.plain).font(Typo.mono(12)).foregroundStyle(Theme.text)
                     .accessibilityLabel("Key path")
                 Text(keyKind + " · reference only").font(Typo.ui(11)).foregroundStyle(Theme.text3)
-                Button("Choose…", action: chooseKey).buttonStyle(.plain).font(Typo.ui(11.5)).foregroundStyle(Theme.body)
+                Button("Choose…", action: chooseKey).buttonStyle(.hand).font(Typo.ui(11.5)).foregroundStyle(Theme.body)
                     .padding(.horizontal, 9).frame(height: 24).background(RoundedRectangle(cornerRadius: 6).fill(Color.white(0.06)))
             }
             .padding(.horizontal, 10).frame(height: 34)
@@ -122,7 +122,7 @@ struct HostEditorSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(on ? t.color.opacity(0.4) : Theme.controlStroke))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -136,7 +136,7 @@ struct HostEditorSheet: View {
             }
             Spacer()
             SubtleButton(title: "Test") { test() }.disabled(testState == .running)
-            Button("Cancel") { dismiss() }.buttonStyle(.plain).font(Typo.ui(12.5)).foregroundStyle(Theme.text2).padding(.horizontal, 12)
+            Button("Cancel") { dismiss() }.buttonStyle(.hand).font(Typo.ui(12.5)).foregroundStyle(Theme.text2).padding(.horizontal, 12)
                 .keyboardShortcut(.cancelAction)
             AccentButton(title: "Save") { save() }.keyboardShortcut(.defaultAction)
         }

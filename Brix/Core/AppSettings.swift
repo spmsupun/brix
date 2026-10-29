@@ -112,6 +112,9 @@ struct AppSettings: Codable, Equatable {
     var notifyNeedsInput = true
     var badgeDock = true
     var notifySound = false
+    /// A sound from /System/Library/Sounds, and its volume from 0 to 1.
+    var notifySoundName = "Glass"
+    var notifyVolume = 0.8
     var collapsedSections: Set<String> = []
     var appearance: AppearanceMode = .dark
     /// Projects expanded in the sidebar tree.
@@ -148,6 +151,8 @@ struct AppSettings: Codable, Equatable {
         notifyNeedsInput = (try? c.decode(Bool.self, forKey: .notifyNeedsInput)) ?? d.notifyNeedsInput
         badgeDock = (try? c.decode(Bool.self, forKey: .badgeDock)) ?? d.badgeDock
         notifySound = (try? c.decode(Bool.self, forKey: .notifySound)) ?? d.notifySound
+        notifySoundName = (try? c.decode(String.self, forKey: .notifySoundName)) ?? d.notifySoundName
+        notifyVolume = (try? c.decode(Double.self, forKey: .notifyVolume)) ?? d.notifyVolume
         collapsedSections = (try? c.decode(Set<String>.self, forKey: .collapsedSections)) ?? d.collapsedSections
         appearance = (try? c.decode(AppearanceMode.self, forKey: .appearance)) ?? d.appearance
         expandedProjects = (try? c.decode(Set<String>.self, forKey: .expandedProjects)) ?? d.expandedProjects

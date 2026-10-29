@@ -105,7 +105,7 @@ struct ExplorerPanel: View {
         .padding(.leading, 4).padding(.trailing, 6)
         .frame(height: 24)
         .rowBackground(selected: selected, tint: hue, radius: 6)
-        .onTapGesture { activate(n) }
+        .clickable().onTapGesture { activate(n) }
         .contextMenu { menu(n) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(n.name)\(n.gitStatus.map { ", \($0.name)" } ?? "")")

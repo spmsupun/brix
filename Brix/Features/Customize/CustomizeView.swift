@@ -132,7 +132,7 @@ private struct LayoutSettings: View {
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(on ? accent : Theme.border))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -306,7 +306,7 @@ private struct AppearanceSettings: View {
                                         .overlay(Circle().strokeBorder(a.color, lineWidth: 2).padding(-4).opacity(store.settings.accent == a ? 1 : 0))
                                         .padding(4)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.hand)
                                 .accessibilityLabel(a.label)
                                 .accessibilityAddTraits(store.settings.accent == a ? .isSelected : [])
                             }
@@ -423,17 +423,61 @@ private struct AppearanceSettings: View {
         .padding(16).hairlineBottom()
     }
 
+    /// Same rows as the rest of the panel: name and hint on the left, control on the right.
     private var notifications: some View {
         @Bindable var store = store
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("Notifications").font(Typo.ui(12.5, .medium)).foregroundStyle(Theme.text)
-            Toggle("When an agent session finishes", isOn: $store.settings.notifyFinished).toggleStyle(.bx)
-            Toggle("When a session needs input", isOn: $store.settings.notifyNeedsInput).toggleStyle(.bx)
-            Toggle("Badge the Dock icon with sessions waiting", isOn: $store.settings.badgeDock).toggleStyle(.bx)
-            Toggle("Play a sound", isOn: $store.settings.notifySound).toggleStyle(.bx)
+        return VStack(spacing: 0) {
+            Text("Notifications").font(Typo.ui(12.5, .semibold)).foregroundStyle(Theme.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 4)
+            switchRow("Agent finished", "When an agent session ends", $store.settings.notifyFinished)
+            switchRow("Agent needs you", "When a session is waiting for input", $store.settings.notifyNeedsInput)
+            switchRow("Dock badge", "Count of sessions waiting on the Dock icon", $store.settings.badgeDock)
+            switchRow("Play a sound", "Heard even when macOS mutes banners", $store.settings.notifySound)
+            if store.settings.notifySound {
+                controlRow("Sound", "Plays when picked") {
+                    Picker("Sound", selection: $store.settings.notifySoundName) {
+                        ForEach(AgentNotifier.sounds, id: \.self) { Text($0).tag($0) }
+                    }
+                    .labelsHidden()
+                    .onChange(of: store.settings.notifySoundName) { AgentNotifier.chime(store.settings) }
+                }
+                controlRow("Volume", "\(Int((store.settings.notifyVolume * 100).rounded()))%") {
+                    HStack(spacing: 6) {
+                        Image(systemName: "speaker.fill").font(.system(size: 9)).foregroundStyle(Theme.text3)
+                        Slider(value: $store.settings.notifyVolume, in: 0.05...1) { editing in
+                            if !editing { AgentNotifier.chime(store.settings) }
+                        }
+                        .accessibilityLabel("Sound volume")
+                        Image(systemName: "speaker.wave.3.fill").font(.system(size: 9)).foregroundStyle(Theme.text3)
+                    }
+                }
+            }
+            controlRow("Test", "Check sound and banners") {
+                AccentButton(title: "Send test", symbol: "paperplane.fill") { AgentNotifier.shared.test(store: store) }
+            }
         }
-        .font(Typo.ui(12.5)).foregroundStyle(Theme.body)
-        .padding(16)
+    }
+
+    private func rowLabel(_ title: String, _ sub: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(Typo.ui(12.5, .medium)).foregroundStyle(Theme.text)
+            Text(sub).font(Typo.ui(11.5)).foregroundStyle(Theme.text3)
+        }
+    }
+
+    private func switchRow(_ title: String, _ sub: String, _ on: Binding<Bool>) -> some View {
+        Toggle(isOn: on) { rowLabel(title, sub) }
+            .toggleStyle(.bx).padding(.horizontal, 16).padding(.vertical, 12).hairlineBottom()
+    }
+
+    private func controlRow<C: View>(_ title: String, _ sub: String, @ViewBuilder control: () -> C) -> some View {
+        HStack(spacing: 12) {
+            rowLabel(title, sub)
+            Spacer(minLength: 8)
+            control().frame(width: 170, alignment: .trailing)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12).hairlineBottom()
     }
 }
 

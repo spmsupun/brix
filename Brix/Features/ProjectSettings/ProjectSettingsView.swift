@@ -58,7 +58,7 @@ struct ProjectSettingsView: View {
                     .background(RoundedRectangle(cornerRadius: 7).fill(on ? Theme.selected : .clear))
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
             Spacer()
@@ -219,7 +219,7 @@ private struct GeneralSettings: View {
                                     .frame(width: 34, height: 34)
                                     .background(RoundedRectangle(cornerRadius: 6).fill(symbol == s ? hue.color.opacity(0.16) : Color.white(0.04)))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.hand)
                             .accessibilityLabel(s)
                         }
                     }
@@ -277,7 +277,12 @@ private struct GeneralSettings: View {
 
 private struct ResourcesSettings: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.accent) private var accent
     let project: Project
+    @State private var queries: [ResourceKind: String] = [:]
+    @State private var pages: [ResourceKind: Int] = [:]
+    /// Compose groups opened or closed by hand; the rest follow `openByDefault`.
+    @State private var flipped: Set<String> = []
 
     var body: some View {
         let total = store.library.links.pairs.filter { $0.project == project.id }.count
@@ -301,7 +306,8 @@ private struct ResourcesSettings: View {
                     HStack(spacing: 1) {
                         group("Docker", add: "Container", kind: .docker, items: store.allDocker.map { c in
                             Item(id: c.id, name: "\(c.name) · \(c.image)", sub: "\(c.hostID.flatMap(store.host)?.name ?? "local") · \(c.uptimeText.lowercased())\(c.ports.isEmpty ? "" : " · \(c.ports)")",
-                                 tag: c.hostID == nil ? "COMPOSE" : "REMOTE", tagColor: c.hostID == nil ? Theme.text2 : Theme.blue, badge: "DK", dot: c.state.color)
+                                 tag: c.hostID == nil ? "" : "REMOTE", tagColor: Theme.blue, badge: "DK", dot: c.state.color,
+                                 group: c.composeProject.isEmpty ? Self.standalone : c.composeProject, lastActive: c.lastActive())
                         }) { store.sheet = .addDocker }
                         .frame(width: w, height: h)
                         usage.frame(width: w, height: h)
@@ -320,10 +326,17 @@ private struct ResourcesSettings: View {
         var tagColor: Color
         var badge: String
         var dot: Color
+        /// Docker: the compose project; rows are listed under it.
+        var group: String? = nil
+        var lastActive: Date = .distantPast
     }
+
+    static let standalone = "Standalone containers"
 
     private func group(_ title: String, add: String, kind: ResourceKind, items: [Item], onAdd: @escaping () -> Void) -> some View {
         let linked = items.filter { store.library.links.isLinked(project.id, $0.id) }.count
+        let q = (queries[kind] ?? "").trimmingCharacters(in: .whitespaces)
+        let shown = q.isEmpty ? items : items.filter { "\($0.name) \($0.sub) \($0.group ?? "")".localizedCaseInsensitiveContains(q) }
         return VStack(spacing: 0) {
             HStack(spacing: 9) {
                 Text(title).font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text)
@@ -332,35 +345,101 @@ private struct ResourcesSettings: View {
                 SubtleButton(title: "+ \(add)", height: 26, action: onAdd)
             }
             .padding(.horizontal, 16).frame(height: 44)
+            if items.count > 8 {
+                SearchField(placeholder: kind == .docker ? "Search containers, images, compose projects" : "Search \(title.lowercased())",
+                            text: Binding(get: { queries[kind] ?? "" }, set: { queries[kind] = $0 }))
+                    .padding(.horizontal, 16).padding(.bottom, 8)
+            }
             if items.isEmpty {
                 EmptyState(symbol: "plus.circle", message: "Nothing saved yet.", actionTitle: "Add \(add)", action: onAdd)
+            } else if shown.isEmpty {
+                Text("Nothing matches “\(q)”").font(Typo.ui(12)).foregroundStyle(Theme.text3).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                let page = Binding(get: { pages[kind] ?? 0 }, set: { pages[kind] = $0 })
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(items) { i in row(i, kind: kind) }
+                        if shown.contains(where: { $0.group != nil }) {
+                            // Pages of compose groups, each folding open like an accordion.
+                            let secs = sections(shown)
+                            ForEach(PageBar.slice(secs, page: page.wrappedValue, size: 15), id: \.name) { sec in
+                                let open = !q.isEmpty || openByDefault(sec) != flipped.contains(sec.name)
+                                sectionHeader(sec.name, sec.items, kind: kind, open: open)
+                                if open { ForEach(sec.items) { i in row(i, kind: kind) } }
+                            }
+                            PageBar(page: page, total: secs.count, size: 15)
+                        } else {
+                            ForEach(PageBar.slice(shown, page: page.wrappedValue)) { i in row(i, kind: kind) }
+                            PageBar(page: page, total: shown.count)
+                        }
                     }
                     .padding(.horizontal, 8).padding(.bottom, 8)
                 }
+                .onChange(of: q) { pages[kind] = 0 }
             }
         }
         .background(Theme.island)
+    }
+
+    /// Compose projects in order: ones with linked containers, then ones named like
+    /// this project, then the rest by when they last ran; standalone containers last.
+    private func sections(_ items: [Item]) -> [(name: String, items: [Item])] {
+        let me = project.name.lowercased()
+        func rank(_ name: String, _ its: [Item]) -> Int {
+            if name == Self.standalone { return 3 }
+            if its.contains(where: { store.library.links.isLinked(project.id, $0.id) }) { return 0 }
+            return name.lowercased().contains(me) || me.contains(name.lowercased()) ? 1 : 2
+        }
+        let secs: [(name: String, items: [Item], rank: Int, last: Date)] = Dictionary(grouping: items) { $0.group ?? Self.standalone }
+            .map { name, its in (name, its.sorted { $0.lastActive > $1.lastActive }, rank(name, its), its.map(\.lastActive).max() ?? .distantPast) }
+        let sorted = secs.sorted { a, b in
+            if a.rank != b.rank { return a.rank < b.rank }
+            if a.last != b.last { return a.last > b.last }
+            return a.name.lowercased() < b.name.lowercased()
+        }
+        return sorted.map { (name: $0.name, items: $0.items) }
+    }
+
+    /// Groups with something linked start open; the rest start folded.
+    private func openByDefault(_ sec: (name: String, items: [Item])) -> Bool {
+        sec.items.contains { store.library.links.isLinked(project.id, $0.id) }
+    }
+
+    private func sectionHeader(_ name: String, _ items: [Item], kind: ResourceKind, open: Bool) -> some View {
+        let all = items.allSatisfy { store.library.links.isLinked(project.id, $0.id) }
+        let linked = items.filter { store.library.links.isLinked(project.id, $0.id) }.count
+        return HStack(spacing: 7) {
+            Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.text3)
+                .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 10)
+            Image(systemName: name == Self.standalone ? "shippingbox" : "square.stack.3d.up").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.text3)
+            Text(name).font(Typo.ui(12, .semibold)).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle)
+            Text(linked > 0 ? "\(linked) of \(items.count) linked" : "\(items.count)").font(Typo.ui(11)).foregroundStyle(linked > 0 ? accent : Theme.text3)
+            Spacer()
+            Button(all ? "Unlink all" : "Link all") {
+                for i in items { store.setLink(project.id, i.id, kind: kind, linked: !all) }
+            }
+            .buttonStyle(.hand).font(Typo.ui(11)).foregroundStyle(Theme.text2)
+        }
+        .padding(.horizontal, 10).frame(height: 36)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white(0.03)))
+        .padding(.top, 6)
+        .contentShape(Rectangle())
+        .clickable().onTapGesture { if flipped.contains(name) { flipped.remove(name) } else { flipped.insert(name) } }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(name), \(items.count) containers, \(open ? "expanded" : "collapsed")")
     }
 
     private func row(_ i: Item, kind: ResourceKind) -> some View {
         let on = store.library.links.isLinked(project.id, i.id)
         let others = store.library.links.projects(for: i.id).filter { $0 != project.id }.compactMap(store.project)
         return HStack(spacing: 11) {
-            Toggle("", isOn: Binding(get: { on }, set: { store.setLink(project.id, i.id, kind: kind, linked: $0) }))
-                .toggleStyle(.bx).labelsHidden().frame(width: 34)
-                .accessibilityLabel("Link \(i.name)")
             Text(i.badge).font(.system(size: 8.5, weight: .heavy)).foregroundStyle(Theme.text2)
                 .frame(width: 26, height: 26)
                 .background(RoundedRectangle(cornerRadius: 7).fill(Color.white(0.05)))
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.border))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 7) {
-                    Text(i.name).font(Typo.ui(12.5, .medium)).foregroundStyle(on ? Theme.text : Theme.text2).lineLimit(1)
-                    Text(i.tag).font(.system(size: 8.5, weight: .bold)).foregroundStyle(i.tagColor)
+                    Text(i.name).font(Typo.ui(12.5, .medium)).foregroundStyle(on ? Theme.text : Theme.text2).lineLimit(1).truncationMode(.middle).help(i.name)
+                    if !i.tag.isEmpty { Text(i.tag).font(.system(size: 8.5, weight: .bold)).foregroundStyle(i.tagColor) }
                 }
                 Text(i.sub).font(Typo.mono(10.5)).foregroundStyle(Theme.text3).lineLimit(1)
             }
@@ -374,6 +453,10 @@ private struct ResourcesSettings: View {
             }
             .accessibilityLabel(others.isEmpty ? "" : "Also used by \(others.map(\.name).joined(separator: ", "))")
             Circle().fill(i.dot).frame(width: 6, height: 6)
+            // The switch sits at the end, where the eye lands after reading the name.
+            Toggle("", isOn: Binding(get: { on }, set: { store.setLink(project.id, i.id, kind: kind, linked: $0) }))
+                .toggleStyle(.bx).labelsHidden().frame(width: 34)
+                .accessibilityLabel("Link \(i.name)")
         }
         .padding(.horizontal, 10).frame(height: 46)
         .background(RoundedRectangle(cornerRadius: 8).fill(on ? Color.white(0.035) : .clear))

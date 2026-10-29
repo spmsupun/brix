@@ -134,7 +134,7 @@ struct BuildSite: View {
                             .padding(.horizontal, 10).frame(height: 26)
                             .background(Capsule().fill(Theme.amber))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                 }
             }
         }
@@ -304,7 +304,7 @@ private struct TowerView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .frame(width: 100, height: max(height, 1))
         .handCursor()
         .help("Open \(project.name)")

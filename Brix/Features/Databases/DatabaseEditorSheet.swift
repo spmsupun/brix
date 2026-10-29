@@ -137,7 +137,7 @@ struct DatabaseEditorSheet: View {
                         Text(scanning ? "scanning…" : scannedAt.map { "scanned \(RelativeTime.short($0)) ↻" } ?? "scan ↻")
                             .font(Typo.ui(11)).foregroundStyle(Theme.text3)
                     }
-                    .buttonStyle(.plain).disabled(scanning)
+                    .buttonStyle(.hand).disabled(scanning)
                     .accessibilityLabel("Scan again")
                 }
                 ScrollView {
@@ -178,7 +178,7 @@ struct DatabaseEditorSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(on ? accent.opacity(0.35) : .clear))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help(c.sub)
         .accessibilityLabel("\(c.name), \(c.sub)")
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -206,7 +206,7 @@ struct DatabaseEditorSheet: View {
                 .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white(0.08), style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
         }
     }
 
@@ -318,7 +318,7 @@ struct DatabaseEditorSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(on ? c.opacity(0.55) : Color.white(0.08)))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -465,7 +465,7 @@ struct DatabaseEditorSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(on ? c.opacity(0.5) : Color.white(0.08)))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -505,7 +505,7 @@ struct DatabaseEditorSheet: View {
             .opacity(disabled ? 0.4 : 1)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .disabled(disabled)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
@@ -523,7 +523,7 @@ struct DatabaseEditorSheet: View {
             .overlay(Capsule().strokeBorder(on ? Color.white(0.18) : Color.white(0.08)))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -536,7 +536,7 @@ struct DatabaseEditorSheet: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             if advanced {
                 VStack(alignment: .leading, spacing: 12) {
                     if kind != .sqlite {
@@ -556,7 +556,7 @@ struct DatabaseEditorSheet: View {
                         HStack(spacing: 10) {
                             HuePicker(selection: Binding(get: { colour ?? .blue }, set: { colour = $0 }))
                             if colour != nil {
-                                Button("Use environment colour") { colour = nil }.buttonStyle(.plain).font(Typo.ui(11.5)).foregroundStyle(Theme.text3)
+                                Button("Use environment colour") { colour = nil }.buttonStyle(.hand).font(Typo.ui(11.5)).foregroundStyle(Theme.text3)
                             }
                         }
                     }
@@ -593,7 +593,7 @@ struct DatabaseEditorSheet: View {
             pill(color: Theme.green, text: text, live: true)
         case .failed(let why):
             Button { showDetails.toggle() } label: { pill(color: Theme.red, text: "Can’t connect · Details", live: false) }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .popover(isPresented: $showDetails, arrowEdge: .bottom) {
                     Text(why).font(Typo.mono(11.5)).foregroundStyle(Theme.text).textSelection(.enabled)
                         .frame(maxWidth: 360, alignment: .leading).fixedSize(horizontal: false, vertical: true).padding(12)
@@ -652,19 +652,19 @@ struct DatabaseEditorSheet: View {
         HStack(spacing: 10) {
             Text(maskedURL).font(Typo.mono(11.5)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button("Cancel") { dismiss() }.buttonStyle(.plain).font(Typo.ui(13)).foregroundStyle(Theme.text2).padding(.horizontal, 12)
+            Button("Cancel") { dismiss() }.buttonStyle(.hand).font(Typo.ui(13)).foregroundStyle(Theme.text2).padding(.horizontal, 12)
                 .keyboardShortcut(.cancelAction)
             Button { save(open: false) } label: {
                 Text("Save").font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text).padding(.horizontal, 14).frame(height: 32)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white(0.06)))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white(0.10)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             Button { save(open: true) } label: {
                 Text("Save & open tables ↩").font(Typo.ui(13, .bold)).foregroundStyle(Theme.onAccent).padding(.horizontal, 16).frame(height: 32)
                     .background(RoundedRectangle(cornerRadius: 8).fill(accent))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, 20).frame(height: 60)

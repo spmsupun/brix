@@ -117,7 +117,9 @@ enum Theme {
     static let disabled = Color.dyn(0x52525B, 0xA1A1AA)
     static let grip = Color.dyn(0x4A4A52, 0xB4B4BB)
     static let offline = Color.dyn(0x5E5E66, 0xA1A1AA)
-    static let onAccent = Color.dyn(0x09090B, 0x09090B)
+    /// Text and icons on accent fills: near-black on the bright dark-theme accents,
+    /// white on the deeper light-theme ones.
+    static let onAccent = Color.dyn(0x09090B, 0xFFFFFF)
 
     // Status
     static let green = Color.dyn(0x4ADE80, 0x16A34A)

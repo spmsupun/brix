@@ -151,7 +151,7 @@ struct DWHistory: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 10).padding(.vertical, 6).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                 }
             }
             .padding(4)
@@ -198,7 +198,7 @@ private struct DWGoTo: View {
                             }
                             .padding(.horizontal, 12).frame(height: 28).contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hand)
                     }
                 }
             }
@@ -296,7 +296,7 @@ struct DWTabLabel: View {
                 Image(systemName: "xmark").font(.system(size: 8.5, weight: .bold)).foregroundStyle(selected || hovering ? Theme.text3 : .clear)
                     .frame(width: 16, height: 16).contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .accessibilityLabel("Close \(tab.title)")
         }
         .accessibilityElement(children: .combine)
@@ -382,7 +382,7 @@ struct DWSegment<T: Hashable>: View {
                         .background(RoundedRectangle(cornerRadius: 5).fill(v == selection ? Color.white(0.09) : .clear))
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityAddTraits(v == selection ? .isSelected : [])
             }
         }

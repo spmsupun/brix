@@ -44,6 +44,14 @@ struct RootView: View {
         .coordinateSpace(name: "root")
         .overlay(alignment: .bottomTrailing) { ToastStack().padding(.trailing, 18).padding(.bottom, 38) }
         .overlay { PopoverHost() }
+        .overlayPreferenceValue(GuideAnchorKey.self) { GuideOverlay(anchors: $0) }
+        .task {
+            // First launch only, once the window has settled; never in snapshot runs.
+            guard !store.library.guideSeen, DebugSnapshot.directory == nil else { return }
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            // Counted as seen once it starts, so quitting mid-tour doesn't replay it.
+            if store.sheet == nil, !store.library.guideSeen { store.guideStep = 0; store.library.guideSeen = true }
+        }
         .overlay {
             if store.paletteOpen {
                 CommandPaletteView()
@@ -186,17 +194,12 @@ struct StatusBar: View {
 
     @ViewBuilder private var agents: some View {
         let c = chips
-        if c.isEmpty {
-            HStack(spacing: 6) {
-                Circle().fill(Theme.disabled).frame(width: 6, height: 6)
-                Text("No agents running")
-            }
-            .padding(.horizontal, 8).frame(height: 20)
-        } else {
+        // Empty unless an agent is waiting for you.
+        if !c.isEmpty {
             ForEach(c.prefix(4)) { s in AgentChip(session: s) }
             if c.count > 4 {
                 Button { store.route = .terminals } label: { Text("+\(c.count - 4)").padding(.horizontal, 8).frame(height: 20).background(RoundedRectangle(cornerRadius: 6).fill(Color.white(0.05))) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                     .help(c.dropFirst(4).map { store.displayTitle($0) }.joined(separator: "\n"))
             }
         }
@@ -299,7 +302,7 @@ private struct AgentChip: View {
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(fresh ? Theme.green.opacity(0.5) : .clear))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help("\(store.displayTitle(s)) in \(s.projectID.flatMap(store.project)?.name ?? "Terminals"): \(sub)")
         .accessibilityLabel("\(store.displayTitle(s)), \(sub)")
     }
@@ -347,7 +350,7 @@ private struct UsageSegment: View {
             .padding(.horizontal, 8).frame(height: 20)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help(AgentUsageChips.tip(agent, windows))
         .accessibilityLabel(AgentUsageChips.spoken(agent, windows))
     }
@@ -384,7 +387,7 @@ struct ToastStack: View {
                     Button { store.dismissToast(t.id) } label: {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.meta)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                     .accessibilityLabel("Dismiss")
                 }
                 .padding(.horizontal, 12)

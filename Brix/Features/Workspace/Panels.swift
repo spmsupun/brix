@@ -101,7 +101,7 @@ struct TerminalPanel: View {
             .zIndex(on ? 1 : 0)
             .contentShape(Rectangle())
             .onHover { hoveredTab = $0 ? s.id : (hoveredTab == s.id ? nil : hoveredTab) }
-            .onTapGesture { ws.state.panelSession[panel.id] = s.id }
+            .clickable().onTapGesture { ws.state.panelSession[panel.id] = s.id }
         .reorderableTab(s.id, order: sessions.map(\.id)) { store.moveSession($0, onto: $1) }
         .onMiddleClick { store.closeSession(s.id) }
         .contextMenu { sessionMenu(s.id) }
@@ -282,7 +282,7 @@ struct ConnectionsPanel: View {
             .frame(height: 31)
             .rowBackground(selected: false)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityLabel("\(name), \(tag.name), \(label)")
         .tip("Open \(name)")
     }
@@ -360,7 +360,7 @@ struct DockerRow: View {
                 .frame(width: 24, height: 24)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.white(0.05)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityLabel(label)
         .tip(label)
     }

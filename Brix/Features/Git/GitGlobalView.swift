@@ -428,7 +428,7 @@ struct HistoryTimeline: View {
                             .background(RoundedRectangle(cornerRadius: 7).fill(selected == c.hash ? Theme.selected : .clear))
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hand)
                         .contextMenu { Button("Copy Hash") { store.copyToPasteboard(c.hash, label: "hash") } }
                     }
                 }
@@ -599,7 +599,7 @@ extension GitGlobalView {
             .padding(.horizontal, 10).padding(.vertical, 9)
             .rowBackground(selected: p.id == current, radius: 8)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .contextMenu { ProjectContextMenu(project: p) }
         .padding(.top, 4)
     }
@@ -636,7 +636,7 @@ extension GitGlobalView {
             }
             .padding(.leading, 20)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .contextMenu { ProjectContextMenu(project: r) }
     }
 }

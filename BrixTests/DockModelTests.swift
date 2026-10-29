@@ -214,6 +214,24 @@ final class UnseenSessionTests: XCTestCase {
         store.reveal(session: s.id)
         XCTAssertFalse(store.session(s.id)!.unseen, "opening it clears the flag")
     }
+
+    /// Marked unread by hand: being on screen doesn't clear it, opening it from a list does.
+    func testMarkedUnreadStaysUntilOpened() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        store.loadSampleWorkspace()
+        let s = store.newTerminal(project: "atlas-web", kind: .shell, attach: false)
+        store.recordNotice(title: "done", body: "b", session: s.id)
+        XCTAssertEqual(store.unreadNotices, 1)
+        store.setUnread(s.id, true)
+        store.markSeen(s.id)
+        XCTAssertTrue(store.session(s.id)!.unseen, "on screen doesn't clear a hand-set unread")
+        store.reveal(session: s.id)
+        XCTAssertFalse(store.session(s.id)!.unseen, "opening it does")
+        XCTAssertEqual(store.unreadNotices, 0, "and its notifications count as read")
+    }
 }
 
 @MainActor

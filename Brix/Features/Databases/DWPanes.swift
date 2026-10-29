@@ -80,7 +80,7 @@ struct DWTablePane: View {
             Button { export(t) } label: {
                 DWPill { Image(systemName: "arrow.down.to.line").font(.system(size: 10.5)); Text("CSV") }.fixedSize()
             }
-            .buttonStyle(.plain).disabled(t.result == nil)
+            .buttonStyle(.hand).disabled(t.result == nil)
         }
     }
 
@@ -209,11 +209,11 @@ struct DWTablePane: View {
                 if !t.deleted.isEmpty { countChip("\(t.deleted.count) delete\(t.deleted.count == 1 ? "" : "s")", Theme.red) }
             }
             Spacer(minLength: 0)
-            Button { preview = true } label: { DWPill { Text("Preview SQL") }.fixedSize() }.buttonStyle(.plain)
+            Button { preview = true } label: { DWPill { Text("Preview SQL") }.fixedSize() }.buttonStyle(.hand)
                 .popover(isPresented: $preview, arrowEdge: .top) {
                     CodeView(text: store.pendingSQL(t).joined(separator: "\n"), language: .sql).frame(width: 560, height: 220)
                 }
-            Button { store.revertTable(tabID) } label: { DWPill { Text("Revert") }.fixedSize() }.buttonStyle(.plain)
+            Button { store.revertTable(tabID) } label: { DWPill { Text("Revert") }.fixedSize() }.buttonStyle(.hand)
             Button { store.submitTable(tabID) } label: {
                 HStack(spacing: 7) {
                     Text("Submit").font(Typo.ui(11.5, .bold))
@@ -223,7 +223,7 @@ struct DWTablePane: View {
                 .background(RoundedRectangle(cornerRadius: 7).fill(accent))
                 .fixedSize()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(store.dataLocked(d))
         }
@@ -286,7 +286,7 @@ private struct DWForeignKey: View {
                     Text("Open in tab ⌘B").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.onAccent)
                         .padding(.horizontal, 8).padding(.vertical, 3).background(RoundedRectangle(cornerRadius: 5).fill(Theme.blue))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 Button {
                     store.dataWorkspace.update(tabID) {
                         $0.whereText = "\(LiveDatabaseService.quote(column.name, connection.kind)) = \(LiveDatabaseService.literal(value, connection.kind))"
@@ -297,7 +297,7 @@ private struct DWForeignKey: View {
                     Text("Filter by this").font(Typo.ui(11)).foregroundStyle(Theme.text2)
                         .padding(.horizontal, 8).padding(.vertical, 3).background(RoundedRectangle(cornerRadius: 5).fill(Color.white(0.06)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
             }
         }
         .padding(12).frame(width: 260, alignment: .leading)
@@ -413,7 +413,7 @@ struct DWConsolePane: View {
                 .background(RoundedRectangle(cornerRadius: 7).fill(accent))
                 .fixedSize()
             }
-            .buttonStyle(.plain).disabled(running)
+            .buttonStyle(.hand).disabled(running)
             .help("Run the statement under the caret")
             IconButton(symbol: "forward.fill", label: "Run all", size: 26, iconSize: 10) { store.runConsole(tabID, .all) }.disabled(running)
             IconButton(symbol: "list.bullet.indent", label: "Explain plan", size: 26, iconSize: 11) { store.runConsole(tabID, .explain) }.disabled(running)
@@ -463,7 +463,7 @@ struct DWConsolePane: View {
                 .background(RoundedRectangle(cornerRadius: 7).fill(Theme.violet.opacity(0.08)))
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.violet.opacity(0.3)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .disabled(d.agentAccess == .none)
             .help(d.agentAccess == .none ? "Agents can't see \(d.name)" : "The agent gets the schema and this SQL; its answer shows here")
         }
@@ -522,7 +522,7 @@ struct DWConsolePane: View {
                 Text("✦ Tab to accept · agent suggestion").font(Typo.ui(10.5)).foregroundStyle(Color(hex: 0xDDD6FE))
                     .padding(.horizontal, 7).padding(.vertical, 1)
                     .background(RoundedRectangle(cornerRadius: 5).fill(Theme.violet.opacity(0.16)))
-                Button("Dismiss") { ws.update(tabID) { $0.ghost = nil } }.buttonStyle(.plain).font(Typo.ui(10.5)).foregroundStyle(Theme.text3)
+                Button("Dismiss") { ws.update(tabID) { $0.ghost = nil } }.buttonStyle(.hand).font(Typo.ui(10.5)).foregroundStyle(Theme.text3)
             }
             Text(sql).font(Typo.mono(12.5)).italic().foregroundStyle(Theme.text.opacity(0.5)).lineLimit(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -570,7 +570,7 @@ struct DWConsolePane: View {
                     .background(RoundedRectangle(cornerRadius: 7).fill(on ? Color.white(0.07) : .clear))
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
             }
             Spacer(minLength: 0)
             DWSegment(options: DWResultView.allCases.map { ($0, $0.rawValue) }, selection: t.resultView) { v in ws.update(tabID) { $0.resultView = v } }
@@ -781,7 +781,7 @@ struct DWInspector: View {
             .overlay(alignment: .leading) { if selected { Rectangle().fill(accent).frame(width: 2).padding(.vertical, 2) } }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityLabel("\(c.name), \(v ?? "NULL")\(edited ? ", edited" : "")")
     }
 
@@ -811,7 +811,7 @@ struct DWInspector: View {
                         .frame(maxWidth: .infinity)
                 }
                 Button { store.stageCell(t.id, row: sel.row, col: sel.col, value: nil) } label: { DWPill { Text("Set NULL") }.frame(maxWidth: .infinity) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                     .disabled(!canEdit || c?.isPK == true || c?.nullable == false)
             }
             Button { store.askAgentRow(t.id) } label: {
@@ -824,7 +824,7 @@ struct DWInspector: View {
                 .background(RoundedRectangle(cornerRadius: 7).fill(Theme.violet.opacity(0.08)))
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.violet.opacity(0.3)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .disabled(d.agentAccess == .none)
             .help(d.agentAccess == .none ? "Agents can't see \(d.name)" : d.agentAccess == .schema ? "Agents get the columns only (schema only)" : "Sends this row's columns and values; sensitive columns are masked")
         }

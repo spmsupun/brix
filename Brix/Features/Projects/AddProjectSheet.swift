@@ -154,7 +154,7 @@ struct HuePicker: View {
                         .overlay(Circle().strokeBorder(Color.white, lineWidth: selection == h ? 2 : 0).padding(-3))
                         .padding(3)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityLabel(h.rawValue.capitalized)
                 .accessibilityAddTraits(selection == h ? .isSelected : [])
             }

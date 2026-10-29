@@ -45,6 +45,7 @@
 		4F9F1E54F7008746B6DB143D /* AgentSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5A6C156178A8C562714813 /* AgentSheets.swift */; };
 		52BD9F52CD8B3EBFB53F5B45 /* FileEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BD673077D6E9613292DAF5 /* FileEditorSheet.swift */; };
 		52CA23322BEA6ECC9F591E35 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = D734E22237DBBE64E0805FF0 /* SwiftTerm */; };
+		52CCEC91D3E062BD2B8562C1 /* Guide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06F88B98CB1C39FC5FFEADA5 /* Guide.swift */; };
 		534EB43F63AB505BCC72E555 /* AppStore+Recovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96D9FF503A6AE3D479295763 /* AppStore+Recovery.swift */; };
 		54447F2A7A8D62896F323E57 /* HomePanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A0F1EB7DD12918F8D249FD /* HomePanels.swift */; };
 		560BAD0E258A419B2483CE9C /* ProjectSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848362334B5FF9608235B475 /* ProjectSettingsView.swift */; };
@@ -143,6 +144,7 @@
 		05074EC4F69B9C1F467DFB5C /* TerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurface.swift; sourceTree = "<group>"; };
 		05E2934E8EDE5EDB1651BB12 /* SessionPaneTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPaneTree.swift; sourceTree = "<group>"; };
 		06E597F4F0E5228947733ACF /* AgentsGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsGrid.swift; sourceTree = "<group>"; };
+		06F88B98CB1C39FC5FFEADA5 /* Guide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Guide.swift; sourceTree = "<group>"; };
 		06FD02FD30B36AAE6D15226A /* LiveTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTerminal.swift; sourceTree = "<group>"; };
 		08DC686E99EA09259083BE92 /* Panels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Panels.swift; sourceTree = "<group>"; };
 		08F47849F9E78B382E3CF9F9 /* DataGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataGrid.swift; sourceTree = "<group>"; };
@@ -639,6 +641,7 @@
 		E322354E259B39DFB9F7BE67 /* Shell */ = {
 			isa = PBXGroup;
 			children = (
+				06F88B98CB1C39FC5FFEADA5 /* Guide.swift */,
 				2F9A920AB987A332256182D1 /* RootView.swift */,
 				99EE130EF003C6F7D9974A99 /* Sidebar.swift */,
 				159937A59ED91FB49B0E86B3 /* Toolbar.swift */,
@@ -824,6 +827,7 @@
 				64D509EC53CEFE982B4020C1 /* FuzzyMatcher.swift in Sources */,
 				A115BD74FCB923419FB2080B /* GitGlobalView.swift in Sources */,
 				9EE12D6BFA5D9C2B33FA5D98 /* GitHub.swift in Sources */,
+				52CCEC91D3E062BD2B8562C1 /* Guide.swift in Sources */,
 				54447F2A7A8D62896F323E57 /* HomePanels.swift in Sources */,
 				FE01F4E00C1AD2D9C5D4C9F8 /* HostEditorSheet.swift in Sources */,
 				87467208138FF6CCCE1AF362 /* HostPing.swift in Sources */,

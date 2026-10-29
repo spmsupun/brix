@@ -464,6 +464,35 @@ struct DockerTarget: Codable, Identifiable, Hashable {
         case .paused: return "Paused"
         }
     }
+
+    /// When it last ran, read from Docker's status line: now while it runs,
+    /// "Exited (0) 8 days ago" gives 8 days back. distantPast when unknown.
+    func lastActive(now: Date = Date()) -> Date {
+        if state == .running || state == .restarting || state == .paused { return now }
+        if let s = startedAt { return s }
+        return Self.ago(statusText, now: now) ?? .distantPast
+    }
+
+    /// "… 8 days ago", "About an hour ago", "Less than a second ago" as a date.
+    static func ago(_ text: String, now: Date) -> Date? {
+        let t = text.lowercased()
+        guard let r = t.range(of: " ago") else { return nil }
+        let words = t[..<r.lowerBound].split(separator: " ").suffix(2).map(String.init)
+        guard words.count == 2 else { return nil }
+        let unit: Double = switch words[1].hasSuffix("s") ? String(words[1].dropLast()) : words[1] {
+        case "second": 1
+        case "minute": 60
+        case "hour": 3600
+        case "day": 86_400
+        case "week": 604_800
+        case "month": 2_592_000
+        case "year": 31_536_000
+        default: 0
+        }
+        guard unit > 0 else { return nil }
+        guard let n = Double(words[0]) ?? (["a", "an"].contains(words[0]) ? 1 : nil) else { return nil }
+        return now.addingTimeInterval(-n * unit)
+    }
 }
 
 // MARK: - Links (many-to-many)
@@ -746,6 +775,8 @@ struct PlanItem: Hashable, Identifiable {
     var id: String { title }
     var title: String
     var done: Bool
+    /// The agent says it's working on this one now.
+    var active = false
 }
 
 struct FileTouch: Hashable, Identifiable {
@@ -781,6 +812,8 @@ struct TerminalSession: Identifiable, Hashable {
     var isLive: Bool = false
     /// Finished or waiting while you weren't looking at it; cleared when you do.
     var unseen = false
+    /// Marked unread by hand: stays flagged while on screen, until you open it from a list.
+    var markedUnread = false
     /// Mock sessions loaded from the sample workspace.
     var isSampleSession: Bool = false
 

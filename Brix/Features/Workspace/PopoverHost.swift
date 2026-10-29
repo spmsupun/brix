@@ -207,7 +207,7 @@ struct AddPanelMenu: View {
         .contentShape(Rectangle())
         .onHover { if $0 { highlighted = index } }
         if item.children.isEmpty {
-            Button { run(index) } label: { content }.buttonStyle(.plain)
+            Button { run(index) } label: { content }.buttonStyle(.hand)
         } else {
             MenuButton(items: { item.children.map { c in MenuSpec(title: c.title) { c.action(); dismiss() } } }) { content }
         }

@@ -204,7 +204,7 @@ struct AgentPane: View {
                 // The tab carries the name, logo and state; the body is just the session.
                 TerminalSurface(sessionID: s.id, showInput: false)
                     .background(Theme.terminal)
-                .onTapGesture { store.inspector = .session(s.id) }
+                .clickable().onTapGesture { store.inspector = .session(s.id) }
             } else {
                 VStack(spacing: 0) {
                     header(s, project: p, hue: hue)
@@ -214,7 +214,7 @@ struct AgentPane: View {
                 .clipShape(RoundedRectangle(cornerRadius: Metrics.islandRadius))
                 .overlay(RoundedRectangle(cornerRadius: Metrics.islandRadius).strokeBorder(active && !compact ? hue.opacity(0.35) : Theme.border))
                 .background(RoundedRectangle(cornerRadius: Metrics.islandRadius + 3).fill(active && !compact ? hue.opacity(0.07) : .clear).padding(-3))
-                .onTapGesture { store.inspector = .session(s.id) }
+                .clickable().onTapGesture { store.inspector = .session(s.id) }
             }
         } else {
             EmptyState(symbol: "sparkle", message: "This session was closed.").island(Theme.terminal)
@@ -285,7 +285,8 @@ struct PlanList: View {
     let session: TerminalSession
 
     var body: some View {
-        let current = session.plan.firstIndex { !$0.done }
+        // The task the agent marked in progress, else the first one not done.
+        let current = session.plan.firstIndex(where: \.active) ?? session.plan.firstIndex { !$0.done }
         VStack(spacing: 0) {
             if session.plan.isEmpty {
                 Text(session.task.isEmpty ? "The plan appears once the agent starts a task." : session.task)
@@ -363,7 +364,7 @@ struct AgentFilesPanel: View {
                             .padding(.horizontal, 8).frame(height: 28)
                             .rowBackground(selected: false, radius: 6)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hand)
                     }
                 }
                 .padding(6)

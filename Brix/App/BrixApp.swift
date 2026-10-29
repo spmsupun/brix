@@ -127,6 +127,14 @@ struct WindowChrome: NSViewRepresentable {
             DispatchQueue.main.async { self.layoutButtons() }
         }
 
+        /// Switching dark and light rebuilds the title bar, which puts the
+        /// traffic lights back at the top; move them again once it has.
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            DispatchQueue.main.async { self.layoutButtons() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self.layoutButtons() }
+        }
+
         @objc func hideWindow() {
             (NSApp.delegate as? AppDelegate)?.store?.saveNow()
             window?.orderOut(nil)

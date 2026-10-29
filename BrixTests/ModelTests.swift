@@ -299,3 +299,75 @@ final class LiveSQLiteTests: XCTestCase {
         XCTAssertEqual(r.message, "1 row affected")
     }
 }
+
+final class AgentHistoryFilterTests: XCTestCase {
+    /// Headless `claude -p` runs stay out of the session list, like Claude Code's /resume.
+    func testHeadlessClaudeRunsAreHidden() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        func session(_ entrypoint: String) throws -> URL {
+            let url = dir.appendingPathComponent("\(entrypoint).jsonl")
+            try #"{"type":"user","entrypoint":"\#(entrypoint)","cwd":"/p","message":{"role":"user","content":"hi"}}"#.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        }
+        XCTAssertNotNil(AgentTranscripts.claudeEntry(try session("cli")))
+        XCTAssertNotNil(AgentTranscripts.claudeEntry(try session("claude-desktop")))
+        XCTAssertNil(AgentTranscripts.claudeEntry(try session("sdk-cli")))
+    }
+}
+
+final class ClaudeLiveSessionTests: XCTestCase {
+    /// A /resume inside Claude changes the id in ~/.claude/sessions/<pid>.json; Brix follows it.
+    func testReadsTheConversationAProcessIsOn() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let dir = home.appendingPathComponent(".claude/sessions")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        try #"{"pid":4242,"sessionId":"8d0a95ca-2908-45cb-aba1-6ad45edb6c42"}"#.write(to: dir.appendingPathComponent("4242.json"), atomically: true, encoding: .utf8)
+        try #"{"pid":7,"sessionId":"../../etc"}"#.write(to: dir.appendingPathComponent("7.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(AgentTranscripts.claudeLiveSessionID(pid: 4242, home: home.path), "8d0a95ca-2908-45cb-aba1-6ad45edb6c42")
+        XCTAssertNil(AgentTranscripts.claudeLiveSessionID(pid: 7, home: home.path))
+        XCTAssertNil(AgentTranscripts.claudeLiveSessionID(pid: 99, home: home.path))
+    }
+}
+
+final class DockerLastActiveTests: XCTestCase {
+    func testReadsAgeFromDockerStatus() {
+        let now = Date(timeIntervalSince1970: 1_000_000_000)
+        XCTAssertEqual(DockerTarget.ago("Exited (0) 8 days ago", now: now), now.addingTimeInterval(-8 * 86_400))
+        XCTAssertEqual(DockerTarget.ago("Exited (137) About an hour ago", now: now), now.addingTimeInterval(-3600))
+        XCTAssertEqual(DockerTarget.ago("Exited (255) 2 hours ago", now: now), now.addingTimeInterval(-7200))
+        XCTAssertNil(DockerTarget.ago("Created", now: now))
+        XCTAssertEqual(PageBar.slice(Array(0..<60), page: 2).first, 50)
+        XCTAssertEqual(PageBar.slice(Array(0..<60), page: 9).first, 50, "a page past the end shows the last page")
+        XCTAssertEqual(PageBar.slice([Int](), page: 3).count, 0)
+    }
+}
+
+final class DockerAgoEdgeTests: XCTestCase {
+    func testUnknownCountIsNotNow() {
+        XCTAssertNil(DockerTarget.ago("Exited (0) several days ago", now: Date()))
+    }
+}
+
+final class ClaudePlanTests: XCTestCase {
+    /// Tasks come from TaskCreate results and TaskUpdate calls, read again as the file grows.
+    func testReadsTasksAndFollowsAppends() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        func line(_ content: String) -> String { #"{"type":"assistant","message":{"content":[\#(content)]}}"# + "\n" }
+        var text = line(#"{"type":"tool_use","name":"TaskCreate","input":{"subject":"Write tests"}}"#)
+        text += line(#"{"type":"tool_result","content":"Task #1 created successfully: Write tests"}"#)
+        text += line(#"{"type":"tool_result","content":"Task #2 created successfully: Ship it"}"#)
+        text += line(#"{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"}}"#)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let reader = AgentTranscripts.PlanReader()
+        XCTAssertEqual(reader.read(url), [PlanItem(title: "Write tests", done: false, active: true), PlanItem(title: "Ship it", done: false)])
+        let h = try FileHandle(forWritingTo: url)
+        try h.seekToEnd()
+        try h.write(contentsOf: Data(line(#"{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}"#).utf8))
+        try h.close()
+        XCTAssertEqual(reader.read(url)?.first, PlanItem(title: "Write tests", done: true))
+    }
+}

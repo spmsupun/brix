@@ -100,6 +100,7 @@ struct BrixCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
+            Button("Show Guide") { store.sheet = nil; store.guideStep = 0 }
             Button("Performance Log") {
                 try? FileManager.default.createDirectory(at: PerfMonitor.directory, withIntermediateDirectories: true)
                 NSWorkspace.shared.open(PerfMonitor.directory)

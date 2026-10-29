@@ -78,7 +78,7 @@ struct DBConnectionsView: View {
         }
         .padding(.horizontal, 10).frame(height: 48)
         .rowBackground(selected: on, radius: 8)
-        .onTapGesture { store.selectedDatabase = d.id }
+        .clickable().onTapGesture { store.selectedDatabase = d.id }
         .onTapGesture(count: 2) { store.selectedDatabase = d.id; store.route = .databases }
         .contextMenu { DatabaseContextMenu(db: d) }
         .accessibilityElement(children: .combine)

@@ -164,9 +164,10 @@ private struct SessionList: View {
             .frame(height: 40)
             .rowBackground(selected: on, radius: 6)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .contextMenu {
             Button("Rename…") { store.sheet = .renameSession(s.id) }
+            Button(s.unseen ? "Mark as Read" : "Mark as Unread") { store.setUnread(s.id, !s.unseen) }
             Button("Clear") { store.clearSession(s.id) }
             Button("Interrupt") { store.interruptSession(s.id) }
             if s.projectID != nil { Button("Open in Workspace") { store.reveal(session: s.id) } }
@@ -181,7 +182,7 @@ private struct SessionList: View {
             Text("Input").font(Typo.ui(10, .semibold)).foregroundStyle(Color(hex: 0x09090B))
                 .padding(.horizontal, 7).padding(.vertical, 1).background(Capsule().fill(Theme.amber))
         } else if s.unseen {
-            Text("Done").font(Typo.ui(10, .semibold)).foregroundStyle(Theme.onAccent)
+            Text(s.markedUnread || s.state == .running ? "Unread" : "Done").font(Typo.ui(10, .semibold)).foregroundStyle(Theme.onAccent)
                 .padding(.horizontal, 7).padding(.vertical, 1).background(Capsule().fill(Theme.green))
         } else if s.state == .running {
             WorkingSpinner(size: 10)

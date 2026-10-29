@@ -38,7 +38,7 @@ struct WelcomeView: View {
             }
             .frame(width: 520)
             Button("Load sample workspace") { store.loadSampleWorkspace() }
-                .buttonStyle(.plain).font(Typo.ui(12)).foregroundStyle(accent)
+                .buttonStyle(.hand).font(Typo.ui(12)).foregroundStyle(accent)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -62,7 +62,7 @@ struct WelcomeView: View {
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
     }
 }
 

@@ -38,6 +38,8 @@ private struct FullSidebar: View {
     @State private var filtering = false
     @State private var filter = ""
     @State private var hoveredProject: ProjectID?
+    /// The project a single click just expanded, so the double-click it was part of leaves it open.
+    @State private var expandedByClick: ProjectID?
     @State private var hoveredSession: String?
     @State private var menuFor: ProjectID?
     @State private var hoveredRepo: ProjectID?
@@ -48,6 +50,9 @@ private struct FullSidebar: View {
     @AppStorage("sidebar.repoSort") private var repoSort = RepoSort.activity
     /// Keyboard cursor in the project tree (↑↓←→↩).
     @State private var cursor: String?
+    /// The ring only shows while moving with the arrow keys; a mouse click hides
+    /// it, so it never marks a row other than the one you just picked.
+    @State private var keyboardNav = false
     @FocusState private var treeFocused: Bool
 
     var body: some View {
@@ -116,6 +121,7 @@ private struct FullSidebar: View {
                 }
                 IconButton(symbol: "plus", label: "Add project", size: 22, iconSize: 11) { store.sheet = .addProject }
             }
+            .guideAnchor(.projects)
             .padding(.leading, 16).padding(.trailing, 8)
             .frame(height: 26)
             if filtering {
@@ -148,7 +154,7 @@ private struct FullSidebar: View {
             .rowHeight(28)
             .rowBackground(selected: on)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -208,7 +214,7 @@ private struct FullSidebar: View {
                     .rotationEffect(.degrees(open ? 90 : 0))
                     .frame(width: 12, height: 24).contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .accessibilityLabel(open ? "Collapse \(p.name)" : "Expand \(p.name)")
             ProjectMark(project: p, size: Tree.icon)
             VStack(alignment: .leading, spacing: 2) {
@@ -241,7 +247,7 @@ private struct FullSidebar: View {
                 }
             }
         }
-        .padding(.leading, 6).padding(.trailing, 4)
+        .padding(.leading, 6).padding(.trailing, 10)
         .frame(height: sub == nil ? 36 : (open ? 46 : 44))
         .background(RoundedRectangle(cornerRadius: 7).fill(on ? p.hue.color.opacity(0.08) : (hoveredProject == p.id ? Theme.hover : .clear)))
         .overlay(cursorRing("p:" + p.id))
@@ -249,16 +255,20 @@ private struct FullSidebar: View {
         .onHover { hoveredProject = $0 ? p.id : (hoveredProject == p.id ? nil : hoveredProject) }
         // One gesture, read the click count: a single click responds at once
         // (two tap gestures would hold it back to wait for a second click).
-        .onTapGesture {
+        .clickable().onTapGesture {
             cursor = "p:" + p.id
+            keyboardNav = false
             if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
-                store.openProject(p.id)
+                // The first click already opened a collapsed project; the second
+                // only closes one that was open before the double-click.
+                if expandedByClick == p.id { expandedByClick = nil } else { toggleExpanded(p.id) }
             } else {
                 store.route = .projectHome(p.id)
+                expandedByClick = isExpanded(p.id) ? nil : p.id
                 if !isExpanded(p.id) { toggleExpanded(p.id) }
             }
         }
-        .help("\(p.path)\nClick for the overview, double-click to open the workspace")
+        .help("\(p.path)\nClick for the overview, double-click to expand or collapse")
         .contextMenu { ProjectContextMenu(project: p) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(p.name)
@@ -317,7 +327,7 @@ private struct FullSidebar: View {
             .background(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.white(0.12), style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityLabel("New \(title.lowercased())")
     }
 
@@ -366,7 +376,7 @@ private struct FullSidebar: View {
     private func sessionRow(_ s: TerminalSession, hue: Color, repo: Project? = nil) -> some View {
         let on = sessionSelected(s)
         let hovering = hoveredSession == s.id
-        return Button { store.reveal(session: s.id) } label: {
+        return Button { cursor = "s:" + s.id; keyboardNav = false; store.reveal(session: s.id) } label: {
             HStack(spacing: 8) {
                 // The icon on its own, no tile behind it; one line: name and age.
                 SessionIcon(session: s, size: 15)
@@ -377,19 +387,21 @@ private struct FullSidebar: View {
                     .lineLimit(1).truncationMode(.tail)
                     .help([repo?.name, store.displayTitle(s), sessionSub(s)].compactMap { $0 }.joined(separator: " · "))
                 Spacer(minLength: 0)
-                if hovering {
-                    SidebarCloseButton(label: "Close \(s.title)") { store.closeSession(s.id) }
-                } else if s.state == .needsInput {
+                // The state (Input, Done, working, idle) stays while hovering; the close button sits beside it.
+                if s.state == .needsInput {
                     Text("Input").font(Typo.ui(10, .semibold)).foregroundStyle(Color(hex: 0x09090B))
                         .padding(.horizontal, 7).padding(.vertical, 1)
                         .background(Capsule().fill(Theme.amber))
                 } else if s.unseen {
-                    Text("Done").font(Typo.ui(10, .semibold)).foregroundStyle(Theme.onAccent)
+                    Text(s.markedUnread || s.state == .running ? "Unread" : "Done").font(Typo.ui(10, .semibold)).foregroundStyle(Theme.onAccent)
                         .padding(.horizontal, 7).padding(.vertical, 1)
                         .background(Capsule().fill(Theme.green))
-                        .help("Finished while you weren't looking")
+                        .help(s.markedUnread ? "Marked unread to come back to" : "Finished while you weren't looking")
                 } else {
                     StatusDot(color: s.state.color, size: 6, ring: s.state == .running, pulse: s.state == .running)
+                }
+                if hovering {
+                    SidebarCloseButton(label: "Close \(s.title)") { store.closeSession(s.id) }
                 }
             }
             .padding(.leading, Tree.child).padding(.trailing, 8)
@@ -400,11 +412,12 @@ private struct FullSidebar: View {
             .overlay(cursorRing("s:" + s.id))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .onHover { hoveredSession = $0 ? s.id : (hoveredSession == s.id ? nil : hoveredSession) }
         .onMiddleClick { store.closeSession(s.id) }
         .contextMenu {
             Button("Rename…") { store.sheet = .renameSession(s.id) }
+            Button(s.unseen ? "Mark as Read" : "Mark as Unread") { store.setUnread(s.id, !s.unseen) }
             Button("Show in Inspector") { store.inspector = .session(s.id) }
             Divider()
             Button("Close", role: .destructive) { store.closeSession(s.id) }
@@ -478,7 +491,7 @@ private struct FullSidebar: View {
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityLabel("Repositories, \(changed) changed")
                 .accessibilityValue(reposOpen ? "Expanded" : "Collapsed")
                 MenuButton(items: { RepoSort.allCases.map { o in MenuSpec(title: "By \(o.rawValue)", checked: o == repoSort) { repoSort = o } } }) {
@@ -579,8 +592,9 @@ private struct FullSidebar: View {
         .overlay(cursorRing("r:" + r.id))
         .contentShape(Rectangle())
         .onHover { hoveredRepo = $0 ? r.id : (hoveredRepo == r.id ? nil : hoveredRepo) }
-        .onTapGesture {
+        .clickable().onTapGesture {
             cursor = "r:" + r.id
+            keyboardNav = false
             if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { store.openProject(r.id) } else { store.route = .projectHome(r.id) }
         }
         .contextMenu { ProjectContextMenu(project: r) }
@@ -609,7 +623,7 @@ private struct FullSidebar: View {
                 .background(RoundedRectangle(cornerRadius: 5).fill(Color.white(0.001)))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help(label)
         .accessibilityLabel(label)
     }
@@ -661,7 +675,7 @@ private struct FullSidebar: View {
                 .background(alignment: .leading) { elbow(p.hue.color) }
                 .rowBackground(selected: false)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .padding(.top, 4)
             .accessibilityLabel(items.map { "\($0.1) \($0.2)" }.joined(separator: ", "))
             .accessibilityValue(open ? "Expanded" : "Collapsed")
@@ -685,6 +699,7 @@ private struct FullSidebar: View {
     }
 
     private func moveCursor(_ by: Int) {
+        keyboardNav = true
         let rows = cursorRows
         guard !rows.isEmpty else { return }
         let i = cursor.flatMap(rows.firstIndex(of:)) ?? (by > 0 ? -1 : rows.count)
@@ -692,6 +707,7 @@ private struct FullSidebar: View {
     }
 
     private func expandCursor(_ open: Bool) {
+        keyboardNav = true
         guard let c = cursor else { return moveCursor(1) }
         let id = String(c.dropFirst(2))
         if c.hasPrefix("p:") {
@@ -714,7 +730,7 @@ private struct FullSidebar: View {
     }
 
     private func cursorRing(_ id: String) -> some View {
-        RoundedRectangle(cornerRadius: 7).strokeBorder(accent.opacity(treeFocused && cursor == id ? 0.7 : 0), lineWidth: 1.5)
+        RoundedRectangle(cornerRadius: 7).strokeBorder(accent.opacity(treeFocused && keyboardNav && cursor == id ? 0.7 : 0), lineWidth: 1.5)
             .allowsHitTesting(false)
     }
 
@@ -852,7 +868,7 @@ private struct FullSidebar: View {
                 .background(alignment: .leading) { elbow(hue) }
                 .rowBackground(selected: false)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .accessibilityLabel("\(title), \(summary)")
             .accessibilityValue(open ? "Expanded" : "Collapsed")
             if open {
@@ -892,7 +908,7 @@ private struct FullSidebar: View {
             }
             .rowBackground(selected: selected)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
     }
 
     /// SSH files open as a tab in the project's tiled centre.
@@ -916,7 +932,7 @@ private struct FullSidebar: View {
                 libraryLabel("Databases", symbol: "cylinder", meta: "\(store.library.databases.count) saved",
                              on: isActive(.dbConnections) || isActive(.databases))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .accessibilityValue(dbTreeOpen ? "Expanded" : "Collapsed")
             if dbTreeOpen { DBLibraryTree() }
             libraryRow("Servers", symbol: "server.rack", meta: "\(store.library.hosts.count) saved", route: .ssh)
@@ -928,7 +944,7 @@ private struct FullSidebar: View {
 
     private func libraryRow(_ title: String, symbol: String, meta: String, route: Route) -> some View {
         Button { store.go(route) } label: { libraryLabel(title, symbol: symbol, meta: meta, on: isActive(route)) }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
     }
 
     private func libraryLabel(_ title: String, symbol: String, meta: String, on: Bool) -> some View {
@@ -965,9 +981,11 @@ private struct FullSidebar: View {
                 .contentShape(Rectangle())
             }
             .accessibilityLabel("Add project, host, database or Docker target")
+            .guideAnchor(.add)
             Spacer()
             IconButton(symbol: "slider.horizontal.3", label: "Customize layout and appearance", shortcut: "⌘,", size: 26, iconSize: 13, color: Theme.text2,
                        active: store.route == .customize) { store.go(.customize) }
+                .guideAnchor(.customize)
             IconButton(symbol: store.settings.sidebarPosition == .left ? "chevron.left.2" : "chevron.right.2", label: "Collapse sidebar", size: 26, iconSize: 11, color: Theme.text2) {
                 withAnimation(.easeOut(duration: 0.18)) {
                     if store.sidebarForcedFull { store.sidebarForcedFull = false } else { store.settings.sidebarStyle = .rail }
@@ -1068,7 +1086,7 @@ private struct NewInProjectMenu: View {
                 .background(RoundedRectangle(cornerRadius: 7).fill(hovering ? Theme.selected : .clear))
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .onHover { hovering = $0 }
         }
     }
@@ -1091,7 +1109,7 @@ private struct RailSidebar: View {
                         .background(RoundedRectangle(cornerRadius: 8).fill(on ? Color.white(0.08) : .clear))
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityLabel(r.title)
                 .tip(r.title)
             }
@@ -1113,7 +1131,7 @@ private struct RailSidebar: View {
                                 }
                                 .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hand)
                         .accessibilityLabel(p.name)
                         .tip(p.name)
                         .contextMenu { ProjectContextMenu(project: p) }
@@ -1208,7 +1226,7 @@ struct SidebarCloseButton: View {
                 .background(RoundedRectangle(cornerRadius: 4).fill(hovering ? Theme.hover : .clear))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .onHover { hovering = $0 }
         .accessibilityLabel(label)
         .help(label)

@@ -161,7 +161,7 @@ private struct ProjectHeader: View {
                 Button { store.projectSettingsSection = "General"; store.route = .projectSettings(p.id) } label: {
                     ProjectMark(project: p, size: 56)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .help("Change the name and icon")
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 10) {
@@ -204,7 +204,7 @@ private struct ProjectHeader: View {
                     .foregroundStyle(Theme.onAccent).padding(.horizontal, 14).frame(height: 32)
                     .background(RoundedRectangle(cornerRadius: 9).fill(accent))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .keyboardShortcut(.return, modifiers: [])
             }
             .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
@@ -228,7 +228,7 @@ private struct ProjectHeader: View {
             .padding(.horizontal, 8).frame(height: 22)
             .background(RoundedRectangle(cornerRadius: 6).fill(Theme.amber.opacity(0.12)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help(runs.map { "\($0.workflowName) · \($0.headBranch) · \($0.displayTitle)" }.joined(separator: "\n"))
     }
 
@@ -253,7 +253,7 @@ private struct ProjectHeader: View {
                         .padding(.horizontal, 8).frame(height: 24)
                         .background(RoundedRectangle(cornerRadius: 6).fill(linked ? Theme.blue.opacity(0.10) : Color.white(0.05)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .help("Remove @\(r)")
             }
             MenuButton(items: { attachMenu(p) }) {
@@ -272,7 +272,7 @@ private struct ProjectHeader: View {
                 .foregroundStyle(Color(hex: 0x09090B)).padding(.horizontal, 12).frame(height: 28)
                 .background(RoundedRectangle(cornerRadius: 7).fill(Color(hex: 0xF4F4F5)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(agent == nil)
         }
@@ -507,7 +507,7 @@ private struct SessionsCard: View {
                         .onExitCommand { query = "" }
                     if !q.isEmpty {
                         Button { query = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 10)).foregroundStyle(Theme.text3) }
-                            .buttonStyle(.plain).accessibilityLabel("Clear search")
+                            .buttonStyle(.hand).accessibilityLabel("Clear search")
                     }
                 }
                 .padding(.horizontal, 8).frame(width: 190, height: 24)
@@ -716,7 +716,7 @@ private struct HeaderSearch: View {
                 .onExitCommand { text = "" }
             if !text.isEmpty {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 10)).foregroundStyle(Theme.text3) }
-                    .buttonStyle(.plain).accessibilityLabel("Clear search")
+                    .buttonStyle(.hand).accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 8).frame(width: 190, height: 24)
@@ -787,7 +787,7 @@ private struct CommitsCard: View {
                             .padding(.horizontal, 9).frame(height: 24)
                             .background(RoundedRectangle(cornerRadius: 6).fill(g.changes.isEmpty ? Color.white(0.06) : Theme.amber))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                 }
             }
             if let gitError {
@@ -899,7 +899,7 @@ private struct CommitsCard: View {
             .padding(.horizontal, 8).frame(height: 30)
             .rowBackground(selected: false, radius: 6)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
     }
 }
 
@@ -937,7 +937,7 @@ private struct RunCard: View {
                 Image(systemName: "play.fill").font(.system(size: 8.5)).foregroundStyle(first ? Theme.onAccent : Theme.text)
                     .frame(width: 22, height: 22).background(RoundedRectangle(cornerRadius: 6).fill(first ? accent : Color.white(0.07)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .accessibilityLabel("Run \(t.name)")
             Text(t.name).font(Typo.ui(12.5, .medium)).foregroundStyle(Theme.text).lineLimit(1)
             Text(t.command).font(Typo.mono(10.5)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
@@ -1103,7 +1103,7 @@ private struct GitHubCard: View {
             .padding(.horizontal, 8).frame(height: 40)
             .rowBackground(selected: false, radius: 7)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help("Open #\(p.number) on GitHub")
     }
 
@@ -1145,7 +1145,7 @@ private struct GitHubCard: View {
             .padding(.horizontal, 8).frame(height: 40)
             .rowBackground(selected: false, radius: 7)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help("Open this run on GitHub")
     }
 
@@ -1193,7 +1193,7 @@ private struct RepositoriesCard: View {
                         .padding(.horizontal, 8).frame(height: 40)
                         .rowBackground(selected: false, radius: 7)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                 }
             }
             .padding(6)
@@ -1287,7 +1287,7 @@ private struct InstructionsCard: View {
                                     .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: 0xE07B53).opacity(0.12)))
                                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(hex: 0xE07B53).opacity(0.3)))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.hand)
                             SubtleButton(title: "Blank CLAUDE.md", height: 28) { blank() }
                         }
                     }
@@ -1307,7 +1307,7 @@ private struct InstructionsCard: View {
                             .padding(.horizontal, 8).frame(height: 28)
                             .rowBackground(selected: false, radius: 6)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hand)
                     }
                 }
                 .padding(6)
@@ -1412,7 +1412,7 @@ private struct CodebaseCard: View {
                     }
                     .padding(.horizontal, 8).frame(height: 26)
                     .contentShape(Rectangle())
-                    .onTapGesture { store.openProject(project.id); store.workspace(for: project.id).open(c.path) }
+                    .clickable().onTapGesture { store.openProject(project.id); store.workspace(for: project.id).open(c.path) }
                 }
             }
             .padding(.horizontal, 6).padding(.bottom, 6).padding(.top, 2)

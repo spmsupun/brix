@@ -269,6 +269,8 @@ final class TerminalRegistry {
     }
 
     func view(_ id: String) -> BrixTerminalView? { views[id] }
+    /// The process the terminal started (the shell, or the agent run directly).
+    func pid(_ id: String) -> pid_t? { views[id].map { $0.process.shellPid }.flatMap { $0 > 0 ? $0 : nil } }
 
     func markWorking(_ id: String) { views[id]?.markWorking() }
 

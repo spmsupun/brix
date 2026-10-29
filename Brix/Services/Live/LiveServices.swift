@@ -85,6 +85,11 @@ final class LiveMetricsService: MetricsService {
     func metrics(_ host: SSHHost) async throws -> HostMetrics {
         let r = try await SSHCommand.run(host, password: passwordLookup?(host), remote: Self.script, timeout: 15)
         guard r.ok else { throw ServiceError(r.stderr.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "\n").last.map(String.init) ?? "metrics failed") }
+        // A login that printed nothing usable (a restricted shell, an unusual OS)
+        // must not read as an idle, empty server.
+        guard ["LOAD", "DISK"].allSatisfy({ k in r.stdout.contains("\n\(k)=") || r.stdout.hasPrefix("\(k)=") }) else {
+            throw ServiceError("The server didn't report its load and disk use (it needs a normal shell with df)")
+        }
         return Self.parse(r.stdout)
     }
 

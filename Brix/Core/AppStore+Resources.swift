@@ -493,6 +493,27 @@ extension DockerTarget {
 
 extension AppStore {
     /// Times a TCP connection to each server's SSH port, all at once.
+    /// Logs in over SSH once, reads CPU, memory, disk and load with a read-only
+    /// script, and logs out; no shell is opened and nothing on the server changes.
+    func checkHealth(_ ids: [ResourceID]) {
+        for id in ids where !healthChecking.contains(id) {
+            guard let h = host(id) else { continue }
+            healthChecking.insert(id)
+            Task {
+                do {
+                    let m = try await svc(h).metrics.metrics(h)
+                    hostMetrics[id] = m
+                    healthAt[id] = Date()
+                    healthError[id] = nil
+                    rememberOS(id, m.os)
+                } catch {
+                    healthError[id] = error.localizedDescription
+                }
+                healthChecking.remove(id)
+            }
+        }
+    }
+
     func ping(_ ids: [ResourceID]) {
         for id in ids where !pinging.contains(id) {
             guard let h = host(id) else { continue }

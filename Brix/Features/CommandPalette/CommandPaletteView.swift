@@ -257,7 +257,7 @@ struct CommandPaletteView: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(scoped ? p.hue.color.opacity(0.14) : Color.white(0.04)))
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(scoped ? p.hue.color.opacity(0.35) : Theme.border))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                     .tip(scoped ? "Search everything" : "Scope to \(p.name)", "⇥")
                 }
                 KeyCap(text: "esc")

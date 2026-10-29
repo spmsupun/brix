@@ -38,7 +38,7 @@ struct ImportSheet: View {
                 .font(Typo.ui(11.5)).foregroundStyle(Theme.text3).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button(allPicked ? "Select None" : "Select All") { picked = allPicked ? [] : Set(importable.map(\.id)) }
-                    .buttonStyle(.plain).font(Typo.ui(12)).foregroundStyle(Theme.text2)
+                    .buttonStyle(.hand).font(Typo.ui(12)).foregroundStyle(Theme.text2)
                     .disabled(importable.isEmpty)
                 Spacer()
                 SubtleButton(title: "Cancel") { dismiss() }.keyboardShortcut(.cancelAction)

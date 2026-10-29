@@ -30,7 +30,7 @@ struct DBTreeRows: View {
         if let err = ws.treeErrors[d.id], store.schemaCache[d.id] == nil {
             HStack(spacing: 6) {
                 Text(err).font(Typo.ui(11)).foregroundStyle(Theme.red).lineLimit(2).help(err)
-                Button("Retry") { store.loadTree(d, force: true) }.buttonStyle(.plain).font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text2)
+                Button("Retry") { store.loadTree(d, force: true) }.buttonStyle(.hand).font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text2)
             }
             .padding(.leading, indent).padding(.trailing, 8).padding(.vertical, 4)
         } else if let tree = store.schemaCache[d.id] {
@@ -40,9 +40,15 @@ struct DBTreeRows: View {
             if schemas.isEmpty {
                 Text("No tables").font(Typo.ui(11)).foregroundStyle(Theme.meta).padding(.leading, indent).frame(height: 22)
             }
-            ForEach(schemas, id: \.self) { schema in
-                let q = query.trimmingCharacters(in: .whitespaces)
-                let objs = (tree.schemas[schema] ?? []).filter { q.isEmpty || $0.name.localizedCaseInsensitiveContains(q) }
+            let q = query.trimmingCharacters(in: .whitespaces)
+            // A search matches database names too: a matching database shows all its
+            // tables, and databases with nothing matching drop out.
+            let shown = schemas.filter { q.isEmpty || $0.localizedCaseInsensitiveContains(q) || tree.schemas[$0]?.contains { $0.name.localizedCaseInsensitiveContains(q) } == true }
+            if !q.isEmpty, shown.isEmpty {
+                Text("Nothing matches").font(Typo.ui(11)).foregroundStyle(Theme.meta).padding(.leading, indent).frame(height: 22)
+            }
+            ForEach(shown, id: \.self) { schema in
+                let objs = (tree.schemas[schema] ?? []).filter { q.isEmpty || schema.localizedCaseInsensitiveContains(q) || $0.name.localizedCaseInsensitiveContains(q) }
                 if schemas.count == 1 {
                     // A lone schema adds nothing: its folders sit right under the connection.
                     folders(schema, objs, indent: indent)
@@ -88,7 +94,7 @@ struct DBTreeRows: View {
                             .padding(.leading, indent + 29).frame(height: 24).frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                 }
             }
         }
@@ -120,11 +126,11 @@ struct DBTreeRows: View {
     private var search: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass").font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Theme.text3)
-            TextField("Filter tables", text: $query).textFieldStyle(.plain).font(Typo.ui(11.5))
+            TextField("Filter databases and tables", text: $query).textFieldStyle(.plain).font(Typo.ui(11.5))
                 .onExitCommand { query = "" }
             if !query.isEmpty {
                 Button { query = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 10)).foregroundStyle(Theme.text3) }
-                    .buttonStyle(.plain).accessibilityLabel("Clear filter")
+                    .buttonStyle(.hand).accessibilityLabel("Clear filter")
             }
         }
         .padding(.horizontal, 7).frame(height: 22)
@@ -155,7 +161,7 @@ struct DBTreeRows: View {
             .background(RoundedRectangle(cornerRadius: 6).fill(current ? accent.opacity(0.08) : .clear))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityLabel(name)
         .accessibilityValue(open.map { $0 ? "Expanded" : "Collapsed" } ?? "")
     }
@@ -197,7 +203,7 @@ struct DBLibraryTree: View {
                             .background(RoundedRectangle(cornerRadius: 6).fill(on ? Theme.selected : .clear))
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.hand)
                         .contextMenu {
                             Button("New Console") { store.newConsole(d) }
                             Button("Refresh") { store.loadTree(d, force: true) }
@@ -233,11 +239,11 @@ struct DBExplorer: View {
             HStack(spacing: 6) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.text3)
-                    TextField("Search tables", text: $query).textFieldStyle(.plain).font(Typo.ui(12.5))
+                    TextField("Search databases and tables", text: $query).textFieldStyle(.plain).font(Typo.ui(12.5))
                         .onExitCommand { query = "" }
                     if !query.isEmpty {
                         Button { query = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(Theme.text3) }
-                            .buttonStyle(.plain).accessibilityLabel("Clear search")
+                            .buttonStyle(.hand).accessibilityLabel("Clear search")
                     }
                 }
                 .padding(.horizontal, 9).frame(height: 30)
@@ -265,7 +271,7 @@ struct DBExplorer: View {
                 .background(RoundedRectangle(cornerRadius: 9).fill(Color.white(0.04)))
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .help("Edit connection")
             .padding(.horizontal, 10).padding(.bottom, 8)
             .hairlineBottom()
@@ -333,7 +339,7 @@ struct SidebarSearch: View {
                 .onExitCommand { text = ""; onExit() }
             if !text.isEmpty {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 10.5)).foregroundStyle(Theme.text3) }
-                    .buttonStyle(.plain).accessibilityLabel("Clear search")
+                    .buttonStyle(.hand).accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 8).frame(height: 26)

@@ -305,7 +305,7 @@ extension AppStore {
         let old = sessions[i].state
         sessions[i].state = state
         guard old != state, sessions[i].kind == .agent else { return }
-        if state == .running {
+        if state == .running, !sessions[i].markedUnread {
             sessions[i].unseen = false
         } else if (old == .running || state == .needsInput || state == .finished), !isWatching(id) {
             sessions[i].unseen = true
@@ -328,9 +328,25 @@ extension AppStore {
     }
 
     /// You looked at it: no longer flagged as finished-unseen.
-    func markSeen(_ id: String) {
-        guard let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].unseen else { return }
+    /// `opened`: the user picked it from a list, which also clears a hand-set unread.
+    /// Otherwise (it's merely on screen) a hand-set unread stays.
+    func markSeen(_ id: String, opened: Bool = false) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        if opened {
+            sessions[i].markedUnread = false
+            markNoticesRead(session: id)
+        }
+        guard sessions[i].unseen, !sessions[i].markedUnread else { return }
         sessions[i].unseen = false
+        updateDockBadge()
+    }
+
+    /// Flags a session to come back to: the Unread chip shows until you open it again.
+    func setUnread(_ id: String, _ unread: Bool) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        sessions[i].unseen = unread
+        sessions[i].markedUnread = unread
+        if !unread { markNoticesRead(session: id) }
         updateDockBadge()
     }
 
@@ -340,8 +356,23 @@ extension AppStore {
     }
 
     func updateDockBadge() {
-        let n = sessions.filter { $0.kind == .agent && ($0.state == .needsInput || $0.unseen) }.count
+        let n = sessions.filter { ($0.kind == .agent && $0.state == .needsInput) || $0.unseen }.count
         NSApp?.dockTile.badgeLabel = settings.badgeDock && n > 0 ? "\(n)" : nil
+    }
+
+    // MARK: Notification list
+
+    var unreadNotices: Int { library.notices.filter { !$0.read }.count }
+
+    func recordNotice(title: String, body: String, session: String) {
+        library.notices.insert(AgentNotice(title: title, body: body, sessionID: session), at: 0)
+        if library.notices.count > 200 { library.notices.removeLast(library.notices.count - 200) }
+    }
+
+    func markNoticesRead(session: String? = nil) {
+        for i in library.notices.indices where !library.notices[i].read && (session == nil || library.notices[i].sessionID == session) {
+            library.notices[i].read = true
+        }
     }
 
     /// Opens the project workspace with the given session focused.
@@ -355,7 +386,7 @@ extension AppStore {
         }
         focusedSessionID = id
         inspector = .session(id)
-        markSeen(id)
+        markSeen(id, opened: true)
     }
 
     /// Called by the live terminal when output arrives or the process exits.
@@ -450,18 +481,43 @@ extension AppStore {
         globalRestored = true
     }
 
-    /// Reads the title Claude Code gave each live conversation from its transcript.
-    func refreshSessionNames() async {
+    /// Reads the task list of each working Claude agent from its transcript.
+    func refreshPlans() async {
         let targets = sessions.compactMap { s -> (String, String)? in
             guard s.kind == .agent, s.isLive, let ext = s.externalID, agent(for: s)?.binary == "claude" else { return nil }
             return (s.id, ext)
         }
         guard !targets.isEmpty else { return }
-        let names = await Task.detached(priority: .utility) {
-            targets.compactMap { id, ext in AgentTranscripts.claudeTitle(sessionID: ext).map { (id, $0) } }
+        let plans = await Task.detached(priority: .utility) {
+            targets.compactMap { id, ext in AgentTranscripts.claudePlan(sessionID: ext).map { (id, $0) } }
         }.value
-        for (id, name) in names {
-            if let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].sessionName != name { sessions[i].sessionName = name }
+        for (id, plan) in plans {
+            if let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].plan != plan { sessions[i].plan = plan }
+        }
+    }
+
+    /// Reads the title Claude Code gave each live conversation from its transcript.
+    /// A /resume inside Claude switches it to another conversation: the id is
+    /// updated too, so the title follows and a relaunch resumes the right one.
+    func refreshSessionNames() async {
+        let targets = sessions.compactMap { s -> (String, String, pid_t?)? in
+            guard s.kind == .agent, s.isLive, let ext = s.externalID, agent(for: s)?.binary == "claude" else { return nil }
+            return (s.id, ext, TerminalRegistry.shared.pid(s.id))
+        }
+        guard !targets.isEmpty else { return }
+        let found = await Task.detached(priority: .utility) {
+            targets.map { id, ext, pid in
+                let now = pid.flatMap { AgentTranscripts.claudeLiveSessionID(pid: $0) } ?? ext
+                return (id, now, AgentTranscripts.claudeTitle(sessionID: now))
+            }
+        }.value
+        for (id, ext, name) in found {
+            guard let i = sessions.firstIndex(where: { $0.id == id }) else { continue }
+            if sessions[i].externalID != ext {
+                PerfMonitor.shared.note("session \(id) switched conversation to \(ext)")
+                sessions[i].externalID = ext
+            }
+            if let name, sessions[i].sessionName != name { sessions[i].sessionName = name }
         }
     }
 }

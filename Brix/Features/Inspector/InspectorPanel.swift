@@ -46,7 +46,7 @@ struct InspectorPanel: View {
                 .contentShape(Rectangle())
                 .fixedSize()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
@@ -232,7 +232,7 @@ struct LinkedResourcesList: View {
                     }
                     .frame(height: 30).contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -248,7 +248,7 @@ struct LinkedResourcesList: View {
             }
             .frame(height: 30).contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
     }
 }
 

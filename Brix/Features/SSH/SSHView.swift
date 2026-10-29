@@ -84,7 +84,7 @@ struct SSHView: View {
         .padding(.horizontal, 10)
         .frame(height: 56)
         .rowBackground(selected: on, radius: 8)
-        .onTapGesture { store.selectedHost = h.id; store.inspector = .host(h.id) }
+        .clickable().onTapGesture { store.selectedHost = h.id; store.inspector = .host(h.id) }
         .onTapGesture(count: 2) { store.connect(h.id) }
         .contextMenu { HostContextMenu(host: h) }
         .accessibilityElement(children: .combine)
@@ -106,8 +106,11 @@ struct HostDetail: View {
                     TagPill(tag: h.tag)
                 }
                 HStack(spacing: 6) {
-                    StatusDot(color: status.color, size: 6)
-                    Text([status.label, m?.os ?? h.os, m.map { "up \($0.uptime)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    // Not logged in, but a ping answered: say it's up rather than "Disconnected".
+                    let ping = store.hostPing[h.id]
+                    let reachable = !status.isLive && ping?.ms != nil
+                    StatusDot(color: reachable ? Theme.green : status.color, size: 6)
+                    Text([reachable ? "Reachable · \(ping!.label)" : status.label, m?.os ?? h.os, m.map { "up \($0.uptime)" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(Typo.ui(12)).foregroundStyle(Theme.text2).lineLimit(1)
                 }
             }
@@ -181,14 +184,27 @@ struct HostDetail: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Rectangle().fill(Theme.divider).frame(width: 1)
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Health").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
+                            let checking = store.healthChecking.contains(h.id)
+                            HStack(spacing: 8) {
+                                Text("Health").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
+                                if let at = store.healthAt[h.id] {
+                                    Text("checked \(RelativeTime.long(at)) ago").font(Typo.ui(11)).foregroundStyle(Theme.meta)
+                                }
+                                Spacer(minLength: 4)
+                                SubtleButton(title: m == nil ? "Check" : "Check again", symbol: "waveform.path.ecg", height: 24, isLoading: checking) { store.checkHealth([h.id]) }
+                                    .disabled(checking)
+                                    .help("Logs in over SSH, reads CPU, memory and disk, and logs out. Read-only.")
+                            }
                             if let m {
                                 healthRow("CPU", m.cpu, Theme.green)
                                 healthRow("Memory", m.memory, Theme.amber)
                                 healthRow("Disk", m.disk, Theme.blue)
-                                Text("Load \(m.load)").font(Typo.mono(11)).foregroundStyle(Theme.text3)
-                            } else {
-                                Text(status.isLive ? "Collecting metrics…" : "Connect to see CPU, memory and disk.").font(Typo.ui(12)).foregroundStyle(Theme.text3)
+                                Text("Load \(m.load) · up \(m.uptime)").font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1)
+                            } else if !checking {
+                                Text(status.isLive ? "Collecting metrics…" : "Check reads CPU, memory and disk over SSH without opening a terminal.").font(Typo.ui(12)).foregroundStyle(Theme.text3)
+                            }
+                            if let e = store.healthError[h.id], !checking {
+                                Text("Couldn't check: \(e)").font(Typo.ui(11.5)).foregroundStyle(Theme.red).lineLimit(3).help(e)
                             }
                         }
                         .padding(20)
@@ -214,7 +230,7 @@ struct HostDetail: View {
                                 .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.divider))
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.hand)
                         }
                         Text("Linked projects").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3).padding(.top, 10)
                         let projects = store.library.links.projects(for: h.id).compactMap(store.project)
@@ -230,7 +246,7 @@ struct HostDetail: View {
                                     .background(RoundedRectangle(cornerRadius: 7).fill(Color.white(0.04)))
                                     .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.border))
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.hand)
                             }
                         }
                         if !h.notes.isEmpty {

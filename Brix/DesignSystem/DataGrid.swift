@@ -89,7 +89,7 @@ struct DataGrid: View {
                     .overlay(alignment: .trailing) { Rectangle().fill(Color.white(0.05)).frame(width: 1) }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .help(c.fk.map { "References \($0)" } ?? "Sort by \(c.name)")
                 .accessibilityLabel("\(c.name), \(c.type)\(sort?.column == c.name ? (sort!.ascending ? ", sorted ascending" : ", sorted descending") : "")")
             }

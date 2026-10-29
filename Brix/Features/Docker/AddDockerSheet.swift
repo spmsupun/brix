@@ -24,12 +24,17 @@ struct AddDockerSheet: View {
                 SectionTitle(text: "Found", color: Theme.text3)
                 Spacer()
                 if loading { ProgressView().controlSize(.small) }
-                Button("Scan again") { scan() }.buttonStyle(.plain).font(Typo.ui(11.5)).foregroundStyle(Theme.text2)
+                Button("Scan again") { scan() }.buttonStyle(.hand).font(Typo.ui(11.5)).foregroundStyle(Theme.text2)
             }
             if discovered.isEmpty {
                 Text(store.dockerError ?? "Nothing new found.").font(Typo.ui(12)).foregroundStyle(Theme.text3).lineLimit(3)
             } else {
-                FlowChips(items: discovered.map { ($0.id, "\($0.name)  \($0.hostID.flatMap(store.host)?.name ?? "local")", $0.state.color) }, selection: $picked)
+                // Scrolls past a few rows: with many containers the sheet grew taller
+                // than the screen and its Cancel and Add buttons were out of reach.
+                ScrollView {
+                    FlowChips(items: discovered.map { ($0.id, "\($0.name)  \($0.hostID.flatMap(store.host)?.name ?? "local")", $0.state.color) }, selection: $picked)
+                }
+                .frame(maxHeight: 220)
             }
             Divider()
             SectionTitle(text: "Or add by name", color: Theme.text3)

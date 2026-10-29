@@ -97,7 +97,7 @@ struct MenuButton<Label: View>: View {
         } label: {
             label()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .background(AnchorView { anchor.view = $0 })
     }
 }

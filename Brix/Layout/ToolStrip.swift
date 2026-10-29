@@ -39,7 +39,7 @@ struct ToolStrip: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(visible ? Color.white(0.08) : .clear))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .tip(k.title, k.toggleShortcut)
         .accessibilityLabel("\(k.title), \(visible ? "shown" : "hidden")")
         .contextMenu {

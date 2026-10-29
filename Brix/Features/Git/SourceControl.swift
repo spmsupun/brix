@@ -74,8 +74,8 @@ struct SourceControlPanel: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                Button(action, action: perform).buttonStyle(.plain).foregroundStyle(Theme.meta).font(Typo.ui(11, .medium))
+                .buttonStyle(.hand)
+                Button(action, action: perform).buttonStyle(.hand).foregroundStyle(Theme.meta).font(Typo.ui(11, .medium))
             }
             .font(Typo.ui(11, .semibold))
             .foregroundStyle(Theme.text3)
@@ -148,7 +148,7 @@ struct BranchSyncRow: View {
             .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.border))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .disabled(busy)
     }
 }
@@ -221,7 +221,7 @@ struct CommitBox: View {
             .background(RoundedRectangle(cornerRadius: 7).fill(Theme.violet.opacity(0.10)))
             .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.violet.opacity(0.22)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .disabled(writing || git.staged.isEmpty)
         .accessibilityLabel("Generate commit message")
         .tip("Suggest a commit message from the staged changes")
@@ -257,7 +257,7 @@ struct ChangeRow: View {
                     }
                     .frame(width: 14, height: 14)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityLabel(change.staged ? "Unstage \(change.name)" : "Stage \(change.name)")
             }
             GitStatusLetter(status: change.status).frame(width: 16)
@@ -276,7 +276,7 @@ struct ChangeRow: View {
         .frame(height: showCheckbox ? 28 : 26)
         .rowBackground(selected: selected || (ws.state.selection == change.path && !showCheckbox), radius: 6)
         .onHover { hovering = $0 }
-        .onTapGesture {
+        .clickable().onTapGesture {
             ws.state.reviewFile = change.id
             ws.state.selection = change.path
             store.inspector = .file(ws.projectID, change.path)
@@ -320,7 +320,7 @@ struct RecentCommits: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 10)

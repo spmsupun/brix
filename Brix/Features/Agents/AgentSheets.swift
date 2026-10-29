@@ -41,7 +41,7 @@ struct ChooseAgentSheet: View {
                         .padding(.horizontal, 10).rowHeight(46)
                         .rowBackground(selected: false, radius: 9)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                     .keyboardShortcut(i < 9 ? KeyEquivalent(Character("\(i + 1)")) : KeyEquivalent(" "), modifiers: i < 9 ? .command : [])
                 }
             }
@@ -243,7 +243,7 @@ struct AgentSettingsView: View {
         .padding(.horizontal, 12).rowHeight(52)
         .background(selected == a.id ? Theme.selected : .clear)
         .contentShape(Rectangle())
-        .onTapGesture { selected = a.id }
+        .clickable().onTapGesture { selected = a.id }
         .hairlineBottom(Color.white(0.05))
     }
 }
@@ -277,7 +277,7 @@ struct AgentUsageChips: View {
             .lineLimit(1).fixedSize()
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .help(Self.tip(a, windows))
         .accessibilityLabel(Self.spoken(a, windows))
     }

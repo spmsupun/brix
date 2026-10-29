@@ -41,8 +41,8 @@ targets:
         CFBundleName: "$(BRIX_APP_NAME)"
         BrixDataFolder: "$(BRIX_APP_NAME)"
         BrixKeychainService: "$(BRIX_KEYCHAIN_SERVICE)"
-        CFBundleShortVersionString: "0.1.0-beta.8"
-        CFBundleVersion: "8"
+        CFBundleShortVersionString: "0.1.0-beta.9"
+        CFBundleVersion: "9"
         LSApplicationCategoryType: public.app-category.developer-tools
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "© 2026 Supun Praneeth. MIT License."

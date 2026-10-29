@@ -44,7 +44,7 @@ struct DockerDetailView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         sections
                         InspectorSection(title: "Raw inspect") {
-                            Button(showRaw ? "Hide JSON" : "Show JSON") { showRaw.toggle() }.buttonStyle(.plain).font(Typo.ui(12)).foregroundStyle(Theme.text2)
+                            Button(showRaw ? "Hide JSON" : "Show JSON") { showRaw.toggle() }.buttonStyle(.hand).font(Typo.ui(12)).foregroundStyle(Theme.text2)
                             if showRaw {
                                 Text(raw).font(Typo.mono(10.5)).foregroundStyle(Theme.body).textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -347,7 +347,7 @@ struct DockerDetailView: View {
             }
             if env.contains(where: { e in ["PASS", "SECRET", "TOKEN", "KEY", "PWD"].contains { e.uppercased().hasPrefix($0) || e.uppercased().contains($0 + "=") || e.uppercased().contains("_" + $0) } }) {
                 Button(revealSecrets ? "Hide secret values" : "Show secret values") { revealSecrets.toggle() }
-                    .buttonStyle(.plain).font(Typo.ui(11.5)).foregroundStyle(Theme.text2)
+                    .buttonStyle(.hand).font(Typo.ui(11.5)).foregroundStyle(Theme.text2)
             }
         }
         let labels = dict("Labels", in: config)
@@ -375,7 +375,7 @@ struct DockerDetailView: View {
                         }
                         .rowHeight(28).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                 }
             }
             InspectorSection(title: "Compose files") {
@@ -460,7 +460,7 @@ struct DockerDetailView: View {
                     HStack { Text(name).font(Typo.row).foregroundStyle(Theme.text); Spacer(); Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.meta) }
                         .rowHeight(26).contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
             }
         }
     }

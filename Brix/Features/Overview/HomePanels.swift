@@ -398,7 +398,7 @@ struct ServersAndDocker: View {
         VStack(spacing: 0) {
             PanelTop(title: "Servers & Docker") {
                 Spacer(minLength: 0)
-                Button("Manage →") { store.go(.ssh) }.buttonStyle(.plain).font(Typo.ui(11.5)).foregroundStyle(accent)
+                Button("Manage →") { store.go(.ssh) }.buttonStyle(.hand).font(Typo.ui(11.5)).foregroundStyle(accent)
             }
             if all.isEmpty {
                 EmptyState(symbol: "server.rack", message: "No servers yet. Add one, or import them from ~/.ssh/config.", actionTitle: "Add Server") { store.sheet = .editHost(nil) }
@@ -430,7 +430,7 @@ struct ServersAndDocker: View {
         }
         .padding(.horizontal, 8).frame(height: 46)
         .contentShape(Rectangle())
-        .onTapGesture { if !r.local { store.selectedHost = r.id; store.go(.ssh) } }
+        .clickable().onTapGesture { if !r.local { store.selectedHost = r.id; store.go(.ssh) } }
     }
 }
 

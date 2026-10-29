@@ -5,7 +5,7 @@ struct ServersView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.islandGap) private var gap
     @State private var selected: ResourceID?
-    @State private var refreshing = false
+    @AppStorage("servers.detailWidth") private var detailWidth: Double = 360
 
     private var current: SSHHost? { (selected ?? store.selectedHost).flatMap(store.host) ?? store.library.hosts.first }
 
@@ -14,10 +14,11 @@ struct ServersView: View {
             EmptyState(symbol: "server.rack", message: "No servers yet. Add an SSH host to see its health here.", actionTitle: "Add SSH Host") { store.sheet = .editHost(nil) }
                 .island()
         } else {
-            HStack(spacing: gap) {
-                list
+            HStack(spacing: 0) {
+                list.frame(minWidth: 300)
                 if let h = current {
-                    ServerDetail(host: h).frame(width: 360)
+                    ResizeHandle(axis: .horizontal, thickness: gap) { detailWidth = min(max(detailWidth - $0, 280), 640) }
+                    ServerDetail(host: h).frame(width: detailWidth)
                 }
             }
         }
@@ -29,58 +30,65 @@ struct ServersView: View {
                 Text("Servers").font(Typo.panelTitle).tracking(0.4).foregroundStyle(Theme.text2)
                 CountPill(text: "\(store.library.hosts.count)")
                 Spacer()
-                Text("Metrics refresh every 5 s").font(Typo.ui(11)).foregroundStyle(Theme.meta)
-                IconButton(symbol: "arrow.clockwise", label: "Refresh now", iconSize: 11.5) {
-                    refreshing = true
-                    Task { await store.refreshMetrics(); refreshing = false; store.toast(.success, "Metrics refreshed") }
+                // Connected servers update every 5 s; the rest on Check health.
+                let busy = !store.healthChecking.isDisjoint(with: store.library.hosts.map(\.id))
+                SubtleButton(title: "Check health", symbol: "waveform.path.ecg", height: 26, isLoading: busy) {
+                    store.checkHealth(store.library.hosts.map(\.id))
                 }
-                .rotationEffect(.degrees(refreshing ? 180 : 0))
-                .animation(.easeOut(duration: 0.4), value: refreshing)
+                .disabled(busy)
+                .help("Logs in to each server over SSH, reads CPU, memory, disk and load, and logs out. Read-only. Connected servers also update every 5 s.")
             }
             .padding(.horizontal, 14).frame(height: Metrics.panelHeader).hairlineBottom()
-            HStack(spacing: 10) {
-                Text("Host").frame(maxWidth: .infinity, alignment: .leading)
-                Text("OS").frame(width: 120, alignment: .leading)
-                Text("Uptime").frame(width: 80, alignment: .leading)
-                Text("Load").frame(width: 100, alignment: .leading)
-                Text("CPU").frame(width: 90, alignment: .leading)
-                Text("Memory").frame(width: 90, alignment: .leading)
-                Text("Disk").frame(width: 90, alignment: .leading)
-            }
-            .font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
-            .padding(.horizontal, 16).frame(height: 30).hairlineBottom()
-            ScrollView {
-                LazyVStack(spacing: 1) {
-                    ForEach(store.library.hosts) { h in row(h) }
+            GeometryReader { geo in
+                let cols = ServerColumns(width: geo.size.width)
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        Text("Host").frame(maxWidth: .infinity, alignment: .leading)
+                        if cols.os { Text("OS").frame(width: 120, alignment: .leading) }
+                        if cols.uptime { Text("Uptime").frame(width: 80, alignment: .leading) }
+                        if cols.load { Text("Load").frame(width: 100, alignment: .leading) }
+                        Text("CPU").frame(width: cols.bar, alignment: .leading)
+                        Text("Memory").frame(width: cols.bar, alignment: .leading)
+                        Text("Disk").frame(width: cols.bar, alignment: .leading)
+                    }
+                    .font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
+                    .padding(.horizontal, 16).frame(height: 30).hairlineBottom()
+                    ScrollView {
+                        LazyVStack(spacing: 1) {
+                            ForEach(store.library.hosts) { h in row(h, cols: cols) }
+                        }
+                        .padding(6)
+                    }
                 }
-                .padding(6)
             }
         }
         .island()
     }
 
-    private func row(_ h: SSHHost) -> some View {
+    private func row(_ h: SSHHost, cols: ServerColumns) -> some View {
         let status = store.hostStatus[h.id] ?? .disconnected
-        let m = status.isLive ? store.hostMetrics[h.id] : nil
+        // Live while connected, else the last Check health reading.
+        let m = status.isLive || store.healthAt[h.id] != nil ? store.hostMetrics[h.id] : nil
         let on = h.id == current?.id
         return HStack(spacing: 10) {
             HStack(spacing: 9) {
                 StatusDot(color: status.color, size: 7, ring: status == .connected)
-                Text(h.name).font(Typo.ui(13, .medium)).foregroundStyle(Theme.text).lineLimit(1).layoutPriority(1)
+                Text(h.name).font(Typo.ui(13, .medium)).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle).help(h.name)
                 TagPill(tag: h.tag, size: 8.5)
+                if store.healthChecking.contains(h.id) { ProgressView().controlSize(.mini) }
             }
-            .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
-            Text(m?.os ?? h.os.ifEmpty("–")).font(Typo.ui(12)).foregroundStyle(Theme.text2).lineLimit(1).frame(width: 120, alignment: .leading)
-            Text(m?.uptime ?? "–").font(Typo.ui(12)).foregroundStyle(Theme.text2).lineLimit(1).frame(width: 80, alignment: .leading)
-            Text(m?.load ?? "–").font(Typo.mono(11)).foregroundStyle(Theme.text2).lineLimit(1).frame(width: 100, alignment: .leading)
-            bar(m?.cpu, Theme.green)
-            bar(m?.memory, Theme.amber)
-            bar(m?.disk, (m?.disk ?? 0) > 0.8 ? Theme.red : Theme.blue)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if cols.os { Text(m?.os ?? h.os.ifEmpty("–")).font(Typo.ui(12)).foregroundStyle(Theme.text2).lineLimit(1).frame(width: 120, alignment: .leading) }
+            if cols.uptime { Text(m?.uptime ?? "–").font(Typo.ui(12)).foregroundStyle(Theme.text2).lineLimit(1).frame(width: 80, alignment: .leading) }
+            if cols.load { Text(m?.load ?? "–").font(Typo.mono(11)).foregroundStyle(Theme.text2).lineLimit(1).frame(width: 100, alignment: .leading) }
+            bar(m?.cpu, Theme.green, width: cols.bar)
+            bar(m?.memory, Theme.amber, width: cols.bar)
+            bar(m?.disk, (m?.disk ?? 0) > 0.8 ? Theme.red : Theme.blue, width: cols.bar)
         }
         .padding(.horizontal, 10)
         .frame(height: 44)
         .rowBackground(selected: on, radius: 8)
-        .onTapGesture { selected = h.id; store.selectedHost = h.id; store.inspector = .host(h.id) }
+        .clickable().onTapGesture { selected = h.id; store.selectedHost = h.id; store.inspector = .host(h.id) }
         .contextMenu {
             Button("Open Shell") { store.connect(h.id) }
             Button("Tail Logs") { store.tailSystemLog(h.id) }
@@ -93,16 +101,29 @@ struct ServersView: View {
         .animation(.easeOut(duration: 0.4), value: m)
     }
 
-    private func bar(_ v: Double?, _ c: Color) -> some View {
+    private func bar(_ v: Double?, _ c: Color, width: CGFloat) -> some View {
         HStack(spacing: 6) {
             if let v {
-                MeterBar(label: "", value: v, color: c, showLabel: false).frame(width: 46)
+                if width >= 90 { MeterBar(label: "", value: v, color: c, showLabel: false).frame(width: 46) }
                 Text("\(Int((v * 100).rounded()))%").font(Typo.ui(11)).monospacedDigit().foregroundStyle(Theme.text)
             } else {
                 Text("–").font(Typo.ui(11)).foregroundStyle(Theme.meta)
             }
         }
-        .frame(width: 90, alignment: .leading)
+        .frame(width: width, alignment: .leading)
+    }
+}
+
+/// Which server columns fit; the host name and the three meters always stay.
+private struct ServerColumns {
+    var os = false, uptime = false, load = false
+    var bar: CGFloat = 90
+
+    init(width: CGFloat) {
+        bar = width >= 560 ? 90 : 48
+        load = width >= 700
+        uptime = width >= 790
+        os = width >= 920
     }
 }
 
@@ -162,7 +183,7 @@ private struct ServerDetail: View {
                                 }
                                 .frame(height: 26).contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.hand)
                         }
                     }
                 }

@@ -92,7 +92,7 @@ struct IconButton: View {
                 .background(RoundedRectangle(cornerRadius: 6).fill(active ? Color.white(0.08) : (hovering ? Theme.hover : .clear)))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .onHover { hovering = $0 }
         .accessibilityLabel(label)
         .tip(label, shortcut)
@@ -130,7 +130,7 @@ struct AccentButton: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(accent.opacity(enabled ? 1 : 0.4)))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .tip(title, shortcut)
     }
 }
@@ -169,7 +169,7 @@ struct SubtleButton: View {
             .opacity(enabled ? 1 : 0.4)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .onHover { hovering = $0 }
         .tip(title, shortcut)
     }
@@ -184,7 +184,7 @@ struct LinkButton: View {
         Button(action: action) {
             Text(title).font(Typo.ui(11.5)).foregroundStyle(accent)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
     }
 }
 
@@ -349,7 +349,7 @@ struct Chip: View {
             .overlay(Capsule().strokeBorder(isOn ? Color.white(0.14) : Theme.border))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hand)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
@@ -456,7 +456,7 @@ struct SearchField: View {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(Theme.meta)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityLabel("Clear")
             } else if let shortcut {
                 Text(shortcut).font(Typo.ui(10)).foregroundStyle(Theme.meta)
@@ -542,7 +542,7 @@ struct SegmentedControl<T: Hashable>: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(on ? Theme.segmentedOn : .clear))
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hand)
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
@@ -570,7 +570,7 @@ struct BXSwitchStyle: ToggleStyle {
                 .frame(width: 34, height: 20)
                 .animation(.easeOut(duration: 0.15), value: configuration.isOn)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .accessibilityLabel("Toggle")
             .accessibilityValue(configuration.isOn ? "On" : "Off")
         }
@@ -713,12 +713,75 @@ private struct ThinScrollBar: View {
     }
 }
 
+// MARK: - Pages
+
+/// "1–25 of 85" with previous and next, under a long list. Hidden when it all fits.
+struct PageBar: View {
+    @Binding var page: Int
+    let total: Int
+    var size = 25
+
+    static func slice<T>(_ items: [T], page: Int, size: Int = 25) -> ArraySlice<T> {
+        let start = min(max(page, 0) * size, max(items.count - 1, 0) / size * size)
+        return items.dropFirst(start).prefix(size)
+    }
+
+    var body: some View {
+        if total > size {
+            let last = (total - 1) / size
+            let p = min(max(page, 0), last)
+            HStack(spacing: 6) {
+                Spacer()
+                Text("\(p * size + 1)–\(min((p + 1) * size, total)) of \(total)").font(Typo.ui(11.5)).monospacedDigit().foregroundStyle(Theme.text3)
+                IconButton(symbol: "chevron.left", label: "Previous page", iconSize: 10) { page = p - 1 }.disabled(p == 0)
+                IconButton(symbol: "chevron.right", label: "Next page", iconSize: 10) { page = p + 1 }.disabled(p == last)
+            }
+            .padding(.horizontal, 10).frame(height: 32)
+        }
+    }
+}
+
 // MARK: - Cursor
 
 extension View {
     /// The pointing-hand cursor while over this view (things you can click that
     /// don't look like buttons). Popped on exit and when the view goes away.
     func handCursor() -> some View { modifier(HandCursor()) }
+}
+
+/// `.plain` with the pointing-hand cursor: every plain button in Brix uses it,
+/// so anything clickable shows the hand. Wraps the real `.plain` style, so
+/// pressed and disabled looks stay exactly as before.
+struct HandButtonStyle: PrimitiveButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HandButton(configuration: configuration)
+    }
+
+    private struct HandButton: View {
+        let configuration: PrimitiveButtonStyleConfiguration
+        @Environment(\.isEnabled) private var enabled
+        var body: some View {
+            let button = Button(configuration).buttonStyle(.plain)
+            if !enabled {
+                button
+            } else if #available(macOS 15, *) {
+                button.pointerStyle(.link)
+            } else {
+                button.handCursor()
+            }
+        }
+    }
+}
+
+extension View {
+    /// The hand cursor on a row or tile that acts on a click (an `onTapGesture`).
+    @ViewBuilder func clickable() -> some View {
+        if #available(macOS 15, *) { pointerStyle(.link) } else { handCursor() }
+    }
+}
+
+extension PrimitiveButtonStyle where Self == HandButtonStyle {
+    static var hand: HandButtonStyle { HandButtonStyle() }
 }
 
 private struct HandCursor: ViewModifier {

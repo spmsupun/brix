@@ -54,7 +54,7 @@ struct EditorArea: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.violet.opacity(0.10)))
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.violet.opacity(0.22)))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hand)
                     .accessibilityLabel("Ask an agent about this file")
                 }
             }
@@ -89,7 +89,7 @@ struct EditorTab: View {
                     .frame(width: 14, height: 14)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .accessibilityLabel("Close \(name)")
         }
         .foregroundStyle(selected ? Theme.text : Theme.text3)
@@ -109,7 +109,7 @@ struct EditorTab: View {
         }
         .offset(y: selected ? 1 : 0)
         .contentShape(Rectangle())
-        .onTapGesture { ws.state.activeFile = path; ws.load(path); store.inspector = .file(ws.projectID, path) }
+        .clickable().onTapGesture { ws.state.activeFile = path; ws.load(path); store.inspector = .file(ws.projectID, path) }
         .onHover { hovering = $0 }
         .onMiddleClick { ws.close(path) }
         .reorderableTab(path, order: ws.state.openFiles) { from, to in
@@ -232,7 +232,7 @@ struct EditorPane: View {
                 if let c = store.git[ws.projectID]?.changes.first(where: { $0.path == path }) { ws.state.reviewFile = c.id }
                 ws.layout.centre = .review
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hand)
             .foregroundStyle(Theme.agentText)
         }
         .font(Typo.ui(11.5))
