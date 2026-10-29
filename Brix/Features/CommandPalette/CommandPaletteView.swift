@@ -114,12 +114,12 @@ enum CommandCatalog {
                                        sub: "\(d.name) · \(o.schema)\(o.rowEstimate.map { " · \($0.formatted()) rows" } ?? "")",
                                        glyph: o.kind == .view ? "VW" : "TB", action: {
                                            store.selectedDatabase = d.id
-                                           store.inspector = .table(d.id, o)
-                                           store.route = .databases
+                                           store.explore(d)
+                                           store.openTable(d, o)
                                        }, splitAction: {
                                            store.pendingQuery = (d.id, "select * from \(o.schema == "main" ? "" : o.schema + ".")\(o.name) limit 100;")
                                            store.selectedDatabase = d.id
-                                           store.route = .databases
+                                           store.explore(d)
                                        }))
             }
         }
@@ -150,7 +150,7 @@ enum CommandCatalog {
 
         // Sessions
         for s in store.sessions where scopeProject == nil || s.projectID == scopeProject {
-            out.append(CommandItem(id: "session:\(s.id)", group: "SESSIONS", title: s.kind == .agent ? "\(s.title) · \(s.projectID.flatMap(store.project)?.name ?? "")" : s.title,
+            out.append(CommandItem(id: "session:\(s.id)", group: "SESSIONS", title: s.kind == .agent ? "\(s.title) · \(s.projectID.flatMap(store.project)?.name ?? "")" : store.displayTitle(s),
                                    sub: "\(s.state.label) · \(s.cwd)", glyph: s.kind == .agent ? "✦" : "❯",
                                    color: s.kind == .agent ? Theme.agentText : Theme.body, tint: s.kind == .agent ? Theme.violet.opacity(0.16) : Color.white(0.06),
                                    action: { store.reveal(session: s.id) }, boost: s.state == .needsInput ? 3 : 0))

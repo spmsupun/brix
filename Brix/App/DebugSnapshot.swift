@@ -24,7 +24,7 @@ enum DebugSnapshot {
             Step(name: "Terminals") { st in st.paletteOpen = false; st.route = .terminals },
             Step(name: "SSH") { st in st.selectedHost = "dev"; st.route = .ssh },
             Step(name: "SSHSheet") { st in st.selectedHost = "dev"; st.route = .ssh; st.sheet = .editHost(st.host("dev")) },
-            Step(name: "Database") { st in st.sheet = nil; st.selectedDatabase = "atlas_dev"; st.route = .databases },
+            Step(name: "Database") { st in st.sheet = nil; st.selectedDatabase = "atlas_dev"; if let d = st.database("atlas_dev") { st.explore(d) } },
             Step(name: "Servers") { $0.route = .servers },
             Step(name: "Docker") { $0.route = .docker },
             Step(name: "DBConnections") { $0.route = .dbConnections },

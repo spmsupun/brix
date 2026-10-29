@@ -14,7 +14,7 @@ extension AppStore {
         let sample = (p?.isSample ?? false) || (h?.isSample ?? false)
         let dir = cwd ?? (h != nil ? "~" : (p?.path ?? "~"))
         var s = TerminalSession(id: "s-\(UUID().uuidString.prefix(8))", projectID: project, hostID: hostID,
-                                title: title ?? (h.map { "\($0.user)@\($0.name.components(separatedBy: " ").first?.lowercased() ?? $0.host)" } ?? "zsh"),
+                                title: title ?? (h.map { "\($0.user)@\($0.name.components(separatedBy: " ").first?.lowercased() ?? $0.host)" } ?? "Terminal"),
                                 kind: kind, cwd: dir, state: .idle, process: command ?? (h != nil ? "ssh" : "zsh"), startedAt: Date())
         if sample {
             s.isSampleSession = true
@@ -387,6 +387,14 @@ extension AppStore {
     func liveAgentState(_ id: String, _ state: SessionState) {
         guard let s = session(id), s.isLive, s.state != .finished, s.state != .failed else { return }
         setSessionState(id, state)
+    }
+
+    /// What a local shell is running: a command's name, or nil at its prompt.
+    func liveForeground(_ id: String, command: String?) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].isLive,
+              sessions[i].state != .finished, sessions[i].state != .failed else { return }
+        sessions[i].state = command == nil ? .idle : .running
+        sessions[i].process = command ?? "zsh"
     }
 
     func liveIdle(_ id: String, idle: Bool) {

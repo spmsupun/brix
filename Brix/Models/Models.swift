@@ -854,3 +854,12 @@ struct QueryHistoryEntry: Codable, Identifiable, Hashable {
     var ms: Double
     var error: String? = nil
 }
+
+extension DatabaseConnection {
+    /// What agents see of a connection: a MySQL server lists every database, but
+    /// a connection set to one database shares only that one.
+    func agentSchemas(_ all: [String: [DBObject]]) -> [String: [DBObject]] {
+        guard kind == .mysql, !database.isEmpty else { return all }
+        return all.filter { $0.key == database }
+    }
+}

@@ -350,8 +350,10 @@ final class LiveDatabaseService: DatabaseService {
             where n.nspname not in ('pg_catalog','information_schema') order by 1, 2 limit 500
             """]
         case .mysql:
-            sqls = ["select table_schema, table_name, if(table_type = 'VIEW', 'v', 'r'), coalesce(table_rows, 0) from information_schema.tables where table_schema = database() order by 2",
-                    "select routine_schema, routine_name from information_schema.routines where routine_schema = database() order by 2"]
+            // Every database on the server. ponytail: capped at 20,000 tables; page
+            // the list per database if a server has more.
+            sqls = ["select table_schema, table_name, if(table_type = 'VIEW', 'v', 'r'), coalesce(table_rows, 0) from information_schema.tables where table_schema not in ('information_schema','mysql','performance_schema','sys') order by 1, 2 limit 20000",
+                    "select routine_schema, routine_name from information_schema.routines where routine_schema not in ('information_schema','mysql','performance_schema','sys') order by 1, 2"]
         case .sqlite:
             sqls = ["select 'main', name, case type when 'view' then 'v' else 'r' end, 0 from sqlite_master where type in ('table','view') and name not like 'sqlite_%' order by name"]
         }
@@ -404,7 +406,7 @@ final class LiveDatabaseService: DatabaseService {
             let res = try await run(c, password: password, [
                 """
                 select c.column_name, c.column_type, c.is_nullable = 'YES', c.column_default, c.column_key = 'PRI',
-                  (select concat(k.referenced_table_name, '.', k.referenced_column_name) from information_schema.key_column_usage k
+                  (select concat(k.referenced_table_schema, '.', k.referenced_table_name, '.', k.referenced_column_name) from information_schema.key_column_usage k
                      where k.table_schema = c.table_schema and k.table_name = c.table_name and k.column_name = c.column_name and k.referenced_table_name is not null limit 1)
                 from information_schema.columns c where c.table_schema = \(s) and c.table_name = \(t) order by c.ordinal_position
                 """,

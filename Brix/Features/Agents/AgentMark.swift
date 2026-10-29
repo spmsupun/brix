@@ -154,6 +154,10 @@ extension AppStore {
     /// Session name shown in tabs and headers: a rename, the agent's own title,
     /// the first task, then the agent's name.
     func displayTitle(_ s: TerminalSession) -> String {
+        if s.kind == .shell, s.hostID == nil, ["zsh", "bash", "Terminal"].contains(s.title) {
+            // An unnamed local terminal: what it's running, else "Terminal".
+            return s.state == .running && !["zsh", "bash", "login"].contains(s.process) ? s.process : "Terminal"
+        }
         guard s.kind == .agent else { return s.title }
         let agentName = agent(for: s)?.name ?? "Agent"
         if s.title != agentName, s.title != "Claude Code" { return s.title }

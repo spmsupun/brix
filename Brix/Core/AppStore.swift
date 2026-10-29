@@ -25,6 +25,9 @@ final class AppStore {
     var gitBusy: Set<String> = []
     var hostStatus: [ResourceID: ConnectionStatus] = [:]
     var hostMetrics: [ResourceID: HostMetrics] = [:]
+    /// Last reachability check per server, and the ones being checked now.
+    var hostPing: [ResourceID: PingResult] = [:]
+    var pinging: Set<ResourceID> = []
     var dbStatus: [ResourceID: ConnectionStatus] = [:]
     var discoveredDocker: [DockerTarget] = []
     var dockerBusy: Set<ResourceID> = []

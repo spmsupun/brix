@@ -103,7 +103,7 @@ struct KeyframeLoop<Content: View>: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
-        let box = FlippedBox()
+        let box = LoopBox()
         box.wantsLayer = true
         let host = NSHostingView(rootView: AnyView(content().environment(store)))
         host.translatesAutoresizingMaskIntoConstraints = true
@@ -122,6 +122,13 @@ struct KeyframeLoop<Content: View>: NSViewRepresentable {
         guard key != context.coordinator.key || host.layer?.animation(forKey: "loop") == nil else { return }
         context.coordinator.key = key
         // Wait for a real size: the anchor and the layer's centre depend on it.
+        // AppKit drops a layer's animations when its view leaves the window
+        // (switching screens, scrolling a lazy list), which froze spinners
+        // mid-turn. The box starts the loop again when it's back.
+        (box as? LoopBox)?.restart = { [weak host] in
+            guard let host, host.layer?.animation(forKey: "loop") == nil, host.layer?.animation(forKey: "stilltransform") == nil else { return }
+            apply(to: host, animate: animate, tries: 20)
+        }
         DispatchQueue.main.async { apply(to: host, animate: animate, tries: 20) }
     }
 
@@ -184,8 +191,17 @@ struct KeyframeLoop<Content: View>: NSViewRepresentable {
     }
 }
 
+/// KeyframeLoop's container: restarts the loop when it's shown in a window again.
+final class LoopBox: FlippedBox {
+    var restart: (() -> Void)?
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil { DispatchQueue.main.async { [weak self] in self?.restart?() } }
+    }
+}
+
 /// Top-left origin, like SwiftUI.
-final class FlippedBox: NSView {
+class FlippedBox: NSView {
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
@@ -218,11 +234,11 @@ struct WorkingSpinner: View {
     var body: some View {
         KeyframeLoop(keyframes: Keyframes(stops: [(0, [0]), (1, [360])], duration: 0.7, curve: .linear), still: [0],
                      pose: { v in LayerPose(rotate: v[0]) }) {
-            ZStack {
-                Circle().stroke(color.opacity(0.25), lineWidth: 1.8)
-                Circle().trim(from: 0, to: 0.3).stroke(color, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-            }
-            .padding(1)
+            // No track behind the arc: with one it read as a half-full progress ring.
+            Circle().trim(from: 0, to: 0.72)
+                .stroke(AngularGradient(colors: [color.opacity(0), color], center: .center, startAngle: .degrees(0), endAngle: .degrees(260)),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .padding(1)
         }
         .frame(width: size, height: size)
         .accessibilityLabel("Working")

@@ -40,7 +40,6 @@
 		409F2221CE3069B619DEAB3B /* DockModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 789B1D1B4C576EBD803755B5 /* DockModelTests.swift */; };
 		42648A322E6E80D1424DE18A /* AppStore+Activity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60A140D5719E790B83418A7 /* AppStore+Activity.swift */; };
 		479997E097D410A7A69156BC /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED33C3D8F38C01FB05B8314F /* Notifications.swift */; };
-		47F19D58035663F2B4893847 /* DatabasePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0D94725ADC4A7F6DA174E08 /* DatabasePanelView.swift */; };
 		483C389BDA88EFD7547A3FB6 /* LiveDatabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 357E45C343AA6CEC5EB959D6 /* LiveDatabaseService.swift */; };
 		4C892D29D395BB627AC9BB6E /* DataGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F47849F9E78B382E3CF9F9 /* DataGrid.swift */; };
 		4F9F1E54F7008746B6DB143D /* AgentSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5A6C156178A8C562714813 /* AgentSheets.swift */; };
@@ -66,6 +65,7 @@
 		8368CD4973C232B4F91C4262 /* BrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93789C650C63158483609937 /* BrixApp.swift */; };
 		86BD82BD506EDE365E2CDFF1 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C439A9A21E617EF06BC2B37 /* ProcessRunner.swift */; };
 		87077C16FE35F407C99335BF /* AppStore+DatabaseTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD9B0E374DBD2328F06EE207 /* AppStore+DatabaseTools.swift */; };
+		87467208138FF6CCCE1AF362 /* HostPing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F7E7CF0DED752589F44329 /* HostPing.swift */; };
 		88790C725676E6DD9748E5B3 /* ResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3662FA2A8AD2D4721BD2DC1 /* ResizeHandle.swift */; };
 		8ED387A5D9178EB98E5A6172 /* DataWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D5EBD38031CB6A6B50E87A0 /* DataWorkspaceView.swift */; };
 		8FC0B03961060582EEEEF601 /* ConfigImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94A2DABE572532B1A78DFFF8 /* ConfigImporter.swift */; };
@@ -164,6 +164,7 @@
 		2B9CA50DE99E30DFE99E5F37 /* AddDockerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddDockerSheet.swift; sourceTree = "<group>"; };
 		2F9A920AB987A332256182D1 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		357E45C343AA6CEC5EB959D6 /* LiveDatabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDatabaseService.swift; sourceTree = "<group>"; };
+		38F7E7CF0DED752589F44329 /* HostPing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostPing.swift; sourceTree = "<group>"; };
 		39E60346EE0E519625C4559F /* TerminalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalsView.swift; sourceTree = "<group>"; };
 		3B2B7A13B38595F23109D378 /* ExplorerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExplorerPanel.swift; sourceTree = "<group>"; };
 		3C8B89E532F82C137AF2140F /* DBTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DBTree.swift; sourceTree = "<group>"; };
@@ -225,7 +226,6 @@
 		AB42F6E043D58B61CFAEA72C /* MacStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacStats.swift; sourceTree = "<group>"; };
 		ADED5E841BE2845407F3F67F /* Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence.swift; sourceTree = "<group>"; };
 		AEF71CF692A084C9F15A3AFA /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
-		B0D94725ADC4A7F6DA174E08 /* DatabasePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabasePanelView.swift; sourceTree = "<group>"; };
 		B2AE30F68CC36D32013ED462 /* MockGitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGitTests.swift; sourceTree = "<group>"; };
 		B2B92C5D48859FBBD422F7B7 /* ToolStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolStrip.swift; sourceTree = "<group>"; };
 		B658E357E054E47E35015F9C /* Motion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Motion.swift; sourceTree = "<group>"; };
@@ -298,7 +298,6 @@
 			isa = PBXGroup;
 			children = (
 				EF51FD492E520241F02A5723 /* DatabaseEditorSheet.swift */,
-				B0D94725ADC4A7F6DA174E08 /* DatabasePanelView.swift */,
 				D7FCBD86CC097B7C5B4388D8 /* DataWorkspaceModel.swift */,
 				1D5EBD38031CB6A6B50E87A0 /* DataWorkspaceView.swift */,
 				4FDF522D92DAF30904B81F6C /* DBConnectionsView.swift */,
@@ -578,6 +577,7 @@
 				F588D997631A54B9A0AA2ADF /* AgentOverview.swift */,
 				D0073D4D45840C7674C3C8AD /* AgentTranscripts.swift */,
 				8D75050B552FBD1FB7E9E9F9 /* DBDiscovery.swift */,
+				38F7E7CF0DED752589F44329 /* HostPing.swift */,
 				AB42F6E043D58B61CFAEA72C /* MacStats.swift */,
 				CB763069B0B514A2618C5AB5 /* MockData.swift */,
 				A717FC262141B046FF5DCAED /* MockServices.swift */,
@@ -810,7 +810,6 @@
 				14B7B62F1B2673B17D0DE542 /* DataWorkspaceModel.swift in Sources */,
 				8ED387A5D9178EB98E5A6172 /* DataWorkspaceView.swift in Sources */,
 				9524CA237E6379FE01156AFC /* DatabaseEditorSheet.swift in Sources */,
-				47F19D58035663F2B4893847 /* DatabasePanelView.swift in Sources */,
 				F180CCC19FF86BF297E55C74 /* DebugSnapshot.swift in Sources */,
 				7BA811F96FD84D61BD7FC78B /* DockHost.swift in Sources */,
 				F8E9D0CDC4AB8B47E8F684D4 /* DockModel.swift in Sources */,
@@ -827,6 +826,7 @@
 				9EE12D6BFA5D9C2B33FA5D98 /* GitHub.swift in Sources */,
 				54447F2A7A8D62896F323E57 /* HomePanels.swift in Sources */,
 				FE01F4E00C1AD2D9C5D4C9F8 /* HostEditorSheet.swift in Sources */,
+				87467208138FF6CCCE1AF362 /* HostPing.swift in Sources */,
 				69531051C162C9C68BE47F7F /* ImportSheet.swift in Sources */,
 				1A0E020B41A415408E6A9077 /* InspectorPanel.swift in Sources */,
 				483C389BDA88EFD7547A3FB6 /* LiveDatabaseService.swift in Sources */,

@@ -34,6 +34,9 @@ struct SSHView: View {
                 HStack(spacing: 6) {
                     SearchField(placeholder: "Search connections", text: $query, height: 30)
                     IconButton(symbol: "plus", label: "New connection", size: 30, iconSize: 12, color: Theme.text2) { store.sheet = .editHost(nil) }
+                    IconButton(symbol: "dot.radiowaves.left.and.right", label: "Ping all servers", size: 30, iconSize: 12, color: Theme.text2) {
+                        store.ping(store.library.hosts.map(\.id))
+                    }
                     IconButton(symbol: "server.rack", label: "Server health", size: 30, iconSize: 12, color: Theme.text2) { store.go(.servers) }
                     IconButton(symbol: "square.and.arrow.down", label: "Import from JetBrains, VS Code or ~/.ssh/config", size: 30, iconSize: 12, color: Theme.text2) { store.sheet = .importConnections }
                 }
@@ -73,7 +76,10 @@ struct SSHView: View {
                 Text(h.address).font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1)
             }
             Spacer(minLength: 0)
-            Text(status == .connecting ? "…" : (h.lastConnected.map { RelativeTime.short($0) } ?? "never")).font(Typo.ui(11)).foregroundStyle(Theme.text3)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(status == .connecting ? "…" : (h.lastConnected.map { RelativeTime.short($0) } ?? "never")).font(Typo.ui(11)).foregroundStyle(Theme.text3)
+                PingBadge(hostID: h.id)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: 56)
@@ -115,6 +121,8 @@ struct HostDetail: View {
                 store.guardProduction(h.tag, name: h.name, verb: "Browse files on") { store.go(.remoteFiles(h.id)) }
             }
             SubtleButton(title: "Edit") { store.sheet = .editHost(h) }
+            SubtleButton(title: store.pinging.contains(h.id) ? "Pinging…" : "Ping", symbol: "dot.radiowaves.left.and.right") { store.ping([h.id]) }
+                .help(store.hostPing[h.id].map { "Last: \($0.error ?? $0.label), \(RelativeTime.short($0.at)) ago" } ?? "Time a connection to port \(h.port)")
             SubtleButton(title: "Duplicate") { store.duplicateHost(h.id) }
             MenuButton(items: {
                 [MenuSpec(title: "Copy SSH Command") { store.copyToPasteboard(h.sshCommand, label: "SSH command") },
@@ -254,5 +262,21 @@ struct HostDetail: View {
             Text("\(Int((v * 100).rounded()))%").font(Typo.ui(12)).monospacedDigit().foregroundStyle(Theme.text).frame(width: 36, alignment: .trailing)
         }
         .animation(.easeOut(duration: 0.4), value: v)
+    }
+}
+
+/// The last ping: green when quick, amber when slow, red with no reply.
+struct PingBadge: View {
+    @Environment(AppStore.self) private var store
+    let hostID: ResourceID
+
+    var body: some View {
+        if store.pinging.contains(hostID) {
+            ProgressView().controlSize(.mini)
+        } else if let r = store.hostPing[hostID] {
+            let color = r.ms == nil ? Theme.red : r.ms! < 150 ? Theme.green : Theme.amber
+            Text(r.label).font(Typo.mono(10.5, .medium)).foregroundStyle(color)
+                .help(r.error.map { "No reply: \($0)" } ?? "Port answered in \(r.label), \(RelativeTime.short(r.at)) ago")
+        }
     }
 }

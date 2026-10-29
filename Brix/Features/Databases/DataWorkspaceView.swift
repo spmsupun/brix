@@ -7,12 +7,28 @@ import AppKit
 struct DataWorkspaceView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.islandGap) private var gap
+    @AppStorage("db.explorerWidth") private var explorerWidth: Double = 300
 
     var body: some View {
         let ws = store.dataWorkspace
         if store.library.databases.isEmpty {
             EmptyState(symbol: "cylinder.split.1x2", message: "No databases yet. Add PostgreSQL, MySQL or SQLite.", actionTitle: "Add Database") { store.sheet = .editDatabase(nil) }
                 .island()
+        } else if let d = ws.explorer.flatMap(store.database) {
+            HStack(spacing: 0) {
+                DBExplorer(connection: d).id(d.id).frame(width: explorerWidth)
+                ResizeHandle(axis: .horizontal, thickness: gap) { explorerWidth = min(max(explorerWidth + $0, 220), 520) }
+                if ws.screenTabs.isEmpty {
+                    EmptyState(symbol: "tablecells", message: "Pick a table to open it here.").island()
+                } else {
+                    DWEditor()
+                    if ws.showInspector, let t = ws.current, t.projectID == nil { DWInspector(tabID: t.id).frame(width: 264).island().padding(.leading, gap) }
+                }
+            }
+            .onAppear(perform: consumeRequests)
+            .onChange(of: store.pendingQuery?.sql) { _, _ in consumeRequests() }
+            .popover(isPresented: Binding(get: { ws.goTo }, set: { ws.goTo = $0 }), arrowEdge: .top) { DWGoTo() }
+            .background(DWShortcuts(tabID: ws.current?.id))
         } else if ws.screenTabs.isEmpty {
             DBConnectionsView()
                 .onAppear(perform: consumeRequests)

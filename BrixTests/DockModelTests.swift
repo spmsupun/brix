@@ -214,3 +214,20 @@ final class UnseenSessionTests: XCTestCase {
         XCTAssertFalse(store.session(s.id)!.unseen, "opening it clears the flag")
     }
 }
+
+@MainActor
+final class LoopBoxTests: XCTestCase {
+    /// AppKit drops layer animations when a view leaves its window; the box
+    /// must ask for the loop again when it's back.
+    func testRestartsWhenShownInAWindowAgain() {
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 50, height: 50), styleMask: [.titled], backing: .buffered, defer: false)
+        let box = LoopBox()
+        var restarts = 0
+        box.restart = { restarts += 1 }
+        win.contentView?.addSubview(box)
+        box.removeFromSuperview()
+        win.contentView?.addSubview(box)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(restarts, 2)
+    }
+}

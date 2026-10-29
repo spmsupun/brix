@@ -10,7 +10,10 @@ struct BrixApp: App {
     @State private var store = BrixApp.sharedStore
 
     var body: some Scene {
-        WindowGroup("Brix", id: "main") {
+        // One window only: terminals and agents are single views that live in one
+        // place at a time, so a second window (a WindowGroup opens one on Dock
+        // clicks and reopen) took them over and left the first one black.
+        Window("Brix", id: "main") {
             RootView()
                 .environment(store)
                 .environment(\.services, store.services)

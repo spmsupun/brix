@@ -136,7 +136,7 @@ struct TerminalPane: View {
                 // In the tiled centre the tab already names the session.
                 if !inTile { HStack(spacing: 8) {
                     Image(systemName: host != nil ? "globe" : "terminal").font(.system(size: 11)).foregroundStyle(host?.tag.color ?? Theme.text3)
-                    Text(s.title).font(Typo.ui(12.5, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                    Text(store.displayTitle(s)).font(Typo.ui(12.5, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
                     Text(s.cwd).font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.head)
                     if let host { TagPill(tag: host.tag, size: 8.5) }
                     Spacer(minLength: 0)

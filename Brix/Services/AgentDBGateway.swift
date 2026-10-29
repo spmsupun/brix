@@ -232,7 +232,7 @@ final class AgentDBGateway {
             let svc = store.svc(d).db
             let tree = try await svc.schema(d, password: store.dbPassword(d))
             var out: [String] = []
-            for (schema, objects) in tree.schemas.sorted(by: { $0.key < $1.key }) {
+            for (schema, objects) in d.agentSchemas(tree.schemas).sorted(by: { $0.key < $1.key }) {
                 for o in objects.sorted(by: { $0.name < $1.name }) where o.kind == .table || o.kind == .view {
                     let cols: [DBColumn]
                     do { cols = try await svc.tableDetail(d, object: o, password: store.dbPassword(d)).columns } catch {

@@ -30,6 +30,31 @@ extension AppStore {
 
     // MARK: Explorer
 
+    /// From a project: the connection's tables in a left panel of that project,
+    /// tables as its tabs, so they sit beside its agents. One database panel per
+    /// project; it follows the connection last clicked.
+    func explore(_ d: DatabaseConnection, in project: ProjectID) {
+        openProject(project)
+        let ws = workspace(for: project)
+        let mine = ws.layout.allPanels.first { $0.kind == .database && $0.resourceID == d.id }
+        for p in ws.layout.allPanels where p.kind == .database && p.id != mine?.id { ws.layout.hide(p.id) }
+        if let mine {
+            if ws.layout.side(of: mine.id) != .left { ws.layout.move(mine.id, to: .left) }
+            ws.layout.collapsed.remove(.left)
+        } else {
+            ws.layout.add(.database, to: .left, resource: d.id, title: d.name)
+        }
+        loadTree(d)
+    }
+
+    /// Opens a connection on the Databases screen: its databases and tables in
+    /// the list, each table as a tab beside it.
+    func explore(_ d: DatabaseConnection) {
+        dataWorkspace.explorer = d.id
+        loadTree(d)
+        go(.databases)
+    }
+
     func loadTree(_ d: DatabaseConnection, force: Bool = false) {
         let ws = dataWorkspace
         guard force || schemaCache[d.id] == nil, !ws.loadingTrees.contains(d.id) else { return }
@@ -403,7 +428,10 @@ extension AppStore {
         let table = parts[parts.count - 2], column = parts[parts.count - 1]
         let schema = parts.count >= 3 ? parts[0] : nil
         let objs = schemaCache[d.id]?.schemas.values.flatMap { $0 } ?? []
-        let o = objs.first { $0.name == table && (schema == nil || $0.schema == schema) }
+        // Without a schema in the reference, the connection's own database wins
+        // over a same-named table in another database on the server.
+        let o = objs.first { $0.name == table && $0.schema == (schema ?? d.database) }
+            ?? objs.first { $0.name == table && (schema == nil || $0.schema == schema) }
             ?? DBObject(schema: schema ?? (d.kind == .postgres ? "public" : d.kind == .sqlite ? "main" : d.database), name: table, kind: .table, rowEstimate: nil)
         return (o, column)
     }
@@ -551,7 +579,7 @@ extension AppStore {
         }
         guard let project = dataProject ?? sortedProjects.first else { return }
         Task {
-            let tables = (schemaCache[d.id]?.schemas.values.flatMap { $0 } ?? []).filter { $0.kind != .function }
+            let tables = d.agentSchemas(schemaCache[d.id]?.schemas ?? [:]).values.flatMap { $0 }.filter { $0.kind != .function }
             let schema = await agentSchema(d, tables: tables)
             let prompt = """
             Help with this SQL for the \(DBProduct.flavor(d).label) database “\(d.name)” (\(d.tag.name)). Schema:

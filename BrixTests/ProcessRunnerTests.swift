@@ -1,4 +1,5 @@
 import XCTest
+import Network
 @testable import Brix
 
 final class ProcessRunnerTests: XCTestCase {
@@ -54,5 +55,24 @@ final class FolderWatcherTests: XCTestCase {
         XCTAssertEqual(FolderWatcher.kind("/p/mod/.git/HEAD", root: root), false)
         XCTAssertEqual(FolderWatcher.kind("/private/p/src/a.swift", root: root), true)
         XCTAssertNil(FolderWatcher.kind("/private/p/x.noindex/a", root: root))
+    }
+}
+
+final class HostPingTests: XCTestCase {
+    /// Against this Mac only: a listening port answers, a closed one doesn't.
+    func testOpenAndClosedPorts() async throws {
+        let listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { $0.cancel() }
+        let ready = expectation(description: "listening")
+        listener.stateUpdateHandler = { if case .ready = $0 { ready.fulfill() } }
+        listener.start(queue: .global())
+        await fulfillment(of: [ready], timeout: 3)
+        defer { listener.cancel() }
+        let open = await HostPing.ping(host: "127.0.0.1", port: Int(listener.port!.rawValue))
+        XCTAssertNotNil(open.ms, "\(open)")
+        XCTAssertNil(open.error)
+        let closed = await HostPing.ping(host: "127.0.0.1", port: 1, timeout: 2)
+        XCTAssertNil(closed.ms)
+        XCTAssertNotNil(closed.error)
     }
 }

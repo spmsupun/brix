@@ -67,3 +67,22 @@ final class DataWorkspaceTests: XCTestCase {
         XCTAssertNil(DataEdits.rowKey(["7", "x"], columns: cols.map { var c = $0; c.isPK = false; return c }))
     }
 }
+
+final class MySQLScopeTests: XCTestCase {
+    func testAgentsSeeOnlyTheConnectionsDatabase() {
+        var d = DatabaseConnection(id: "m", name: "m", kind: .mysql, tag: .dev)
+        let all = ["shop": [DBObject(schema: "shop", name: "users", kind: .table, rowEstimate: nil)],
+                   "crm": [DBObject(schema: "crm", name: "users", kind: .table, rowEstimate: nil)]]
+        XCTAssertEqual(Set(d.agentSchemas(all).keys), ["shop", "crm"], "no default database: everything")
+        d.database = "shop"
+        XCTAssertEqual(Array(d.agentSchemas(all).keys), ["shop"])
+    }
+}
+
+final class ShortVersionTests: XCTestCase {
+    func testServerVersionsReadShort() {
+        XCTAssertEqual(DatabaseEditorSheet.shortVersion("MySQL 10.11.7-MariaDB-1:10.11.7+maria~ubu2204"), "MariaDB 10.11.7")
+        XCTAssertEqual(DatabaseEditorSheet.shortVersion("PostgreSQL 17.6 (Debian 17.6-1.pgdg120+1) on x86_64-pc-linux-gnu"), "PostgreSQL 17.6")
+        XCTAssertEqual(DatabaseEditorSheet.shortVersion("MySQL 8.0.36"), "MySQL 8.0.36")
+    }
+}

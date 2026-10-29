@@ -14,6 +14,10 @@ struct DBTreeRows: View {
     var project: ProjectID? = nil
 
     var initialQuery = ""
+    /// Off when the place showing the tree has its own search box.
+    var showSearch = true
+    /// Databases (schemas) start open: the key then records a closed one.
+    var schemasOpen = false
     @State private var query = ""
     /// How many objects a folder shows before "Show more": long lists stay cheap.
     @State private var limit: [String: Int] = [:]
@@ -31,7 +35,7 @@ struct DBTreeRows: View {
             .padding(.leading, indent).padding(.trailing, 8).padding(.vertical, 4)
         } else if let tree = store.schemaCache[d.id] {
             let schemas = tree.schemas.keys.sorted()
-            if tree.schemas.values.reduce(0, { $0 + $1.count }) > 12 { search }
+            if showSearch, tree.schemas.values.reduce(0, { $0 + $1.count }) > 12 { search }
             Color.clear.frame(height: 0).onChange(of: initialQuery, initial: true) { _, q in query = q }
             if schemas.isEmpty {
                 Text("No tables").font(Typo.ui(11)).foregroundStyle(Theme.meta).padding(.leading, indent).frame(height: 22)
@@ -44,9 +48,10 @@ struct DBTreeRows: View {
                     folders(schema, objs, indent: indent)
                 } else {
                     let key = "\(scope)|s:\(d.id).\(schema)"
+                    let open = !q.isEmpty || schemasOpen != ws.expanded.contains(key)
                     row(indent: indent, icon: "cylinder", iconColor: Theme.text2, name: schema, meta: "\(objs.filter { $0.kind != .function }.count)",
-                        open: ws.expanded.contains(key)) { toggle(key) }
-                    if ws.expanded.contains(key) { folders(schema, objs, indent: indent + 14) }
+                        open: open) { toggle(key) }
+                    if open { folders(schema, objs, indent: indent + 14) }
                 }
             }
         } else {
@@ -156,21 +161,21 @@ struct DBTreeRows: View {
     }
 }
 
-/// Every saved connection under the sidebar's Databases row, each opening into its tree.
+/// Every saved connection under the sidebar's Databases row. A click opens it
+/// on the Databases screen, where its databases and tables are listed.
 struct DBLibraryTree: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.accent) private var accent
     @State private var query = ""
     @State private var scroll = ScrollMetrics()
 
     var body: some View {
-        let ws = store.dataWorkspace
         let q = query.trimmingCharacters(in: .whitespaces)
         let conns = store.library.databases.filter { d in
-            q.isEmpty || d.name.localizedCaseInsensitiveContains(q) || d.host.localizedCaseInsensitiveContains(q)
-                || (store.schemaCache[d.id]?.schemas.values.contains { $0.contains { $0.name.localizedCaseInsensitiveContains(q) } } ?? false)
+            q.isEmpty || d.name.localizedCaseInsensitiveContains(q) || d.host.localizedCaseInsensitiveContains(q) || d.database.localizedCaseInsensitiveContains(q)
         }
         VStack(alignment: .leading, spacing: 1) {
-            SidebarSearch(placeholder: "Search connections and tables", text: $query)
+            if store.library.databases.count > 6 { SidebarSearch(placeholder: "Search connections", text: $query) }
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     if conns.isEmpty {
@@ -178,23 +183,18 @@ struct DBLibraryTree: View {
                             .padding(.leading, 10).frame(height: 24)
                     }
                     ForEach(conns) { d in
-                        let key = "lib|c:" + d.id
-                        // A table match opens its connection.
-                        let open = ws.expanded.contains(key) || (!q.isEmpty && !d.name.localizedCaseInsensitiveContains(q))
-                        Button {
-                            if ws.expanded.contains(key) { ws.expanded.remove(key) } else { ws.expanded.insert(key); store.loadTree(d) }
-                        } label: {
+                        let on = store.route == .databases && store.dataWorkspace.explorer == d.id
+                        Button { store.explore(d) } label: {
                             HStack(spacing: 7) {
-                                Image(systemName: "chevron.right").font(.system(size: 7, weight: .bold)).foregroundStyle(Theme.meta)
-                                    .rotationEffect(.degrees(open ? 90 : 0)).frame(width: 9)
                                 DatabaseIcon(db: d, size: 16)
-                                Text(d.name).font(Typo.ui(12.5)).foregroundStyle(Theme.body).lineLimit(1)
+                                Text(d.name).font(Typo.ui(12.5, on ? .semibold : .regular)).foregroundStyle(on ? Theme.text : Theme.body).lineLimit(1)
                                 Spacer(minLength: 0)
                                 DWLook.tag(d.tag)
                                 Circle().fill(store.dbStatus[d.id] == .connected ? Theme.green : Theme.disabled).frame(width: 6, height: 6)
                             }
-                            .padding(.leading, 10).padding(.trailing, 8)
+                            .padding(.leading, 12).padding(.trailing, 8)
                             .frame(height: 26)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(on ? Theme.selected : .clear))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -204,8 +204,6 @@ struct DBLibraryTree: View {
                             Divider()
                             Button("Edit Connection…") { store.sheet = .editDatabase(d) }
                         }
-                        .accessibilityValue(open ? "Expanded" : "Collapsed")
-                        if open { DBTreeRows(connection: d, scope: "lib", indent: 26, initialQuery: d.name.localizedCaseInsensitiveContains(q) ? "" : q) }
                     }
                 }
                 .reportsScrollPosition(scroll)
@@ -213,6 +211,110 @@ struct DBLibraryTree: View {
             .thinScrollBar(scroll)
             .frame(maxHeight: 360)
             .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The Databases screen's list beside the tabs: one connection's databases
+/// (schemas), their Tables, Views and Routines. A table opens as a tab.
+struct DBExplorer: View {
+    @Environment(AppStore.self) private var store
+    let connection: DatabaseConnection
+    /// Set inside a project: tables open as the project's tabs, beside its agents.
+    var project: ProjectID? = nil
+    /// Inside a dock panel, which draws its own island.
+    var bare = false
+    @State private var query = ""
+    @State private var scroll = ScrollMetrics()
+
+    var body: some View {
+        let d = connection
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.text3)
+                    TextField("Search tables", text: $query).textFieldStyle(.plain).font(Typo.ui(12.5))
+                        .onExitCommand { query = "" }
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(Theme.text3) }
+                            .buttonStyle(.plain).accessibilityLabel("Clear search")
+                    }
+                }
+                .padding(.horizontal, 9).frame(height: 30)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.input))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.divider))
+                IconButton(symbol: "plus.rectangle", label: "New console", size: 28, iconSize: 12) { store.newConsole(d, project: project) }
+                IconButton(symbol: "arrow.clockwise", label: "Refresh", size: 28, iconSize: 12) { store.loadTree(d, force: true) }
+            }
+            .padding(10)
+            Button { store.sheet = .editDatabase(d) } label: {
+                HStack(spacing: 10) {
+                    DatabaseIcon(db: d, size: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(d.name).font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                            DWLook.tag(d.tag)
+                        }
+                        Text(d.kind == .sqlite ? (d.filePath as NSString).lastPathComponent : "\(d.host)\(d.port > 0 ? ":\(d.port)" : "")")
+                            .font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.middle)
+                    }
+                    Spacer(minLength: 0)
+                    Circle().fill(store.dbStatus[d.id] == .connected ? Theme.green : Theme.disabled).frame(width: 7, height: 7)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 9).fill(Color.white(0.04)))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Edit connection")
+            .padding(.horizontal, 10).padding(.bottom, 8)
+            .hairlineBottom()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    DBTreeRows(connection: d, scope: project ?? "exp", indent: 6, project: project, initialQuery: query, showSearch: false,
+                               schemasOpen: (store.schemaCache[d.id]?.schemas.count ?? 0) <= 3)
+                }
+                .padding(6)
+                .reportsScrollPosition(scroll)
+            }
+            .thinScrollBar(scroll)
+        }
+        .modifier(IslandUnless(bare: bare))
+        .onAppear { store.loadTree(d) }
+    }
+}
+
+private struct IslandUnless: ViewModifier {
+    let bare: Bool
+    func body(content: Content) -> some View {
+        if bare { content } else { content.island() }
+    }
+}
+
+/// A project's Database panel: one linked connection's databases and tables;
+/// a table opens as a tab in the project, so it can sit beside an agent.
+struct ProjectDBPanel: View {
+    @Environment(AppStore.self) private var store
+    let ws: WorkspaceStore
+    let panel: PanelInstance
+
+    var body: some View {
+        let dbs = store.linkedDatabases(ws.projectID)
+        // Never stand in another connection for one that was removed or unlinked:
+        // its tables would open against a database nobody picked.
+        let d = panel.resourceID.map { id in dbs.first { $0.id == id } } ?? dbs.first
+        PanelChrome(title: d?.name ?? "Database") {
+            Spacer(minLength: 0)
+        } content: {
+            if let d {
+                DBExplorer(connection: d, project: ws.projectID, bare: true).id(d.id)
+            } else {
+                EmptyState(symbol: "cylinder.split.1x2",
+                           message: panel.resourceID == nil ? "No database linked to this project." : "This connection was removed or unlinked from the project.",
+                           actionTitle: "Link one") {
+                    store.route = .projectSettings(ws.projectID)
+                }
+            }
         }
     }
 }

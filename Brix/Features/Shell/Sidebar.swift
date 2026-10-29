@@ -56,7 +56,6 @@ private struct FullSidebar: View {
                 navRow(NavItem(route: .overview, label: "Overview"))
                 navRow(NavItem(route: .terminals, label: "All Terminals", badge: store.runningTerminals > 0 ? "\(store.runningTerminals)" : nil, badgeColor: Theme.green))
                 navRow(NavItem(route: .git, label: "Git", badge: store.totalUncommitted > 0 ? "\(store.totalUncommitted)" : nil, badgeColor: Theme.amber))
-                navRow(NavItem(route: .recentFiles, label: "Recent Files"))
             }
             .padding(.horizontal, 8).padding(.top, 10).padding(.bottom, 6)
             Rectangle().fill(Theme.divider).frame(height: 1).padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 8)
@@ -214,7 +213,12 @@ private struct FullSidebar: View {
             ProjectMark(project: p, size: Tree.icon)
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.name).font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
-                if let sub { sub.lineLimit(1).truncationMode(.tail) }
+                if let sub {
+                    // The path is cut short in a narrow sidebar; hovering shows all of it.
+                    sub.lineLimit(1).truncationMode(.middle)
+                        .help(p.path)
+                        .accessibilityHint(p.path)
+                }
             }
             Spacer(minLength: 0)
             HStack(spacing: 6) {
@@ -254,7 +258,7 @@ private struct FullSidebar: View {
                 if !isExpanded(p.id) { toggleExpanded(p.id) }
             }
         }
-        .help("Click for the overview, double-click to open the workspace")
+        .help("\(p.path)\nClick for the overview, double-click to open the workspace")
         .contextMenu { ProjectContextMenu(project: p) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(p.name)
@@ -263,20 +267,13 @@ private struct FullSidebar: View {
 
     static let agentOrange = Color(hex: 0xE07B53)
 
-    /// "7 repos · ⎇ dev · 2 off-branch", or "1 repo · ⎇ master · agent editing".
+    /// "~/projects/gac · 7 repos", or "~/projects/brix · agent editing". Branches
+    /// are in the toolbar's project header, so the row stays light.
     private func subLine(_ p: Project, repos: [Project]) -> Text? {
-        var parts: [Text] = []
-        if repos.isEmpty {
-            if let b = store.git[p.id]?.branch, !b.isEmpty {
-                parts = [Text("1 repo"), Text("⎇ \(b)").font(Typo.mono(10.5))]
-            }
-            if let a = activityLine(p) { parts.append(Text(a.text).foregroundColor(a.color)) }
-        } else {
-            let (dominant, off) = branches(repos)
-            parts.append(Text("\(repos.count) repos"))
-            if let dominant { parts.append(Text("⎇ \(dominant)").font(Typo.mono(10.5))) }
-            if off > 0 { parts.append(Text("\(off) off-branch")) }
-        }
+        // What an agent is doing says more than the path while it lasts.
+        if repos.isEmpty, let a = activityLine(p) { return Text(a.text).foregroundColor(a.color).font(Typo.ui(10.5)) }
+        var parts: [Text] = [Text((p.path as NSString).abbreviatingWithTildeInPath)]
+        if !repos.isEmpty { parts.append(Text("\(repos.count) repos")) }
         guard let first = parts.first else { return nil }
         return parts.dropFirst().reduce(first) { $0 + Text(" · ") + $1 }
             .font(Typo.ui(10.5)).foregroundColor(Theme.text3)
@@ -426,7 +423,10 @@ private struct FullSidebar: View {
         if s.kind == .agent, let line = s.lastOutput.split(separator: "\n").last.map(String.init), !line.isEmpty {
             return "\(line.trimmingCharacters(in: .whitespaces)) · \(age)"
         }
-        return (s.cwd as NSString).abbreviatingWithTildeInPath
+        // The folder belongs to the project row, not every session under it.
+        let what = s.kind == .agent ? (store.agent(for: s)?.name ?? "Agent")
+            : s.state == .running && !["zsh", "bash"].contains(s.process) ? s.process : "Terminal"
+        return "\(what) · \(age)"
     }
 
     static func age(since d: Date) -> String {
@@ -640,7 +640,7 @@ private struct FullSidebar: View {
         let items: [(String, String, Int, Color)] = [
             ("server.rack", "Servers", hosts.count, hosts.contains { store.hostStatus[$0.id] == .connected } ? Theme.green : Theme.disabled),
             ("shippingbox", "Docker", dockerN, dockerUp == 0 ? Theme.disabled : dockerUp == dockerN ? Theme.green : Theme.amber),
-            ("cylinder", "DB", dbs.count, dbs.contains { store.dbStatus[$0.id] == .connected } ? Theme.green : Theme.disabled)
+            ("cylinder", "Databases", dbs.count, dbs.contains { store.dbStatus[$0.id] == .connected } ? Theme.green : Theme.disabled)
         ].filter { $0.2 > 0 }
         if !items.isEmpty {
             let open = !groupOpen(p.id, "res")
@@ -803,13 +803,12 @@ private struct FullSidebar: View {
         group(p, "db", "Databases", "cylinder", "\(dbs.count) linked", empty: dbs.isEmpty, hue: hue, header: headers) {
             let order = dbs.map(\.id)
             ForEach(dbs) { d in
-                let key = "\(p.id)|c:\(d.id)"
-                let open = store.dataWorkspace.expanded.contains(key)
                 itemRow(icon: AnyView(DatabaseIcon(db: d, size: 18)), name: d.name, meta: d.port > 0 ? ":\(d.port)" : "", tag: d.tag,
-                        dot: store.dbStatus[d.id] == .connected ? Theme.green : Theme.disabled, selected: activeTab(p.id) == GridItemID.database(d.id), hue: hue,
-                        expanded: open) {
-                    // Opens its tree of tables; a table opens as a tab in this project.
-                    if open { store.dataWorkspace.expanded.remove(key) } else { store.dataWorkspace.expanded.insert(key); store.loadTree(d) }
+                        dot: store.dbStatus[d.id] == .connected ? Theme.green : Theme.disabled,
+                        selected: store.route == .workspace(p.id) && store.workspace(for: p.id).layout.allPanels.contains { $0.kind == .database && $0.resourceID == d.id },
+                        hue: hue) {
+                    // Its tables open in this project, beside its agents.
+                    store.explore(d, in: p.id)
                 }
                 .contextMenu {
                     Button("Add as a Tab") { store.openProject(p.id); store.workspace(for: p.id).placeTab(GridItemID.database(d.id), in: nil) }
@@ -823,7 +822,6 @@ private struct FullSidebar: View {
                           let b = store.library.databases.firstIndex(where: { $0.id == order[to] }) else { return }
                     store.library.databases.reorder(from: a, onto: b)
                 }
-                if open { DBTreeRows(connection: d, scope: p.id, indent: Tree.item + 16, project: p.id) }
             }
         }
     }
@@ -1164,6 +1162,7 @@ struct HostContextMenu: View {
     let host: SSHHost
     var body: some View {
         Button("Connect / Open Terminal") { store.connect(host.id) }
+        Button("Ping") { store.ping([host.id]) }
         Button("Browse Files") { store.guardProduction(host.tag, name: host.name, verb: "Browse files on") { store.go(.remoteFiles(host.id)) } }
         Button("Edit…") { store.sheet = .editHost(host) }
         Button("Duplicate") { store.duplicateHost(host.id) }

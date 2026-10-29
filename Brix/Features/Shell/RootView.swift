@@ -178,11 +178,11 @@ struct StatusBar: View {
 
     // MARK: Agents
 
-    /// Working first, then waiting, then finished ones ready to review.
+    /// Agents that need you (waiting) first, then working ones. Finished agents
+    /// are marked in the sidebar and on the Dock badge instead.
     private var chips: [TerminalSession] {
-        let a = store.sessions.filter { $0.kind == .agent && ($0.state == .running || $0.state == .needsInput || ($0.state == .idle && !$0.task.isEmpty) || $0.state == .finished) }
-        let rank: (TerminalSession) -> Int = { $0.state == .needsInput ? 0 : $0.unseen ? 1 : $0.state == .running ? 2 : 3 }
-        return a.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+        let a = store.sessions.filter { $0.kind == .agent && ($0.state == .running || $0.state == .needsInput) }
+        return a.enumerated().sorted { ($0.element.state == .needsInput ? 0 : 1, $0.offset) < ($1.element.state == .needsInput ? 0 : 1, $1.offset) }.map(\.element)
     }
 
     @ViewBuilder private var agents: some View {
@@ -334,10 +334,14 @@ private struct UsageSegment: View {
                         Capsule().fill(Color.white(0.08)).frame(width: 34, height: 4)
                             .overlay(alignment: .leading) { Capsule().fill(color(w.percent)).frame(width: 34 * min(max(w.percent, 0), 100) / 100, height: 4) }
                         Text("\(Int(w.percent))%").font(Typo.mono(10.5)).foregroundStyle(Theme.body)
+                        // Each window's own reset, next to it: one shared "resets"
+                        // at the end read as the weekly one.
+                        if let r = w.resetsAt, r > Date() {
+                            Text("↻ \(Self.countdown(to: r))").foregroundStyle(Theme.meta)
+                                .help("\(w.label) limit resets in \(Self.countdown(to: r))")
+                        }
                     }
-                }
-                if let reset = windows.compactMap(\.resetsAt).filter({ $0 > Date() }).min() {
-                    Text("resets \(Self.countdown(to: reset))").foregroundStyle(Theme.meta)
+                    .padding(.trailing, w.label == windows.last?.label ? 0 : 4)
                 }
             }
             .fixedSize()

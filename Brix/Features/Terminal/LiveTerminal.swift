@@ -61,6 +61,12 @@ final class BrixTerminalView: LocalProcessTerminalView {
         if window != nil { needsDisplay = true }
     }
 
+    /// Moved to a screen with another scale (an external display): draw again.
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        needsDisplay = true
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         let grew = newSize != frame.size
         super.setFrameSize(newSize)
@@ -79,7 +85,8 @@ final class BrixTerminalView: LocalProcessTerminalView {
             if agentState != .running { checkIdle() }
             return
         }
-        if idle {
+        // Local shells are tracked by their foreground process in checkIdle.
+        if idle, foregroundCommand() == nil {
             idle = false
             store?.liveIdle(sessionID, idle: false)
         }
@@ -135,10 +142,39 @@ final class BrixTerminalView: LocalProcessTerminalView {
             }
             return
         }
+        // A local shell is busy while a command runs in front of it, not while it
+        // prints: prompts with clocks or Git status redraw by themselves.
+        if let fg = foregroundCommand() {
+            let busy = fg != ""
+            if busy != !idle || fg != lastForeground {
+                idle = !busy
+                lastForeground = fg
+                store?.liveActivity(sessionID, lastLines: recentLines, exited: nil)
+                store?.liveForeground(sessionID, command: busy ? fg : nil)
+            }
+            return
+        }
         guard !idle, Date().timeIntervalSince(lastData) > 2.5 else { return }
         idle = true
         store?.liveActivity(sessionID, lastLines: recentLines, exited: nil)
         store?.liveIdle(sessionID, idle: true)
+    }
+
+    private var lastForeground: String?
+
+    /// For a local shell: "" when the shell itself is in front (waiting at its
+    /// prompt), else the name of the command running in it. nil when that can't
+    /// be told (an ssh session, or the terminal has no process yet).
+    private func foregroundCommand() -> String? {
+        guard let s = store?.session(sessionID), s.kind == .shell, s.hostID == nil else { return nil }
+        let shell = process.shellPid, fd = process.childfd
+        guard shell > 0, fd >= 0 else { return nil }
+        let fg = tcgetpgrp(fd)
+        guard fg > 0 else { return nil }
+        if fg == shell { return "" }
+        var name = [CChar](repeating: 0, count: 256)
+        let n = proc_name(fg, &name, UInt32(name.count))
+        return n > 0 ? String(cString: name) : "command"
     }
 
     private var isAgent: Bool { store?.session(sessionID)?.kind == .agent }

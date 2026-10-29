@@ -62,9 +62,9 @@ enum PanelKind: String, Codable, CaseIterable, Identifiable {
     /// Default side when a panel is added without a target dock.
     var defaultSide: DockSide {
         switch self {
-        case .explorer: .left
+        case .explorer, .database: .left
         case .sourceControl, .inspector, .connections, .notes, .browser, .plan, .agentFiles, .remoteFiles, .record: .right
-        case .terminal, .agent, .database, .serverShell, .logs, .docker, .dataTab: .bottom
+        case .terminal, .agent, .serverShell, .logs, .docker, .dataTab: .bottom
         }
     }
 

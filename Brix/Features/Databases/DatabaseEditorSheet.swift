@@ -215,11 +215,16 @@ struct DatabaseEditorSheet: View {
     private var form: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 12) {
+                // The title keeps its width; a long status shortens instead of squeezing it.
                 VStack(alignment: .leading, spacing: 4) {
                     Text(existing == nil ? "New database connection" : "Edit connection").font(Typo.ui(17, .bold)).foregroundStyle(Theme.text)
+                        .fixedSize()
                     Text("Passwords go to your Keychain. Brix never shows them to agents.").font(Typo.ui(12)).foregroundStyle(Theme.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
+                .frame(minWidth: 260, alignment: .leading)
+                .layoutPriority(1)
+                Spacer(minLength: 8)
                 statusPill
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -599,9 +604,9 @@ struct DatabaseEditorSheet: View {
     private func pill(color: Color, text: String, live: Bool) -> some View {
         HStack(spacing: 7) {
             if live { LiveDot(color: color, size: 7, ring: 5) } else { Circle().fill(color).frame(width: 7, height: 7) }
-            Text(text).font(Typo.ui(11.5, .medium)).foregroundStyle(color).lineLimit(1)
+            Text(text).font(Typo.ui(11.5, .medium)).foregroundStyle(color).lineLimit(1).truncationMode(.middle)
         }
-        .fixedSize()
+        .help(text)
         .padding(.horizontal, 11).frame(height: 28)
         .background(Capsule().fill(color.opacity(0.10)))
         .overlay(Capsule().strokeBorder(color.opacity(0.25)))
@@ -631,10 +636,14 @@ struct DatabaseEditorSheet: View {
         }
     }
 
-    /// "PostgreSQL 17.6 (Debian 17.6-1.pgdg…) on x86_64…" to "PostgreSQL 17.6".
+    /// "PostgreSQL 17.6 (Debian 17.6-1.pgdg…) on x86_64…" to "PostgreSQL 17.6";
+    /// "MySQL 10.11.7-MariaDB-1:10.11.7+maria~ubu2204" to "MariaDB 10.11.7".
     static func shortVersion(_ v: String) -> String {
         let cut = v.components(separatedBy: CharacterSet(charactersIn: "(,")).first ?? v
-        return cut.split(separator: " ").prefix(2).joined(separator: " ")
+        let words = cut.split(separator: " ").prefix(2).map(String.init)
+        guard words.count == 2 else { return words.joined(separator: " ") }
+        let number = words[1].split(separator: "-").first.map(String.init) ?? words[1]
+        return (v.contains("MariaDB") ? "MariaDB" : words[0]) + " " + number
     }
 
     // MARK: Footer

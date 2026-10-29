@@ -15,7 +15,7 @@ struct PanelContent: View {
         case .inspector: InspectorPanel(ws: ws)
         case .connections: ConnectionsPanel(ws: ws)
         case .docker: DockerPanel(ws: ws)
-        case .database: DatabasePanelView(ws: ws, panel: panel)
+        case .database: ProjectDBPanel(ws: ws, panel: panel)
         case .serverShell: ServerShellPanel(ws: ws, panel: panel)
         case .logs: LogsPanel(ws: ws, panel: panel)
         case .notes: NotesPanel(ws: ws)
@@ -251,8 +251,7 @@ struct ConnectionsPanel: View {
                         ForEach(dbs) { d in
                             let status = store.dbStatus[d.id] ?? .disconnected
                             row(icon: AnyView(DatabaseIcon(db: d, size: 22)), name: d.name, tag: d.tag, dot: status.color, label: status.label) {
-                                let p = ws.layout.add(.database, to: .bottom, resource: d.id)
-                                ws.select(panel: p.id)
+                                store.explore(d, in: ws.projectID)
                             }
                             .contextMenu { DatabaseContextMenu(db: d) }
                         }

@@ -298,6 +298,8 @@ extension AppStore {
                 return
             }
         }
+        // Host or database may have changed: the tree is read again.
+        schemaCache[d.id] = nil
         if let i = library.databases.firstIndex(where: { $0.id == d.id }) {
             library.databases[i] = d
             toast(.success, "Saved \(d.name)")
@@ -487,4 +489,19 @@ extension AppStore {
 
 extension DockerTarget {
     func withSample(_ s: Bool) -> DockerTarget { var c = self; c.isSample = s; return c }
+}
+
+extension AppStore {
+    /// Times a TCP connection to each server's SSH port, all at once.
+    func ping(_ ids: [ResourceID]) {
+        for id in ids where !pinging.contains(id) {
+            guard let h = host(id) else { continue }
+            pinging.insert(id)
+            Task {
+                let r = h.isSample ? PingResult(ms: Double.random(in: 18...140), at: Date()) : await HostPing.ping(host: h.host, port: h.port)
+                hostPing[id] = r
+                pinging.remove(id)
+            }
+        }
+    }
 }

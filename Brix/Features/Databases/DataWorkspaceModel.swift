@@ -11,6 +11,8 @@ final class DataWorkspace {
     /// Sidebar tree rows that are open ("c:<conn>", "s:<conn>.<schema>", …).
     var expanded: Set<String> = []
     var showInspector = true
+    /// The connection whose databases and tables the Databases screen lists.
+    var explorer: ResourceID?
     var treeErrors: [ResourceID: String] = [:]
     var loadingTrees: Set<ResourceID> = []
     var consoleCount = 0
