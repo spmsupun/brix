@@ -17,8 +17,16 @@ extension AppStore {
     /// agent when one is set; otherwise asks which one. With `then`, the caller
     /// places the session itself (a docked panel, say) instead of the agent grid.
     func startAgent(project id: ProjectID?, then: ((TerminalSession) -> Void)? = nil) {
-        guard let id = id ?? currentProjectID ?? sortedProjects.first?.id else {
-            toast(.info, "Add a project first", detail: "Agent sessions run inside a project folder.")
+        // Outside any project (All Terminals, the overview): an agent on This Mac,
+        // not one quietly started in whichever project is listed first.
+        guard let id = id ?? currentProjectID else {
+            guard let a = [agent(settings.defaultAgent)].compactMap({ $0 }).filter({ $0.enabled && isInstalled($0) }).first
+                    ?? enabledAgents.first(where: isInstalled) else {
+                toast(.info, "No agent installed", detail: "Install Claude Code or another agent in Customize → Agents.")
+                return
+            }
+            let s = startLocalAgent(a)
+            then?(s)
             return
         }
         let preferred = agent(project(id)?.agentID) ?? agent(settings.defaultAgent)
@@ -34,6 +42,23 @@ extension AppStore {
         if then == nil, route != .workspace(id) { openProject(id) }
         guard let s = newAgentSession(project: id, agent: a, attach: then == nil) else { return }
         then?(s)
+    }
+
+    /// An agent outside any project: runs in your home folder and is listed under This Mac.
+    @discardableResult
+    func startLocalAgent(_ a: AgentConfig) -> TerminalSession {
+        let external = a.binary == "claude" ? UUID().uuidString.lowercased() : nil
+        let s = newTerminal(project: nil, title: a.name, kind: .agent,
+                            command: a.launchCommand(resourceNames: [], sessionID: external), attach: false,
+                            chat: settings.claudeNativeView && a.binary == "claude")
+        if let i = sessions.firstIndex(where: { $0.id == s.id }) {
+            sessions[i].process = a.binary
+            sessions[i].agentID = a.id
+            sessions[i].externalID = external
+        }
+        route = .terminals
+        focusedSessionID = s.id
+        return session(s.id) ?? s
     }
 
     /// One menu item per enabled agent, for "+" menus.

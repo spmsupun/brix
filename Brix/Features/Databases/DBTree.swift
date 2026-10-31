@@ -204,6 +204,7 @@ struct DBLibraryTree: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.hand)
+                        .hoverTip { store.tooltip(d) }
                         .contextMenu {
                             Button("New Console") { store.newConsole(d) }
                             Button("Refresh") { store.loadTree(d, force: true) }

@@ -33,6 +33,41 @@ final class BrixTerminalView: LocalProcessTerminalView {
 
     deinit { idleTimer?.invalidate() }
 
+    // MARK: Context menu
+
+    /// Right-click always opens Brix's menu, even while a program (an agent, vim)
+    /// reads the mouse; SwiftTerm would otherwise hand the click to it.
+    override func rightMouseDown(with event: NSEvent) {
+        guard let m = menu(for: event) else { return super.rightMouseDown(with: event) }
+        NSMenu.popUpContextMenu(m, with: event, for: self)
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let m = NSMenu()
+        // Copy and Paste go to SwiftTerm, which greys Copy out with nothing selected.
+        m.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "c")
+        m.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "v")
+        m.addItem(withTitle: "Select All", action: #selector(selectAll(_:)), keyEquivalent: "a")
+        m.addItem(.separator())
+        m.addItem(item("Clear", #selector(menuClear)))
+        m.addItem(item("Interrupt (⌃C)", #selector(menuInterrupt)))
+        m.addItem(.separator())
+        m.addItem(item("Rename…", #selector(menuRename)))
+        m.addItem(item("Close", #selector(menuClose)))
+        return m
+    }
+
+    private func item(_ title: String, _ action: Selector) -> NSMenuItem {
+        let i = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        i.target = self
+        return i
+    }
+
+    @objc private func menuClear() { store?.clearSession(sessionID) }
+    @objc private func menuInterrupt() { store?.interruptSession(sessionID) }
+    @objc private func menuRename() { store?.sheet = .renameSession(sessionID) }
+    @objc private func menuClose() { store?.closeSession(sessionID) }
+
     private var accent: AccentChoice = .lime
 
     /// SwiftTerm stores concrete colours, so dynamic theme colours are resolved
@@ -145,12 +180,19 @@ final class BrixTerminalView: LocalProcessTerminalView {
         // A local shell is busy while a command runs in front of it, not while it
         // prints: prompts with clocks or Git status redraw by themselves.
         if let fg = foregroundCommand() {
-            let busy = fg != ""
+            var busy = fg != ""
+            // An agent typed into a shell (claude, codex) stays in front while it
+            // waits for you: read its screen like an agent session's instead.
+            if busy, Self.agentCommands.contains(fg) {
+                let screen = visibleScreen()
+                if Self.screenShowsWork(screen) { lastWorkHint = Date() }
+                busy = Date().timeIntervalSince(lastWorkHint) < 2.5
+            }
             if busy != !idle || fg != lastForeground {
                 idle = !busy
                 lastForeground = fg
                 store?.liveActivity(sessionID, lastLines: recentLines, exited: nil)
-                store?.liveForeground(sessionID, command: busy ? fg : nil)
+                store?.liveForeground(sessionID, command: fg.isEmpty ? nil : fg, busy: busy)
             }
             return
         }
@@ -161,6 +203,8 @@ final class BrixTerminalView: LocalProcessTerminalView {
     }
 
     private var lastForeground: String?
+    /// Process names of agent CLIs (Homebrew's Claude runs as claude.exe).
+    static let agentCommands: Set<String> = ["claude", "claude.exe", "codex", "gemini"]
 
     /// For a local shell: "" when the shell itself is in front (waiting at its
     /// prompt), else the name of the command running in it. nil when that can't
@@ -187,21 +231,25 @@ final class BrixTerminalView: LocalProcessTerminalView {
     private var rolling = ""
 
     /// The bottom of the screen, where an agent's spinner, prompt box and
-    /// questions live. Chat text further up never counts.
+    /// questions live. Chat text further up never counts. Room for the task
+    /// list Claude draws under its spinner, which pushed the spinner out of a
+    /// 10-line window.
     private func visibleScreen() -> String {
         let rows = terminalContentSnapshot(region: .history(maximumScrollbackRows: -1))?.rows.map(\.text) ?? []
         return Self.bottom(rows)
     }
 
-    static func bottom(_ rows: [String], lines: Int = 10) -> String {
+    static func bottom(_ rows: [String], lines: Int = 24) -> String {
         rows.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.suffix(lines).joined(separator: "\n")
     }
 
     static func screenShowsWork(_ screen: String) -> Bool {
         let s = screen.lowercased()
         if s.contains("esc to interrupt") || s.contains("ctrl+c to interrupt") { return true }
-        // Claude Code's spinner row: one of its star glyphs, then a capitalised -ing word and an ellipsis ("✶ Cogitating…").
-        return screen.range(of: #"(?m)^\s*[·✢✳✶✻✽*]\s+[A-Z][a-z]+ing…"#, options: .regularExpression) != nil
+        // Claude Code's spinner row: one of its star glyphs, then a capitalised word and an ellipsis
+        // ("✶ Cogitating…", "✳ Sautéing…", "✢ Dilly-dallying…", "· Beboppin'…"). Claude no longer
+        // prints "esc to interrupt" there, so this row is the only sign.
+        return screen.range(of: #"(?m)^\s*[·✢✳✶✻✽*]\s+\p{Lu}[\p{L}'-]*…"#, options: .regularExpression) != nil
     }
 
     /// The agent is asking something: a numbered choice list or a y/n prompt.

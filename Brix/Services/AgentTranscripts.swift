@@ -54,10 +54,16 @@ enum AgentTranscripts {
         let dirs = ((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []).filter { $0 == base || $0.hasPrefix(base + "-") }
         var out: [AgentHistoryEntry] = []
         for d in dirs {
-            let dir = root.appendingPathComponent(d)
+            // The folder can be a symlink to another project's (riderpin links to
+            // tivlet); listing a symlink's URL returns nothing, so resolve it first.
+            let dir = root.appendingPathComponent(d).resolvingSymlinksInPath()
             for f in (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])) ?? []
             where f.pathExtension == "jsonl" {
-                guard let e = entries.value(f, { claudeEntry(f) }), e.cwd == projectPath || e.cwd.hasPrefix(projectPath + "/") else { continue }
+                // Everything in the project's own folder counts, as in /resume, even
+                // chats started under an old name the folder links back to. Folders
+                // for subfolders only count for chats that ran inside this project.
+                guard let e = entries.value(f, { claudeEntry(f) }),
+                      d == base || e.cwd == projectPath || e.cwd.hasPrefix(projectPath + "/") else { continue }
                 out.append(e)
             }
         }
@@ -112,9 +118,10 @@ enum AgentTranscripts {
     // MARK: Plan
 
     /// The task list Claude keeps for a conversation (TaskCreate / TaskUpdate,
-    /// or the older TodoWrite), read from its transcript. Transcripts can run to
-    /// hundreds of MB, so each file is read once and then only its new bytes.
-    static func claudePlan(sessionID: String, home: String = NSHomeDirectory()) -> [PlanItem]? {
+    /// or the older TodoWrite) and the last plan it wrote in plan mode, read from
+    /// its transcript. Transcripts can run to hundreds of MB, so each file is
+    /// read once and then only its new bytes.
+    static func claudePlan(sessionID: String, home: String = NSHomeDirectory()) -> AgentPlan? {
         guard let url = transcriptURL(sessionID: sessionID, home: home) else { return nil }
         return planReader.read(url)
     }
@@ -136,11 +143,11 @@ enum AgentTranscripts {
     static let planReader = PlanReader()
 
     final class PlanReader: @unchecked Sendable {
-        private struct State { var offset: UInt64 = 0; var tail = Data(); var tasks: [(id: String, title: String, status: String)] = [] }
+        struct State { var offset: UInt64 = 0; var tail = Data(); var tasks: [(id: String, title: String, status: String)] = []; var doc = ""; var proposed: [String: String] = [:] }
         private var files: [String: State] = [:]
         private let lock = NSLock()
 
-        func read(_ url: URL) -> [PlanItem]? {
+        func read(_ url: URL) -> AgentPlan? {
             lock.lock(); defer { lock.unlock() }
             var st = files[url.path] ?? State()
             guard let h = try? FileHandle(forReadingFrom: url) else { return nil }
@@ -155,7 +162,7 @@ enum AgentTranscripts {
                 let chunk = st.tail + piece
                 // Keep an unfinished last line for the next piece (or the next read).
                 if let lastNL = chunk.lastIndex(of: 0x0A) {
-                    Self.apply(chunk[..<lastNL], to: &st.tasks)
+                    Self.apply(chunk[..<lastNL], to: &st)
                     st.tail = Data(chunk[chunk.index(after: lastNL)...])
                 } else {
                     st.tail = chunk
@@ -163,7 +170,8 @@ enum AgentTranscripts {
             }
             st.offset = size
             files[url.path] = st
-            return st.tasks.isEmpty ? nil : st.tasks.map { PlanItem(title: $0.title, done: $0.status == "completed", active: $0.status == "in_progress") }
+            if st.tasks.isEmpty, st.doc.isEmpty { return nil }
+            return AgentPlan(items: st.tasks.map { PlanItem(title: $0.title, done: $0.status == "completed", active: $0.status == "in_progress") }, doc: st.doc)
         }
 
         /// The lines that call a task tool or report a created task, found with a
@@ -175,7 +183,7 @@ enum AgentTranscripts {
                 let n = buf.count
                 // The tool calls and the creation result; each needle's next hit is
                 // remembered so the buffer is scanned once per needle, not per line.
-                let needles = [#""name":"Task"#, #""name":"TodoWrite"#, "created successfully: "].map { Array($0.utf8) }
+                let needles = [#""name":"Task"#, #""name":"TodoWrite"#, #""name":"ExitPlanMode"#, "User has approved", "created successfully: "].map { Array($0.utf8) }
                 func next(_ k: Int, from: Int) -> Int {
                     guard from < n else { return n }
                     return needles[k].withUnsafeBytes { nd in
@@ -201,33 +209,42 @@ enum AgentTranscripts {
             return out
         }
 
-        static func apply(_ data: Data.SubSequence, to tasks: inout [(id: String, title: String, status: String)]) {
+        static func apply(_ data: Data.SubSequence, to st: inout State) {
             for line in matchingLines(data) {
                 guard let text = String(data: Data(line), encoding: .utf8),
                       let o = json(text), let m = o["message"] as? [String: Any], let parts = m["content"] as? [[String: Any]] else { continue }
                 for c in parts {
                     if c["type"] as? String == "tool_use", let input = c["input"] as? [String: Any] {
                         switch c["name"] as? String {
+                        case "ExitPlanMode":
+                            // Held until you approve it: a rejected plan changes nothing.
+                            guard let id = c["id"] as? String, let plan = input["plan"] as? String, !plan.isEmpty else { continue }
+                            st.proposed[id] = plan
                         case "TodoWrite":
                             let todos = input["todos"] as? [[String: Any]] ?? []
-                            tasks = todos.enumerated().map { i, t in ("\(i + 1)", t["content"] as? String ?? "", t["status"] as? String ?? "pending") }
+                            st.tasks = todos.enumerated().map { i, t in ("\(i + 1)", t["content"] as? String ?? "", t["status"] as? String ?? "pending") }
                         case "TaskUpdate":
-                            guard let id = input["taskId"] as? String, let i = tasks.firstIndex(where: { $0.id == id }) else { continue }
-                            if let st = input["status"] as? String {
-                                if st == "deleted" { tasks.remove(at: i); continue }
-                                tasks[i].status = st
+                            guard let id = input["taskId"] as? String, let i = st.tasks.firstIndex(where: { $0.id == id }) else { continue }
+                            if let status = input["status"] as? String {
+                                if status == "deleted" { st.tasks.remove(at: i); continue }
+                                st.tasks[i].status = status
                             }
-                            if let t = input["subject"] as? String { tasks[i].title = t }
+                            if let t = input["subject"] as? String { st.tasks[i].title = t }
                         default: break
                         }
                     }
                     // A task's number comes back in its result: "Task #3 created successfully: Subject".
                     if c["type"] as? String == "tool_result" {
+                        // An approved plan replaces the task list of the last one.
+                        if let id = c["tool_use_id"] as? String, let plan = st.proposed.removeValue(forKey: id) {
+                            if c["is_error"] as? Bool != true { st.doc = plan; st.tasks = [] }
+                            continue
+                        }
                         let body = (c["content"] as? String) ?? ((c["content"] as? [[String: Any]])?.compactMap { $0["text"] as? String }.joined()) ?? ""
                         guard let r = body.range(of: #"Task #(\d+) created successfully: "#, options: .regularExpression) else { continue }
                         let id = body[r].filter(\.isNumber)
                         let title = String(body[r.upperBound...]).components(separatedBy: "\n").first ?? ""
-                        if !tasks.contains(where: { $0.id == id }) { tasks.append((String(id), title, "pending")) }
+                        if !st.tasks.contains(where: { $0.id == id }) { st.tasks.append((String(id), title, "pending")) }
                     }
                 }
             }

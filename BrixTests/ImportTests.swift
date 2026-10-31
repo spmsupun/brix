@@ -286,6 +286,13 @@ extension ImportTests {
         XCTAssertFalse(BrixTerminalView.screenShowsWork("  ⎿ Loading… done\nBuilding… the app"))
         XCTAssertFalse(BrixTerminalView.screenAsksInput("● Do you want to add tests next? Would you like to deploy?\n❯ "))
         XCTAssertEqual(BrixTerminalView.bottom(["a", "", "b", "c"], lines: 2), "b\nc")
+        // Spinner words that aren't plain ASCII "-ing" (from Claude Code 2.1.295's list).
+        for w in ["Sautéing", "Flambéing", "Dilly-dallying", "Sock-hopping", "Beboppin'"] {
+            XCTAssertTrue(BrixTerminalView.screenShowsWork("✳ \(w)… (8s · ↓ 1.1k tokens)"), w)
+        }
+        // A long task list under the spinner still leaves it inside the window read.
+        let screen = ["✶ Cogitating… (40s)"] + (1...12).map { "  ☐ Task \($0)" } + ["────", "❯ ", "────", "⏵⏵ auto mode on"]
+        XCTAssertTrue(BrixTerminalView.screenShowsWork(BrixTerminalView.bottom(screen)))
     }
 }
 

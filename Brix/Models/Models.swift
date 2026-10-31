@@ -779,6 +779,13 @@ struct PlanItem: Hashable, Identifiable {
     var active = false
 }
 
+/// What an agent's transcript says it's doing: its task list, and the last
+/// plan it wrote in plan mode (Markdown).
+struct AgentPlan: Equatable {
+    var items: [PlanItem]
+    var doc: String
+}
+
 struct FileTouch: Hashable, Identifiable {
     var id: String { path }
     var path: String
@@ -799,6 +806,8 @@ struct TerminalSession: Identifiable, Hashable {
     var lines: [TermLine] = []
     // Agent extras
     var plan: [PlanItem] = []
+    /// The plan-mode plan, shown while there's no task list.
+    var planDoc = ""
     var touched: [FileTouch] = []
     var lastOutput: String = ""
     var progress: Double = 0
@@ -810,6 +819,8 @@ struct TerminalSession: Identifiable, Hashable {
     /// Title the agent gave the conversation, read from its transcript.
     var sessionName: String?
     var isLive: Bool = false
+    /// A Claude Code session shown as a chat (ClaudeChat) rather than a terminal.
+    var isChat = false
     /// Finished or waiting while you weren't looking at it; cleared when you do.
     var unseen = false
     /// Marked unread by hand: stays flagged while on screen, until you open it from a list.
@@ -821,7 +832,7 @@ struct TerminalSession: Identifiable, Hashable {
 
     static func == (a: TerminalSession, b: TerminalSession) -> Bool {
         a.id == b.id && a.state == b.state && a.lines.count == b.lines.count && a.title == b.title
-            && a.plan == b.plan && a.lastOutput == b.lastOutput && a.progress == b.progress
+            && a.plan == b.plan && a.planDoc == b.planDoc && a.lastOutput == b.lastOutput && a.progress == b.progress
     }
     func hash(into h: inout Hasher) { h.combine(id) }
 }

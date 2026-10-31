@@ -8,7 +8,7 @@ extension AppStore {
     /// everything else runs a real PTY.
     @discardableResult
     func newTerminal(project: ProjectID?, host hostID: ResourceID? = nil, title: String? = nil, kind: SessionKind = .shell,
-                     command: String? = nil, cwd: String? = nil, env extraEnv: [String: String] = [:], attach: Bool = true) -> TerminalSession {
+                     command: String? = nil, cwd: String? = nil, env extraEnv: [String: String] = [:], attach: Bool = true, chat: Bool = false) -> TerminalSession {
         let p = project.flatMap(self.project)
         let h = hostID.flatMap(self.host)
         let sample = (p?.isSample ?? false) || (h?.isSample ?? false)
@@ -44,7 +44,13 @@ extension AppStore {
                 env.merge(ask) { _, new in new }
             }
             let workdir = h == nil ? (dir as NSString).expandingTildeInPath : NSHomeDirectory()
+            if chat, h == nil, let command {
+                s.isChat = true
+                s.state = .idle
+                ClaudeChatRegistry.shared.start(sessionID: s.id, command: command, cwd: workdir, env: env, store: self)
+            } else {
             TerminalRegistry.shared.start(sessionID: s.id, argv: argv, cwd: workdir, env: env, fontSize: settings.terminalFontSize, store: self)
+            }
         }
         sessions.append(s)
         if attach, let project { workspace(for: project).attach(session: s) }
@@ -81,7 +87,8 @@ extension AppStore {
         // brix-db reaches Brix's gateway with these; the session id is filled in below.
         let pending = "s-pending-\(UUID().uuidString.prefix(6))"
         var s = newTerminal(project: id, title: a.name, kind: .agent, command: cmd,
-                            env: AgentDBGateway.shared.environment(project: id, session: pending), attach: false)
+                            env: AgentDBGateway.shared.environment(project: id, session: pending), attach: false,
+                            chat: settings.claudeNativeView && a.binary == "claude")
         gatewaySessions[pending] = s.id
         if let i = sessions.firstIndex(where: { $0.id == s.id }) {
             if s.isSampleSession {
@@ -157,6 +164,7 @@ extension AppStore {
         let close = { [weak self] in
             guard let self else { return }
             TerminalRegistry.shared.stop(id)
+            ClaudeChatRegistry.shared.stop(id)
             if s.state == .running { trackAgentTime(s, from: .running, to: .finished) }
             runningTasks[id] = nil
             sessions.removeAll { $0.id == id }
@@ -199,7 +207,9 @@ extension AppStore {
 
     func clearSession(_ id: String) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
-        if sessions[i].isLive {
+        if sessions[i].isChat {
+            return
+        } else if sessions[i].isLive {
             TerminalRegistry.shared.clear(id)
         } else {
             sessions[i].lines = []
@@ -208,7 +218,9 @@ extension AppStore {
 
     func interruptSession(_ id: String) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
-        if sessions[i].isLive {
+        if let chat = ClaudeChatRegistry.shared.chat(id) {
+            chat.interrupt()
+        } else if sessions[i].isLive {
             TerminalRegistry.shared.send(id, text: "\u{3}")
         } else {
             sessions[i].lines.append(TermLine("^C", Theme.text3))
@@ -231,6 +243,11 @@ extension AppStore {
     func sendInput(_ id: String, _ text: String) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         let s = sessions[i]
+        if let chat = ClaudeChatRegistry.shared.chat(id) {
+            if sessions[i].task.isEmpty { sessions[i].task = String(text.prefix(120)) }
+            chat.send(text)
+            return
+        }
         if s.isLive {
             TerminalRegistry.shared.send(id, text: text + "\r")
             if s.kind == .agent {
@@ -421,10 +438,11 @@ extension AppStore {
     }
 
     /// What a local shell is running: a command's name, or nil at its prompt.
-    func liveForeground(_ id: String, command: String?) {
+    /// `busy`: the command is working (an agent CLI waiting for you isn't).
+    func liveForeground(_ id: String, command: String?, busy: Bool) {
         guard let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].isLive,
               sessions[i].state != .finished, sessions[i].state != .failed else { return }
-        sessions[i].state = command == nil ? .idle : .running
+        sessions[i].state = busy ? .running : .idle
         sessions[i].process = command ?? "zsh"
     }
 
@@ -489,10 +507,14 @@ extension AppStore {
         }
         guard !targets.isEmpty else { return }
         let plans = await Task.detached(priority: .utility) {
-            targets.compactMap { id, ext in AgentTranscripts.claudePlan(sessionID: ext).map { (id, $0) } }
+            // No transcript, or nothing in it yet (a /clear or /resume moved on): empty,
+            // so the last conversation's plan doesn't linger.
+            targets.map { id, ext in (id, AgentTranscripts.claudePlan(sessionID: ext) ?? AgentPlan(items: [], doc: "")) }
         }.value
         for (id, plan) in plans {
-            if let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].plan != plan { sessions[i].plan = plan }
+            guard let i = sessions.firstIndex(where: { $0.id == id }) else { continue }
+            if sessions[i].plan != plan.items { sessions[i].plan = plan.items }
+            if sessions[i].planDoc != plan.doc { sessions[i].planDoc = plan.doc }
         }
     }
 
@@ -502,7 +524,7 @@ extension AppStore {
     func refreshSessionNames() async {
         let targets = sessions.compactMap { s -> (String, String, pid_t?)? in
             guard s.kind == .agent, s.isLive, let ext = s.externalID, agent(for: s)?.binary == "claude" else { return nil }
-            return (s.id, ext, TerminalRegistry.shared.pid(s.id))
+            return (s.id, ext, TerminalRegistry.shared.pid(s.id) ?? ClaudeChatRegistry.shared.chat(s.id)?.pid)
         }
         guard !targets.isEmpty else { return }
         let found = await Task.detached(priority: .utility) {

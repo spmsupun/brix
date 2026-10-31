@@ -123,6 +123,7 @@ enum DebugSnapshot {
                 if let t = st.dataWorkspace.tabs.first(where: { $0.title == "users" }) { st.show(t) }
             },
             Step(name: "DBForm") { st in st.route = .overview; st.sheet = .editDatabase(nil) },
+            Step(name: "AddProject") { st in st.route = .overview; st.sheet = .addProject },
             Step(name: "Accounts") { st in st.sheet = nil; st.customizeTab = "accounts"; st.route = .customize },
             Step(name: "ProjectGeneral") { st in st.projectSettingsSection = "General"; st.route = .projectSettings("atlas-web") },
             Step(name: "StatusWaiting") { st in
@@ -279,6 +280,58 @@ enum DebugSnapshot {
                 let lines = env.filter { $0.key != "PATH" }.map { "export \($0.key)='\($0.value)'" } + ["export PATH=\"\(AgentDBGateway.binDir.path):$PATH\""]
                 try? lines.joined(separator: "\n").write(toFile: (directory ?? "/tmp") + "/gateway.env", atomically: true, encoding: .utf8)
             })
+        }
+        if let pair = ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_CHAT"]?.split(separator: ",", maxSplits: 1).map(String.init), pair.count == 2 {
+            // dir,prompt: a real Claude Code chat session (Sonnet) in dir. Each step
+            // captures it; a waiting permission prompt is allowed one step after it shows.
+            var chatID = ""
+            s.append(Step(name: "Chat00") { st in
+                let p = st.addProject(AppStore.detect(url: URL(fileURLWithPath: pair[0])), pinned: true, preset: .agent, hosts: [], databases: [], docker: [])
+                st.openProject(p.id)
+                let c = st.newTerminal(project: p.id, title: "Claude Code", kind: .agent, command: "claude --model sonnet --permission-mode default", chat: true)
+                if let i = st.sessions.firstIndex(where: { $0.id == c.id }) { st.sessions[i].agentID = "claude"; st.sessions[i].process = "claude" }
+                chatID = c.id
+                st.reveal(session: c.id)
+                st.sendInput(c.id, pair[1])
+            })
+            var seen: String?
+            for n in 1..<40 {
+                s.append(Step(name: String(format: "Chat%02d", n)) { _ in
+                    guard let chat = ClaudeChatRegistry.shared.chat(chatID) else { return }
+                    if let ask = chat.asks.first {
+                        if seen == ask.id { chat.allow(ask) } else { seen = ask.id }
+                    }
+                })
+            }
+        }
+        if let pair = ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_AGENTSWITCH"]?.split(separator: ",").map(String.init), pair.count == 3 {
+            // dirA,dirB,agentScript: a stand-in agent spinning in project A, then a
+            // terminal opened in project B. Logs what Brix reads from the agent.
+            s.append(Step(name: "SwitchA") { st in
+                let a = st.addProject(AppStore.detect(url: URL(fileURLWithPath: pair[0])), pinned: true, preset: .code, hosts: [], databases: [], docker: [])
+                st.openProject(a.id)
+                let ag = st.newTerminal(project: a.id, title: "Claude Code", kind: .agent, command: pair[2])
+                st.reveal(session: ag.id)
+                Task {
+                    var log = ""
+                    for i in 0..<60 {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        let v = TerminalRegistry.shared.view(ag.id)
+                        let rows = v?.terminalContentSnapshot(region: .history(maximumScrollbackRows: -1))?.rows.map(\.text) ?? []
+                        let bottom = BrixTerminalView.bottom(rows)
+                        log += "\(Double(i) / 2)s state=\(st.session(ag.id)?.state ?? .idle) work=\(BrixTerminalView.screenShowsWork(bottom)) frame=\(v?.frame.size ?? .zero) window=\(v?.window != nil) route=\(st.route) last=\(bottom.split(separator: "\n").last ?? "")\n"
+                    }
+                    try? log.write(toFile: (directory ?? "/tmp") + "/agentswitch.log", atomically: true, encoding: .utf8)
+                }
+            })
+            s.append(Step(name: "SwitchWait") { _ in })
+            s.append(Step(name: "SwitchB") { st in
+                let b = st.addProject(AppStore.detect(url: URL(fileURLWithPath: pair[1])), pinned: true, preset: .code, hosts: [], databases: [], docker: [])
+                st.openProject(b.id)
+                let t = st.newTerminal(project: b.id)
+                st.reveal(session: t.id)
+            })
+            for i in 0..<8 { s.append(Step(name: "SwitchB\(i)") { _ in }) }
         }
         if let only = ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_ONLY"] {
             let names = Set(only.split(separator: ",").map(String.init))

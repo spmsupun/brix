@@ -15,10 +15,7 @@ struct TerminalsView: View {
             } else {
                 SessionPaneTree(tree: Bindable(store).terminalTree, host: TiledHost(
                     addPopover: nil, addMenu: newItems,
-                    newTerminal: {
-                        let p = store.currentProjectID ?? store.sortedProjects.first?.id
-                        return store.newTerminal(project: p, attach: false).id
-                    },
+                    newTerminal: { store.newTerminal(project: nil, attach: false).id },
                     close: { store.closeSessions($0) },
                     content: { AnyView(pane($0)) }))
             }
@@ -43,14 +40,22 @@ struct TerminalsView: View {
         store.inspector = .session(id)
     }
 
+    /// Not tied to a project: a terminal or agent here runs on This Mac, in your home folder.
     private func newTerminal(in group: String?) {
-        let p = store.currentProjectID ?? store.sortedProjects.first?.id
-        let s = store.newTerminal(project: p, attach: false)
+        let s = store.newTerminal(project: nil, attach: false)
         store.terminalTree.add(s.id, to: group)
     }
 
     private func newItems(_ group: String) -> [MenuSpec] {
         var items: [MenuSpec] = [MenuSpec(title: "Terminal", symbol: "terminal", key: "⌘T") { newTerminal(in: group) }]
+        let agents = store.enabledAgents.filter(store.isInstalled)
+        if !agents.isEmpty {
+            items += [.separator, .header("Agent on This Mac")]
+            items += agents.map { a in MenuSpec(title: a.name, symbol: "sparkle") {
+                let s = store.startLocalAgent(a)
+                store.terminalTree.add(s.id, to: group)
+            } }
+        }
         if !store.library.hosts.isEmpty {
             items += [.separator, .header("SSH")]
             items += store.library.hosts.map { h in MenuSpec(title: h.name, symbol: "globe") {
@@ -118,7 +123,7 @@ private struct SessionList: View {
             .frame(height: Metrics.panelHeader).hairlineBottom()
             if groups.isEmpty {
                 EmptyState(symbol: "terminal", message: "No sessions yet.", actionTitle: "New Terminal") {
-                    let s = store.newTerminal(project: store.sortedProjects.first?.id, attach: false)
+                    let s = store.newTerminal(project: nil, attach: false)
                     open(s.id)
                 }
             } else {
@@ -204,6 +209,11 @@ private struct SessionList: View {
         var items: [MenuSpec] = [.header("Local shell")]
         items += store.sortedProjects.prefix(8).map { p in MenuSpec(title: p.name, symbol: "terminal") { open(store.newTerminal(project: p.id, attach: false).id) } }
         items.append(MenuSpec(title: "Home folder", symbol: "house") { open(store.newTerminal(project: nil, attach: false).id) })
+        let agents = store.enabledAgents.filter(store.isInstalled)
+        if !agents.isEmpty {
+            items += [.separator, .header("Agent on This Mac")]
+            items += agents.map { a in MenuSpec(title: a.name, symbol: "sparkle") { open(store.startLocalAgent(a).id) } }
+        }
         if !store.library.hosts.isEmpty {
             items += [.separator, .header("Server shell")]
             items += store.library.hosts.map { h in MenuSpec(title: h.name, symbol: "globe") {

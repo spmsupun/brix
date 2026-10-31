@@ -87,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             store?.saveNow()
             TerminalRegistry.shared.stopAll()
+            ClaudeChatRegistry.shared.stopAll()
         }
     }
 }

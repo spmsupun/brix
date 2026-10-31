@@ -21,7 +21,9 @@ struct TerminalSurface: View {
 
     @ViewBuilder private var content: some View {
         if let s = store.session(sessionID) {
-            if s.isLive {
+            if s.isChat, let chat = ClaudeChatRegistry.shared.chat(s.id) {
+                ClaudeChatView(chat: chat)
+            } else if s.isLive {
                 LiveTerminalSurface(sessionID: sessionID)
                     .background(Theme.terminal)
                     .accessibilityLabel("Terminal \(s.title)")

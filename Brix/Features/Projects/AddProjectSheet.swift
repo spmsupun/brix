@@ -47,7 +47,6 @@ struct AddProjectSheet: View {
         }
         .frame(width: 600, height: detected == nil ? 260 : 640)
         .background(Theme.sheet)
-        .onAppear { if url == nil { DispatchQueue.main.async(execute: choose) } }
     }
 
     private var folderRow: some View {
@@ -56,9 +55,10 @@ struct AddProjectSheet: View {
                 .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 8).fill(Color.white(0.05)))
             VStack(alignment: .leading, spacing: 2) {
                 Text(url?.lastPathComponent ?? "No folder chosen").font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text)
-                Text(url?.path ?? "Pick an existing project folder.").font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.middle)
+                Text(url?.path ?? "Use a folder you have, or make a new one.").font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.middle)
             }
             Spacer()
+            SubtleButton(title: "New Folder…") { create() }
             SubtleButton(title: url == nil ? "Choose Folder…" : "Change…") { choose() }
         }
         .padding(12)
@@ -109,6 +109,57 @@ struct AddProjectSheet: View {
         }
     }
 
+    /// A brand-new project: name a folder, Brix makes it and starts a Git repository in it.
+    private func create() {
+        let panel = NSSavePanel()
+        panel.title = "New Project"
+        panel.prompt = "Create"
+        panel.message = "Name the new project folder"
+        panel.nameFieldLabel = "Project:"
+        panel.nameFieldStringValue = "new-project"
+        panel.canCreateDirectories = true
+        panel.directoryURL = URL(fileURLWithPath: NSHomeDirectory() + "/Developer")
+        guard panel.runModal() == .OK, let u = panel.url else { return }
+        // The panel offers "Replace" for a folder that's already there: use it as it is.
+        var isDir: ObjCBool = false
+        let existed = FileManager.default.fileExists(atPath: u.path, isDirectory: &isDir) && isDir.boolValue
+        if !existed {
+            do {
+                try FileManager.default.createDirectory(at: u, withIntermediateDirectories: false)
+            } catch {
+                self.error = "Couldn't create \(u.lastPathComponent): \(error.localizedDescription)"
+                url = nil
+                detected = nil
+                return
+            }
+        }
+        Task {
+            // Git first, so the project opens with a branch; a failure only means no repository yet.
+            // Off the main thread: without the developer tools, /usr/bin/git waits on an install prompt.
+            if !existed, let failure = await Self.gitInit(u) {
+                store.toast(.info, "Created \(u.lastPathComponent) without Git", detail: failure)
+            }
+            use(u)
+        }
+    }
+
+    /// Runs `git init`; nil when it worked, else what went wrong.
+    private static func gitInit(_ u: URL) async -> String? {
+        await Task.detached {
+            let git = Process(), err = Pipe()
+            git.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            git.arguments = ["init", "-q", u.path]
+            git.standardError = err
+            git.standardOutput = FileHandle.nullDevice
+            do { try git.run() } catch { return error.localizedDescription }
+            let text = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            git.waitUntilExit()
+            guard git.terminationStatus != 0 else { return nil }
+            let msg = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return msg.isEmpty ? "git init exited with \(git.terminationStatus)." : msg
+        }.value
+    }
+
     private func choose() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -117,10 +168,11 @@ struct AddProjectSheet: View {
         panel.prompt = "Choose"
         panel.message = "Choose a project folder"
         panel.directoryURL = URL(fileURLWithPath: NSHomeDirectory() + "/Developer")
-        guard panel.runModal() == .OK, let u = panel.url else {
-            if url == nil { dismiss() }
-            return
-        }
+        guard panel.runModal() == .OK, let u = panel.url else { return }
+        use(u)
+    }
+
+    private func use(_ u: URL) {
         url = u
         if let e = store.validateNewProject(url: u) {
             error = e.localizedDescription

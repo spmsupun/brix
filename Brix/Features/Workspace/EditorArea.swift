@@ -257,9 +257,12 @@ struct CheckerBoard: View {
 /// Minimal block-level Markdown renderer: headings, lists, quotes, code, tables.
 struct MarkdownView: View {
     let text: String
+    /// Side padding; the vertical padding follows it.
+    var inset: CGFloat = 28
+    var scrolls = true
 
     private enum Block: Hashable {
-        case heading(Int, String), paragraph(String), bullet(String), code(String), table([[String]]), quote(String), rule
+        case heading(Int, String), paragraph(String), bullet(String, String), code(String), table([[String]]), quote(String), rule
     }
 
     private var blocks: [Block] {
@@ -267,8 +270,10 @@ struct MarkdownView: View {
         var lines = text.components(separatedBy: "\n")[...]
         var para: [String] = []
         func flush() { if !para.isEmpty { out.append(.paragraph(para.joined(separator: " "))); para = [] } }
+        var afterBlank = false
         while let line = lines.popFirst() {
             let t = line.trimmingCharacters(in: .whitespaces)
+            defer { afterBlank = t.isEmpty }
             if t.hasPrefix("```") {
                 flush()
                 var code: [String] = []
@@ -277,7 +282,9 @@ struct MarkdownView: View {
             } else if let level = t.prefix(while: { $0 == "#" }).count as Int?, level > 0, level <= 6, t.dropFirst(level).hasPrefix(" ") {
                 flush(); out.append(.heading(level, String(t.dropFirst(level + 1))))
             } else if t.hasPrefix("- ") || t.hasPrefix("* ") || t.hasPrefix("+ ") {
-                flush(); out.append(.bullet(String(t.dropFirst(2))))
+                flush(); out.append(.bullet("•", String(t.dropFirst(2))))
+            } else if let r = t.range(of: #"^\d+[.)] "#, options: .regularExpression) {
+                flush(); out.append(.bullet(String(t[r].dropLast()), String(t[r.upperBound...])))
             } else if t.hasPrefix(">") {
                 flush(); out.append(.quote(String(t.dropFirst()).trimmingCharacters(in: .whitespaces)))
             } else if t == "---" || t == "***" {
@@ -291,6 +298,9 @@ struct MarkdownView: View {
                 out.append(.table(cells))
             } else if t.isEmpty {
                 flush()
+            } else if para.isEmpty, !afterBlank, line.first?.isWhitespace == true, case .bullet(let m, let s)? = out.last {
+                // An indented line carries on the list item above it.
+                out[out.count - 1] = .bullet(m, s + " " + t)
             } else {
                 para.append(t)
             }
@@ -304,13 +314,21 @@ struct MarkdownView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
+        if scrolls {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in block(b) }
+                }
+                .padding(.horizontal, inset).padding(.vertical, inset * 0.8)
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+            }
+        } else {
+            // Inside something that already scrolls (a chat message).
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, b in block(b) }
             }
-            .padding(.horizontal, 28).padding(.vertical, 22)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
         }
     }
@@ -321,9 +339,9 @@ struct MarkdownView: View {
             Text(inline(s)).font(Typo.ui(l == 1 ? 20 : (l == 2 ? 16 : 14), .semibold)).foregroundStyle(Theme.text).padding(.top, l == 1 ? 0 : 6)
         case .paragraph(let s):
             Text(inline(s)).font(Typo.ui(13)).foregroundStyle(Theme.body).lineSpacing(3)
-        case .bullet(let s):
+        case .bullet(let m, let s):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("•").foregroundStyle(Theme.text3)
+                Text(m).foregroundStyle(Theme.text3).monospacedDigit()
                 Text(inline(s)).font(Typo.ui(13)).foregroundStyle(Theme.body)
             }
         case .quote(let s):

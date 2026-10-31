@@ -125,6 +125,8 @@ struct AppSettings: Codable, Equatable {
     var defaultAgent: String?
     /// Plan and files column beside an agent session.
     var agentSidePanel = true
+    /// New Claude Code sessions draw as a chat (preview) instead of its terminal screen.
+    var claudeNativeView = false
     /// Tool window bars on the workspace edges.
     var showToolStrips = true
     var uiFont: UIFontChoice = .system
@@ -159,6 +161,7 @@ struct AppSettings: Codable, Equatable {
         agents = AgentConfig.mergingBuiltins((try? c.decode([AgentConfig].self, forKey: .agents)) ?? d.agents)
         defaultAgent = try? c.decode(String.self, forKey: .defaultAgent)
         agentSidePanel = (try? c.decode(Bool.self, forKey: .agentSidePanel)) ?? d.agentSidePanel
+        claudeNativeView = (try? c.decode(Bool.self, forKey: .claudeNativeView)) ?? d.claudeNativeView
         showToolStrips = (try? c.decode(Bool.self, forKey: .showToolStrips)) ?? d.showToolStrips
         uiFont = (try? c.decode(UIFontChoice.self, forKey: .uiFont)) ?? d.uiFont
         codeFont = (try? c.decode(String.self, forKey: .codeFont)) ?? d.codeFont

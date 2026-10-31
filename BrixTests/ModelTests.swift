@@ -363,11 +363,59 @@ final class ClaudePlanTests: XCTestCase {
         text += line(#"{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"}}"#)
         try text.write(to: url, atomically: true, encoding: .utf8)
         let reader = AgentTranscripts.PlanReader()
-        XCTAssertEqual(reader.read(url), [PlanItem(title: "Write tests", done: false, active: true), PlanItem(title: "Ship it", done: false)])
+        XCTAssertEqual(reader.read(url)?.items, [PlanItem(title: "Write tests", done: false, active: true), PlanItem(title: "Ship it", done: false)])
         let h = try FileHandle(forWritingTo: url)
         try h.seekToEnd()
         try h.write(contentsOf: Data(line(#"{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}"#).utf8))
         try h.close()
-        XCTAssertEqual(reader.read(url)?.first, PlanItem(title: "Write tests", done: true))
+        XCTAssertEqual(reader.read(url)?.items.first, PlanItem(title: "Write tests", done: true))
+    }
+
+    /// An approved plan-mode plan shows until the agent makes tasks and drops the old tasks; a rejected one changes nothing.
+    func testPlanModePlan() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        func line(_ content: String) -> String { #"{"type":"assistant","message":{"content":[\#(content)]}}"# + "\n" }
+        var text = line(#"{"type":"tool_result","content":"Task #1 created successfully: Old"}"#)
+        // Rejected: nothing changes.
+        text += line(##"{"type":"tool_use","id":"p1","name":"ExitPlanMode","input":{"plan":"# Nope"}}"##)
+        text += line(#"{"type":"tool_result","tool_use_id":"p1","is_error":true,"content":"The user doesn't want to proceed"}"#)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let reader = AgentTranscripts.PlanReader()
+        XCTAssertEqual(reader.read(url), AgentPlan(items: [PlanItem(title: "Old", done: false)], doc: ""))
+        text += line(##"{"type":"tool_use","id":"p2","name":"ExitPlanMode","input":{"plan":"# Deploy\n\n1. Ship it"}}"##)
+        text += line(#"{"type":"tool_result","tool_use_id":"p2","content":"User has approved your plan."}"#)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertEqual(reader.read(url), AgentPlan(items: [], doc: "# Deploy\n\n1. Ship it"))
+        let h = try FileHandle(forWritingTo: url)
+        try h.seekToEnd()
+        try h.write(contentsOf: Data(line(#"{"type":"tool_result","content":"Task #2 created successfully: Ship it"}"#).utf8))
+        try h.close()
+        XCTAssertEqual(reader.read(url)?.items, [PlanItem(title: "Ship it", done: false)])
+    }
+}
+
+final class ChatDiffTests: XCTestCase {
+    /// An edit's unchanged lines at either end are context; only the change is marked.
+    func testDiffKeepsContext() {
+        let d = ClaudeChat.Diff(old: "a\nb\nc", new: "a\nB\nx\nc")
+        XCTAssertEqual(DiffBlock.lines(d).map { $0.0 + $0.1 }, [" a", "-b", "+B", "+x", " c"])
+        XCTAssertEqual(DiffBlock.lines(ClaudeChat.Diff(old: "", new: "n")).map { $0.0 + $0.1 }, ["+n"])
+        XCTAssertEqual(DiffBlock.lines(ClaudeChat.Diff(old: "same", new: "same")).map { $0.0 + $0.1 }, [" same"])
+    }
+}
+
+final class ClaudeSymlinkFolderTests: XCTestCase {
+    /// A project folder under ~/.claude/projects that is a symlink still lists its sessions.
+    func testListsSessionsThroughASymlinkedFolder() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let root = home.appendingPathComponent(".claude/projects")
+        let real = root.appendingPathComponent("-Users-me-old")
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("-Users-me-app"), withDestinationURL: real)
+        try #"{"type":"user","entrypoint":"cli","cwd":"/Users/me/app","message":{"role":"user","content":"hi"}}"#
+            .write(to: real.appendingPathComponent("a.jsonl"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(AgentTranscripts.claudeSessions(projectPath: "/Users/me/app", home: home.path).count, 1)
     }
 }

@@ -59,6 +59,7 @@
 		6C1CAD1CB90C3AA24E8912B6 /* DataWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C8B70B85A7E6A30349837C7 /* DataWorkspaceTests.swift */; };
 		6C470A843D2E3DC7C13A2EDA /* AppStore+GitHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A528E3FC0F01B426999C58E /* AppStore+GitHub.swift */; };
 		70AACF7856FA2F01D7199D4D /* AddProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A7B89DDDD8A3CCD58F101F /* AddProjectSheet.swift */; };
+		791ECE7E8AD2C7572C4F3378 /* ClaudeChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E703C0EF33F0BED957CA1907 /* ClaudeChat.swift */; };
 		7BA811F96FD84D61BD7FC78B /* DockHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0DE2352A5E657CE5E196E3 /* DockHost.swift */; };
 		7E31D0B751246C6269317834 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431E29C82D38812B0B2EB2A1 /* AppModels.swift */; };
 		7FA48345484490CEE11AC2C2 /* LiveTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06FD02FD30B36AAE6D15226A /* LiveTerminal.swift */; };
@@ -88,6 +89,7 @@
 		B4DFD3524165FCE4F7908FDD /* Motion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B658E357E054E47E35015F9C /* Motion.swift */; };
 		B71F4DFDA04B4543DE12BB54 /* Toolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159937A59ED91FB49B0E86B3 /* Toolbar.swift */; };
 		BB8DD68B4EFD0816D4BC9AA8 /* WorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3A8481DC1E271420E694AC1 /* WorkspaceStore.swift */; };
+		C22523162EEAB9FEF788A164 /* ClaudeChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E27C61845830CA4354E8BF00 /* ClaudeChatView.swift */; };
 		C31D28DBC42D4EAACBDA3514 /* NewBranchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BCAD0846E7659E49854F15F /* NewBranchSheet.swift */; };
 		C3CAC0BAB7BA4D46979A615A /* ExplorerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B2B7A13B38595F23109D378 /* ExplorerPanel.swift */; };
 		C63974DB8A70523AE4CD3EFC /* DockerDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9125E98EB15420A87D9C7EE4 /* DockerDetail.swift */; };
@@ -104,6 +106,7 @@
 		DF98EF3862083D223AB484C0 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 3E43C7966A44E4544BED6167 /* GRDB */; };
 		E073A87EA4DCF5FF512F6067 /* ImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8820543E4D6FF7A908B7156B /* ImportTests.swift */; };
 		E20DA3C0A0CBD297201651BC /* SessionPaneTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05E2934E8EDE5EDB1651BB12 /* SessionPaneTree.swift */; };
+		E265B519282246A017BAF29A /* HoverTip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F85CF623377D10FA726372 /* HoverTip.swift */; };
 		E3BDE5180B810B2040AF3D39 /* SourceControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7589CCB87755B231C5AAD4 /* SourceControl.swift */; };
 		E4C7017BCF3B560CD34D0091 /* SavePresetSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DB90EC680B6F6E6CA470AE /* SavePresetSheet.swift */; };
 		E5D141468EFE595200723028 /* AppStore+Resources.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37B8341CA1BEBE6500918B5 /* AppStore+Resources.swift */; };
@@ -167,6 +170,7 @@
 		2F9A920AB987A332256182D1 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		357E45C343AA6CEC5EB959D6 /* LiveDatabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDatabaseService.swift; sourceTree = "<group>"; };
 		38F7E7CF0DED752589F44329 /* HostPing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostPing.swift; sourceTree = "<group>"; };
+		38F85CF623377D10FA726372 /* HoverTip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverTip.swift; sourceTree = "<group>"; };
 		39E60346EE0E519625C4559F /* TerminalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalsView.swift; sourceTree = "<group>"; };
 		3B2B7A13B38595F23109D378 /* ExplorerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExplorerPanel.swift; sourceTree = "<group>"; };
 		3C8B89E532F82C137AF2140F /* DBTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DBTree.swift; sourceTree = "<group>"; };
@@ -247,7 +251,9 @@
 		DAA14DF421F5F8E1D107BB60 /* ResourceIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceIcons.swift; sourceTree = "<group>"; };
 		DD8BB9F5AAB4AD688DEF3723 /* HostEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostEditorSheet.swift; sourceTree = "<group>"; };
 		E21469C7BF24C30297B863D0 /* AgentMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMark.swift; sourceTree = "<group>"; };
+		E27C61845830CA4354E8BF00 /* ClaudeChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeChatView.swift; sourceTree = "<group>"; };
 		E3A8481DC1E271420E694AC1 /* WorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceStore.swift; sourceTree = "<group>"; };
+		E703C0EF33F0BED957CA1907 /* ClaudeChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeChat.swift; sourceTree = "<group>"; };
 		EC877D66AFFE6AF163347C65 /* MenuButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuButton.swift; sourceTree = "<group>"; };
 		ED33C3D8F38C01FB05B8314F /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		EF51FD492E520241F02A5723 /* DatabaseEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseEditorSheet.swift; sourceTree = "<group>"; };
@@ -457,6 +463,7 @@
 			children = (
 				E21469C7BF24C30297B863D0 /* AgentMark.swift */,
 				8E5A6C156178A8C562714813 /* AgentSheets.swift */,
+				E27C61845830CA4354E8BF00 /* ClaudeChatView.swift */,
 			);
 			path = Agents;
 			sourceTree = "<group>";
@@ -494,6 +501,7 @@
 		9B2DD84A6FFF45ABD99766C4 /* Live */ = {
 			isa = PBXGroup;
 			children = (
+				E703C0EF33F0BED957CA1907 /* ClaudeChat.swift */,
 				2B6345E2A06D48A88A65B78D /* GitHub.swift */,
 				357E45C343AA6CEC5EB959D6 /* LiveDatabaseService.swift */,
 				6DEECE6C739FC67CB25AC116 /* LiveFileService.swift */,
@@ -663,6 +671,7 @@
 				0D23CDD4068CB0F32058F410 /* CodeView.swift */,
 				A704B404717C4B07107E44F7 /* Components.swift */,
 				08F47849F9E78B382E3CF9F9 /* DataGrid.swift */,
+				38F85CF623377D10FA726372 /* HoverTip.swift */,
 				EC877D66AFFE6AF163347C65 /* MenuButton.swift */,
 				B658E357E054E47E35015F9C /* Motion.swift */,
 				44A871909E8AB81D0CB8B72D /* ReorderableTabs.swift */,
@@ -798,6 +807,8 @@
 				A5E721282CD3D215851CF446 /* AppStore.swift in Sources */,
 				8368CD4973C232B4F91C4262 /* BrixApp.swift in Sources */,
 				E8BF64D6B3C8D0128F6F269F /* BuildSite.swift in Sources */,
+				791ECE7E8AD2C7572C4F3378 /* ClaudeChat.swift in Sources */,
+				C22523162EEAB9FEF788A164 /* ClaudeChatView.swift in Sources */,
 				0D0F1AE86921377946E9645B /* CodeView.swift in Sources */,
 				2F3BB63D1A653B312C09C2CF /* CommandPaletteView.swift in Sources */,
 				FBB466BC97AC4E5E9D13C7E5 /* Commands.swift in Sources */,
@@ -831,6 +842,7 @@
 				54447F2A7A8D62896F323E57 /* HomePanels.swift in Sources */,
 				FE01F4E00C1AD2D9C5D4C9F8 /* HostEditorSheet.swift in Sources */,
 				87467208138FF6CCCE1AF362 /* HostPing.swift in Sources */,
+				E265B519282246A017BAF29A /* HoverTip.swift in Sources */,
 				69531051C162C9C68BE47F7F /* ImportSheet.swift in Sources */,
 				1A0E020B41A415408E6A9077 /* InspectorPanel.swift in Sources */,
 				483C389BDA88EFD7547A3FB6 /* LiveDatabaseService.swift in Sources */,

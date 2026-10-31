@@ -222,13 +222,14 @@ private struct FullSidebar: View {
                 if let sub {
                     // The path is cut short in a narrow sidebar; hovering shows all of it.
                     sub.lineLimit(1).truncationMode(.middle)
-                        .help(p.path)
                         .accessibilityHint(p.path)
                 }
             }
             Spacer(minLength: 0)
             HStack(spacing: 6) {
                 if !open, !agents.isEmpty {
+                    // Folded, the agent rows (and their spinners) are hidden: show it here.
+                    if agents.contains(where: { $0.state == .running }) { WorkingSpinner(size: 10) }
                     Text("✳\(agents.count)").font(Typo.ui(10.5, .semibold))
                         .foregroundStyle(agents.contains { $0.state == .needsInput } ? Theme.amber : Self.agentOrange)
                         .accessibilityLabel("\(agents.count) agent sessions")
@@ -268,7 +269,11 @@ private struct FullSidebar: View {
                 if !isExpanded(p.id) { toggleExpanded(p.id) }
             }
         }
-        .help("\(p.path)\nClick for the overview, double-click to expand or collapse")
+        .hoverTip {
+            var t = store.tooltip(p)
+            t.lines.append("Click for the overview, double-click to expand or collapse")
+            return t
+        }
         .contextMenu { ProjectContextMenu(project: p) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(p.name)
@@ -437,7 +442,7 @@ private struct FullSidebar: View {
         }
         // The folder belongs to the project row, not every session under it.
         let what = s.kind == .agent ? (store.agent(for: s)?.name ?? "Agent")
-            : s.state == .running && !["zsh", "bash"].contains(s.process) ? s.process : "Terminal"
+            : !["zsh", "bash", "login"].contains(s.process) ? s.process : "Terminal"
         return "\(what) · \(age)"
     }
 
@@ -597,6 +602,7 @@ private struct FullSidebar: View {
             keyboardNav = false
             if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { store.openProject(r.id) } else { store.route = .projectHome(r.id) }
         }
+        .hoverTip { store.tooltip(repo: r) }
         .contextMenu { ProjectContextMenu(project: r) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(repoLabel(r, branch: g?.branch, lines: lines, files: files, working: working))
@@ -769,7 +775,7 @@ private struct FullSidebar: View {
             ForEach(hosts) { h in
                 itemRow(icon: AnyView(ServerOSIcon(host: h, size: 18)), name: h.name, meta: "", tag: h.tag,
                         dot: (store.hostStatus[h.id] ?? .disconnected) == .connected ? Theme.green : Theme.disabled,
-                        selected: hostSelected(h, in: p.id), hue: hue) { openFiles(h, in: p) }
+                        selected: hostSelected(h, in: p.id), hue: hue, tip: { store.tooltip(h) }) { openFiles(h, in: p) }
                     .contextMenu {
                         Button("Browse Files") { openFiles(h, in: p) }
                         Button("Open Terminal") { store.openProject(p.id); store.connect(h.id, project: p.id) }
@@ -792,7 +798,7 @@ private struct FullSidebar: View {
                 ForEach(stacks) { st in
                     itemRow(icon: AnyView(LogoBadge(logo: "Logos/docker", color: Theme.blue, size: 18)), name: st.name, meta: "",
                             tag: nil, dot: st.isRunning ? Theme.green : Theme.disabled,
-                            selected: store.route == .docker && store.dockerSelection == .stack(st.id), hue: hue) {
+                            selected: store.route == .docker && store.dockerSelection == .stack(st.id), hue: hue, tip: { store.tooltip(st) }) {
                         store.dockerTab = "stacks"
                         store.dockerSelection = .stack(st.id)
                         store.go(.docker)
@@ -802,7 +808,7 @@ private struct FullSidebar: View {
                 ForEach(containers) { c in
                     itemRow(icon: AnyView(LogoBadge(logo: "Logos/docker", color: Theme.blue, size: 18)), name: c.name,
                             meta: c.ports.split(separator: ",").first.map { ":" + ($0.split(separator: ":").last.map(String.init) ?? "") } ?? "",
-                            tag: nil, dot: c.state == .running ? Theme.green : Theme.disabled, selected: containerSelected(c, in: p.id), hue: hue) {
+                            tag: nil, dot: c.state == .running ? Theme.green : Theme.disabled, selected: containerSelected(c, in: p.id), hue: hue, tip: { store.tooltip(c) }) {
                         store.openProject(p.id)
                         store.openDockerShell(c.id, project: p.id)
                     }
@@ -821,7 +827,7 @@ private struct FullSidebar: View {
                 itemRow(icon: AnyView(DatabaseIcon(db: d, size: 18)), name: d.name, meta: d.port > 0 ? ":\(d.port)" : "", tag: d.tag,
                         dot: store.dbStatus[d.id] == .connected ? Theme.green : Theme.disabled,
                         selected: store.route == .workspace(p.id) && store.workspace(for: p.id).layout.allPanels.contains { $0.kind == .database && $0.resourceID == d.id },
-                        hue: hue) {
+                        hue: hue, tip: { store.tooltip(d) }) {
                     // Its tables open in this project, beside its agents.
                     store.explore(d, in: p.id)
                 }
@@ -886,7 +892,7 @@ private struct FullSidebar: View {
 
     /// `expanded`: nil for rows that don't open, else whether a chevron points down.
     private func itemRow(icon: AnyView, name: String, meta: String, tag: EnvTag?, dot: Color, selected: Bool, hue: Color,
-                         expanded: Bool? = nil, action: @escaping () -> Void) -> some View {
+                         expanded: Bool? = nil, tip: @escaping () -> HoverTipContent, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 icon
@@ -909,6 +915,7 @@ private struct FullSidebar: View {
             .rowBackground(selected: selected)
         }
         .buttonStyle(.hand)
+        .hoverTip(tip)
     }
 
     /// SSH files open as a tab in the project's tiled centre.
@@ -1133,7 +1140,7 @@ private struct RailSidebar: View {
                         }
                         .buttonStyle(.hand)
                         .accessibilityLabel(p.name)
-                        .tip(p.name)
+                        .hoverTip { store.tooltip(p) }
                         .contextMenu { ProjectContextMenu(project: p) }
                     }
                 }
@@ -1285,5 +1292,101 @@ struct BranchGlyph: Shape {
         p.move(to: CGPoint(x: 18 * u, y: 9 * u))
         p.addQuadCurve(to: CGPoint(x: 9 * u, y: 18 * u), control: CGPoint(x: 18 * u, y: 18 * u))
         return p
+    }
+}
+
+// MARK: - Tooltips
+
+/// What a sidebar row's tooltip says: the details that don't fit on the row.
+/// Nothing secret goes in (passwords stay in the Keychain).
+extension AppStore {
+    func tooltip(_ p: Project) -> HoverTipContent {
+        let repos = children(of: p.id)
+        var out = [p.name, (p.path as NSString).abbreviatingWithTildeInPath]
+        // The framework often names the language too ("Next.js 15 · TypeScript"): each word once.
+        var stack: [String] = []
+        for part in "\(p.language) · \(p.framework)".components(separatedBy: " · ")
+        where !["", "Unknown", "Folder"].contains(part) && !stack.contains(part) { stack.append(part) }
+        if !stack.isEmpty { out.append(stack.joined(separator: " · ")) }
+        if let g = git[p.id], g.isRepo, !g.branch.isEmpty { out.append(Self.gitLine(g)) }
+        if !repos.isEmpty { out.append("\(repos.count) repos: " + repos.map(\.name).joined(separator: ", ")) }
+        if let gh = p.githubRepo { out.append("GitHub: \(gh)") }
+        let agents = sessions.filter { s in s.kind == .agent && (s.projectID == p.id || repos.contains { $0.id == s.projectID }) }
+        if !agents.isEmpty {
+            let working = agents.filter { $0.state == .running }.count, waiting = agents.filter { $0.state == .needsInput }.count
+            out.append("Agents: \(agents.count)" + (working > 0 ? ", \(working) working" : "") + (waiting > 0 ? ", \(waiting) waiting for you" : ""))
+        }
+        let hosts = linkedHosts(p.id).count, dbs = linkedDatabases(p.id).count
+        let docker = linkedDocker(p.id).count + linkedStacks(p.id).count
+        var linked: [String] = []
+        if hosts > 0 { linked.append(hosts == 1 ? "1 server" : "\(hosts) servers") }
+        if dbs > 0 { linked.append(dbs == 1 ? "1 database" : "\(dbs) databases") }
+        if docker > 0 { linked.append("\(docker) Docker") }
+        if !linked.isEmpty { out.append("Linked: " + linked.joined(separator: ", ")) }
+        if let n = Self.firstLine(p.notes) { out.append(n) }
+        return HoverTipContent(title: out[0], lines: Array(out.dropFirst()))
+    }
+
+    func tooltip(repo r: Project) -> HoverTipContent {
+        var out = [r.name, (r.path as NSString).abbreviatingWithTildeInPath]
+        if let g = git[r.id], g.isRepo, !g.branch.isEmpty { out.append(Self.gitLine(g)) }
+        return HoverTipContent(title: out[0], lines: Array(out.dropFirst()))
+    }
+
+    func tooltip(_ h: SSHHost) -> HoverTipContent {
+        var out = [h.address]
+        out.append(h.auth == .key ? "Key: \(h.keyPath)" : h.auth.label)
+        if !h.os.isEmpty { out.append(h.os) }
+        out.append((hostStatus[h.id].map(\.label) ?? "Not connected")
+                   + (h.lastConnected.map { ", last connected " + $0.formatted(.relative(presentation: .named)) } ?? ""))
+        if let n = Self.firstLine(h.notes) { out.append(n) }
+        return HoverTipContent(title: h.name, tag: h.tag, lines: out)
+    }
+
+    func tooltip(_ d: DatabaseConnection) -> HoverTipContent {
+        var out = [(d.flavor?.label ?? d.kind.label) + (d.serverVersion.isEmpty ? "" : " \(d.serverVersion)")]
+        if d.kind == .sqlite {
+            out.append((d.filePath as NSString).abbreviatingWithTildeInPath)
+        } else {
+            out.append((d.user.isEmpty ? "" : "\(d.user)@") + d.host + (d.port > 0 ? ":\(d.port)" : "") + (d.database.isEmpty ? "" : "/\(d.database)"))
+            switch d.route {
+            case .ssh: out.append("Through SSH: " + (d.tunnelHostID.flatMap(host)?.name ?? "missing host"))
+            case .docker: out.append("In container: " + (d.dockerContainer ?? "?"))
+            case .direct: break
+            }
+            out.append("SSL: \(d.sslMode.rawValue)")
+        }
+        out.append((d.readOnly ? "Read-only · " : "") + "Agents: \(d.agentAccess.label)")
+        out.append(dbStatus[d.id].map(\.label) ?? "Not connected")
+        if let n = Self.firstLine(d.notes) { out.append(n) }
+        return HoverTipContent(title: d.name, tag: d.tag, lines: out)
+    }
+
+    func tooltip(_ c: DockerTarget) -> HoverTipContent {
+        var out = [c.name, c.image]
+        if !c.ports.isEmpty { out.append("Ports: " + c.ports.trimmingCharacters(in: CharacterSet(charactersIn: ":"))) }
+        if !c.composeProject.isEmpty { out.append("Compose: \(c.composeProject)" + (c.composeService.isEmpty ? "" : " / \(c.composeService)")) }
+        if let h = c.hostID.flatMap(host) { out.append("On \(h.name) (\(h.address))") }
+        out.append(c.statusText.isEmpty ? c.state.rawValue.capitalized : c.statusText)
+        return HoverTipContent(title: out[0], lines: Array(out.dropFirst()))
+    }
+
+    func tooltip(_ st: ComposeStack) -> HoverTipContent {
+        // Empty until Docker has been asked, which isn't the same as stopped.
+        var out = [st.name, st.status.isEmpty ? "Status unknown" : st.status]
+        if let h = st.hostID.flatMap(host) { out.append("On \(h.name) (\(h.address))") }
+        out += st.configFiles.map { ($0 as NSString).abbreviatingWithTildeInPath }
+        return HoverTipContent(title: out[0], lines: Array(out.dropFirst()))
+    }
+
+    private static func gitLine(_ g: GitRepoState) -> String {
+        var s = "⎇ \(g.branch)"
+        if g.ahead > 0 { s += " ↑\(g.ahead)" }
+        if g.behind > 0 { s += " ↓\(g.behind)" }
+        return s + (g.isClean ? ", clean" : ", \(g.changedFileCount) changed file" + (g.changedFileCount == 1 ? "" : "s"))
+    }
+
+    private static func firstLine(_ s: String) -> String? {
+        s.split(separator: "\n").first.map { String($0.prefix(120)) }
     }
 }

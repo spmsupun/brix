@@ -270,9 +270,12 @@ struct PlanPanel: View {
         let s = ws.currentAgentSession
         PanelChrome(title: "Plan") {
             Spacer(minLength: 0)
-            if let s { Text("\(s.plan.filter(\.done).count) of \(s.plan.count)").font(Typo.ui(11)).foregroundStyle(Theme.text3) }
+            if let s, !s.plan.isEmpty { Text("\(s.plan.filter(\.done).count) of \(s.plan.count)").font(Typo.ui(11)).foregroundStyle(Theme.text3) }
         } content: {
-            if let s {
+            if let s, s.plan.isEmpty, !s.planDoc.isEmpty {
+                // Plan mode: the plan as written, until the agent makes a task list.
+                MarkdownView(text: s.planDoc, inset: 12)
+            } else if let s {
                 ScrollView { PlanList(session: s) }
             } else {
                 EmptyState(symbol: "checklist", message: "Start an agent to see its plan here.")

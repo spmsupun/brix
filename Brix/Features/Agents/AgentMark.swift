@@ -151,7 +151,7 @@ extension AppStore {
         if s.kind == .shell, s.hostID == nil, Self.unnamedShell.contains(s.title) {
             // An unnamed local terminal: what it's running, else "Terminal",
             // "Terminal 2", … in the order they were opened in the project.
-            if s.state == .running, !["zsh", "bash", "login"].contains(s.process) { return s.process }
+            if !["zsh", "bash", "login"].contains(s.process) { return s.process }
             let peers = sessions.filter { $0.kind == .shell && $0.hostID == nil && $0.projectID == s.projectID && Self.unnamedShell.contains($0.title) }
             let n = (peers.firstIndex { $0.id == s.id } ?? 0) + 1
             return n == 1 ? "Terminal" : "Terminal \(n)"

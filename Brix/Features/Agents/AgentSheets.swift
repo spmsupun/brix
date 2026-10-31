@@ -163,6 +163,17 @@ struct AgentSettingsView: View {
                     .labelsHidden()
                     .frame(width: 220)
                 }
+                Toggle(isOn: Bindable(store).settings.claudeNativeView) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Claude Code as a chat").font(Typo.ui(12.5, .medium)).foregroundStyle(Theme.text)
+                            Text("PREVIEW").font(.system(size: 8.5, weight: .heavy)).foregroundStyle(Theme.violet)
+                        }
+                        Text("New Claude sessions show messages, tool calls and permission prompts natively instead of the terminal screen. Sessions already open keep their view.")
+                            .font(Typo.ui(11.5)).foregroundStyle(Theme.text3).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.bx)
                 VStack(spacing: 0) {
                     HStack {
                         Text("Agent")
