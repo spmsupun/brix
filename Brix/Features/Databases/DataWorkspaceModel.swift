@@ -10,7 +10,10 @@ final class DataWorkspace {
     var active: UUID?
     /// Sidebar tree rows that are open ("c:<conn>", "s:<conn>.<schema>", …).
     var expanded: Set<String> = []
-    var showInspector = true
+    /// The Record panel beside a table or console; hidden or shown, it stays that way after a relaunch.
+    var showInspector = UserDefaults.standard.object(forKey: "brix.showRecordPanel") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showInspector, forKey: "brix.showRecordPanel") }
+    }
     /// The connection whose databases and tables the Databases screen lists.
     var explorer: ResourceID?
     var treeErrors: [ResourceID: String] = [:]

@@ -161,6 +161,7 @@ struct SheetRouter: View {
         case .importConnections: ImportSheet()
         case .editFile(let f): FileEditorSheet(file: f)
         case .editAgent(let a): AgentEditorSheet(existing: a)
+        case .copyDatabase(let d, let s, let t): CopyDatabaseSheet(sourceID: d, initialSchema: s, initialTables: t)
         }
     }
 }

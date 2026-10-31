@@ -1209,6 +1209,7 @@ struct DatabaseContextMenu: View {
         Divider()
         Button("Dump…") { store.dumpDatabase(db) }
         Button("Restore…") { store.restoreDatabase(db) }.disabled(db.readOnly)
+        Button("Copy Tables To…") { store.sheet = .copyDatabase(db.id, schema: nil, tables: nil) }.disabled(db.isSample)
         Button("Open CLI") { store.openDatabaseCLI(db) }
         Toggle("Read-only", isOn: Binding(get: { db.readOnly || db.tag.isProduction }, set: { v in
             var d = db; d.readOnly = v; store.saveDatabase(d, password: nil)

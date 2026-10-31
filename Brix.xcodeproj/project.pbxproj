@@ -78,11 +78,13 @@
 		9524CA237E6379FE01156AFC /* DatabaseEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF51FD492E520241F02A5723 /* DatabaseEditorSheet.swift */; };
 		971B05B6D95419F04564B641 /* SSHView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AF01592CF827C3F3838094B /* SSHView.swift */; };
 		981AF0B0A0AF1C9CFEE46A79 /* MySQLNIO in Frameworks */ = {isa = PBXBuildFile; productRef = 493883ECC6748A0AB7436F1A /* MySQLNIO */; };
+		9A193DCF662E976AD006F909 /* CopyDatabaseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4B01B4A9151D586525CCAB /* CopyDatabaseSheet.swift */; };
 		9E79FDB79163A0E2A1BFFE95 /* FileSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB947EAE70E6654BCFFD99F /* FileSheets.swift */; };
 		9EE12D6BFA5D9C2B33FA5D98 /* GitHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6345E2A06D48A88A65B78D /* GitHub.swift */; };
 		A115BD74FCB923419FB2080B /* GitGlobalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EABF825EE6AE3066FFA5A42 /* GitGlobalView.swift */; };
 		A5E721282CD3D215851CF446 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4872BCC0F829B1669E0A40B /* AppStore.swift */; };
 		A9CF9256716B8C5C18943AEA /* DBDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D75050B552FBD1FB7E9E9F9 /* DBDiscovery.swift */; };
+		AAE847AFEFA897F4B3C865E1 /* DBCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E0840ACAF1F220A9050967C /* DBCopyTests.swift */; };
 		AB200BF46FD9D947D6F75C57 /* AgentTranscripts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0073D4D45840C7674C3C8AD /* AgentTranscripts.swift */; };
 		B103CB3D417823A45219829A /* AppStore+DataWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664C2253791C3A4F9C6302D5 /* AppStore+DataWorkspace.swift */; };
 		B1FE223172EAA062A7FFE91A /* MacStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB42F6E043D58B61CFAEA72C /* MacStats.swift */; };
@@ -105,6 +107,7 @@
 		DE995910DA79F5B497D1371F /* EditorArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61DFEA44B953EC79AD2B8166 /* EditorArea.swift */; };
 		DF98EF3862083D223AB484C0 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 3E43C7966A44E4544BED6167 /* GRDB */; };
 		E073A87EA4DCF5FF512F6067 /* ImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8820543E4D6FF7A908B7156B /* ImportTests.swift */; };
+		E1E03B09CB44B03C68FCB052 /* DBCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 433C8F7A5F1AF84073300B48 /* DBCopy.swift */; };
 		E20DA3C0A0CBD297201651BC /* SessionPaneTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05E2934E8EDE5EDB1651BB12 /* SessionPaneTree.swift */; };
 		E265B519282246A017BAF29A /* HoverTip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F85CF623377D10FA726372 /* HoverTip.swift */; };
 		E3BDE5180B810B2040AF3D39 /* SourceControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7589CCB87755B231C5AAD4 /* SourceControl.swift */; };
@@ -173,11 +176,13 @@
 		38F85CF623377D10FA726372 /* HoverTip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverTip.swift; sourceTree = "<group>"; };
 		39E60346EE0E519625C4559F /* TerminalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalsView.swift; sourceTree = "<group>"; };
 		3B2B7A13B38595F23109D378 /* ExplorerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExplorerPanel.swift; sourceTree = "<group>"; };
+		3B4B01B4A9151D586525CCAB /* CopyDatabaseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyDatabaseSheet.swift; sourceTree = "<group>"; };
 		3C8B89E532F82C137AF2140F /* DBTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DBTree.swift; sourceTree = "<group>"; };
 		3C8CD886D667F3C094E524C6 /* DockerInventoryList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockerInventoryList.swift; sourceTree = "<group>"; };
 		3DCE176CF85CC843495BBE9F /* DWPanes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWPanes.swift; sourceTree = "<group>"; };
 		41AFB87649E54EB3BE4FF0AA /* PopoverHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverHost.swift; sourceTree = "<group>"; };
 		431E29C82D38812B0B2EB2A1 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		433C8F7A5F1AF84073300B48 /* DBCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DBCopy.swift; sourceTree = "<group>"; };
 		44A871909E8AB81D0CB8B72D /* ReorderableTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReorderableTabs.swift; sourceTree = "<group>"; };
 		4BCAD0846E7659E49854F15F /* NewBranchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewBranchSheet.swift; sourceTree = "<group>"; };
 		4C7336711D68B5925D12B5C3 /* ProjectScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectScanner.swift; sourceTree = "<group>"; };
@@ -203,6 +208,7 @@
 		789B1D1B4C576EBD803755B5 /* DockModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockModelTests.swift; sourceTree = "<group>"; };
 		78D2B37BCD92E34FCDD3A08A /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
 		7B7589CCB87755B231C5AAD4 /* SourceControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceControl.swift; sourceTree = "<group>"; };
+		7E0840ACAF1F220A9050967C /* DBCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DBCopyTests.swift; sourceTree = "<group>"; };
 		81E8DF4118F1D303A794D255 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		830781B2CD13037A03BF4AA5 /* Brix.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Brix.entitlements; sourceTree = "<group>"; };
 		848362334B5FF9608235B475 /* ProjectSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSettingsView.swift; sourceTree = "<group>"; };
@@ -305,6 +311,7 @@
 		185BD755FA16DEA94F76B60E /* Databases */ = {
 			isa = PBXGroup;
 			children = (
+				3B4B01B4A9151D586525CCAB /* CopyDatabaseSheet.swift */,
 				EF51FD492E520241F02A5723 /* DatabaseEditorSheet.swift */,
 				D7FCBD86CC097B7C5B4388D8 /* DataWorkspaceModel.swift */,
 				1D5EBD38031CB6A6B50E87A0 /* DataWorkspaceView.swift */,
@@ -430,6 +437,7 @@
 			isa = PBXGroup;
 			children = (
 				5C8B70B85A7E6A30349837C7 /* DataWorkspaceTests.swift */,
+				7E0840ACAF1F220A9050967C /* DBCopyTests.swift */,
 				789B1D1B4C576EBD803755B5 /* DockModelTests.swift */,
 				8820543E4D6FF7A908B7156B /* ImportTests.swift */,
 				B2AE30F68CC36D32013ED462 /* MockGitTests.swift */,
@@ -502,6 +510,7 @@
 			isa = PBXGroup;
 			children = (
 				E703C0EF33F0BED957CA1907 /* ClaudeChat.swift */,
+				433C8F7A5F1AF84073300B48 /* DBCopy.swift */,
 				2B6345E2A06D48A88A65B78D /* GitHub.swift */,
 				357E45C343AA6CEC5EB959D6 /* LiveDatabaseService.swift */,
 				6DEECE6C739FC67CB25AC116 /* LiveFileService.swift */,
@@ -814,8 +823,10 @@
 				FBB466BC97AC4E5E9D13C7E5 /* Commands.swift in Sources */,
 				DA327134B65BB1E4315B2987 /* Components.swift in Sources */,
 				8FC0B03961060582EEEEF601 /* ConfigImporter.swift in Sources */,
+				9A193DCF662E976AD006F909 /* CopyDatabaseSheet.swift in Sources */,
 				3C23BEDEED53A7D96F725FB0 /* CustomizeView.swift in Sources */,
 				9208DF85B74B9ECBF2F3ACAF /* DBConnectionsView.swift in Sources */,
+				E1E03B09CB44B03C68FCB052 /* DBCopy.swift in Sources */,
 				A9CF9256716B8C5C18943AEA /* DBDiscovery.swift in Sources */,
 				3FD8C4506B046C9BF5F27C49 /* DBTree.swift in Sources */,
 				DB34D3294961A59FFF08FD36 /* DWGrid.swift in Sources */,
@@ -898,6 +909,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AAE847AFEFA897F4B3C865E1 /* DBCopyTests.swift in Sources */,
 				6C1CAD1CB90C3AA24E8912B6 /* DataWorkspaceTests.swift in Sources */,
 				409F2221CE3069B619DEAB3B /* DockModelTests.swift in Sources */,
 				E073A87EA4DCF5FF512F6067 /* ImportTests.swift in Sources */,

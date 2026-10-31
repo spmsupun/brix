@@ -47,7 +47,7 @@ struct AddDockerSheet: View {
                     Text("Runs on").font(Typo.ui(11.5, .medium)).foregroundStyle(Theme.text2)
                     Picker("", selection: $hostID) {
                         Text("This Mac").tag(ResourceID?.none)
-                        ForEach(store.library.hosts) { h in Text(h.name).tag(ResourceID?.some(h.id)) }
+                        ForEach(store.library.hosts) { h in Text(h.menuLabel).tag(ResourceID?.some(h.id)) }
                     }
                     .labelsHidden().frame(width: 200)
                 }

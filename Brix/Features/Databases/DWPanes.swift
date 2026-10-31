@@ -81,6 +81,7 @@ struct DWTablePane: View {
                 DWPill { Image(systemName: "arrow.down.to.line").font(.system(size: 10.5)); Text("CSV") }.fixedSize()
             }
             .buttonStyle(.hand).disabled(t.result == nil)
+            if t.projectID == nil { RecordToggle() }
         }
     }
 
@@ -578,6 +579,7 @@ struct DWConsolePane: View {
                 if let r = t.shownResult?.result { DWExport.csv(columns: r.columns, rows: r.rows, name: t.title) }
             }
             .disabled(t.shownResult?.result?.columns.isEmpty ?? true)
+            if t.projectID == nil { RecordToggle() }
         }
         .padding(.horizontal, 10).frame(height: 36)
     }
@@ -719,6 +721,9 @@ struct DWInspector: View {
                     Spacer(minLength: 0)
                     IconButton(symbol: "chevron.up", label: "Previous row", size: 26, iconSize: 10) { move(-1, count: count, sel: sel) }.disabled((sel?.row ?? 0) <= 0)
                     IconButton(symbol: "chevron.down", label: "Next row", size: 26, iconSize: 10) { move(1, count: count, sel: sel) }.disabled((sel?.row ?? 0) + 1 >= count)
+                    if showHeader {
+                        IconButton(symbol: "xmark", label: "Hide the Record panel (bring it back from the table toolbar)", size: 26, iconSize: 9.5) { ws.showInspector = false }
+                    }
                 }
                 if let sel, !cols.isEmpty {
                     ScrollView {
@@ -862,5 +867,16 @@ struct DWToolbar<Content: View>: View {
             ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 4) { content() } }
         }
         .padding(.horizontal, 10).frame(height: 40)
+    }
+}
+
+/// Shows or hides the Record panel (the row's fields, beside the grid).
+struct RecordToggle: View {
+    @Environment(AppStore.self) private var store
+    var body: some View {
+        let on = store.dataWorkspace.showInspector
+        IconButton(symbol: "sidebar.right", label: on ? "Hide the Record panel" : "Show the Record panel", size: 26, iconSize: 12, active: on) {
+            store.dataWorkspace.showInspector.toggle()
+        }
     }
 }

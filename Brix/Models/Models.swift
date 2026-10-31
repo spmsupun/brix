@@ -82,6 +82,8 @@ struct SSHHost: Codable, Identifiable, Hashable {
     var isSample: Bool = false
 
     var address: String { "\(user)@\(host)\(port == 22 ? "" : ":\(port)")" }
+    /// For menus listing servers: two with the same name told apart by environment and address.
+    var menuLabel: String { "\(name)  ·  \(tag.label)  ·  \(address)" }
     var sshCommand: String {
         var parts = ["ssh"]
         if port != 22 { parts += ["-p", "\(port)"] }

@@ -348,9 +348,10 @@ struct DatabaseEditorSheet: View {
         case .ssh:
             Picker("", selection: $tunnel) {
                 Text("Choose a server").tag(ResourceID?.none)
-                ForEach(store.library.hosts) { h in Text(h.name).tag(ResourceID?.some(h.id)) }
+                ForEach(store.library.hosts) { h in Text(h.menuLabel).tag(ResourceID?.some(h.id)) }
             }
             .labelsHidden().frame(width: 170).accessibilityLabel("SSH server")
+            if let h = tunnel.flatMap(store.host) { TagPill(tag: h.tag, size: 9, filled: false) }
         case .docker:
             Picker("", selection: Binding(get: { container }, set: { pickContainer($0) })) {
                 Text(dockerChoices.isEmpty ? "No database containers" : "Choose a container").tag(String?.none)
@@ -369,7 +370,7 @@ struct DatabaseEditorSheet: View {
         case .direct:
             return "Connects straight to \(host.isEmpty ? "the host" : host):\(port)"
         case .ssh:
-            return tunnel.flatMap(store.host).map { "Through \($0.name); Brix picks a local port" } ?? "Pick a saved server to tunnel through"
+            return tunnel.flatMap(store.host).map { "Through \($0.name) (\($0.address)); Brix picks a local port" } ?? "Pick a saved server to tunnel through"
         case .docker:
             guard let c = dockerChoices.first(where: { $0.dockerContainer == container }) else { return "Pick a running container" }
             return c.port.map { "Published on localhost:\($0)" } ?? "No published port; publish \(flavor.defaultPort) to connect"

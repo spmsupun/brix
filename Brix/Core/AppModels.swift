@@ -194,6 +194,8 @@ enum ActiveSheet: Identifiable {
     case newBranch(ProjectID)
     case renameSession(String)
     case renamePanel(ProjectID, String)
+    /// Copy tables from a connection; optionally starting at a schema and tables.
+    case copyDatabase(ResourceID, schema: String?, tables: [String]?)
 
     var id: String {
         switch self {
@@ -211,6 +213,7 @@ enum ActiveSheet: Identifiable {
         case .newBranch(let p): "branch-\(p)"
         case .renameSession(let s): "session-\(s)"
         case .renamePanel(let p, let id): "panel-\(p)-\(id)"
+        case .copyDatabase(let d, let s, let t): "copy-\(d)-\(s ?? "")-\(t?.joined(separator: ",") ?? "")"
         }
     }
 }

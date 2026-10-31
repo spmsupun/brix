@@ -57,6 +57,7 @@ struct DBTreeRows: View {
                     let open = !q.isEmpty || schemasOpen != ws.expanded.contains(key)
                     row(indent: indent, icon: "cylinder", iconColor: Theme.text2, name: schema, meta: "\(objs.filter { $0.kind != .function }.count)",
                         open: open) { toggle(key) }
+                        .contextMenu { DBSchemaMenu(connection: d, schema: schema, project: project) }
                     if open { folders(schema, objs, indent: indent + 14) }
                 }
             }
@@ -83,6 +84,7 @@ struct DBTreeRows: View {
             // A search opens every folder with a match.
             let open = !query.isEmpty || openByDefault != ws.expanded.contains(key)
             row(indent: indent, icon: "folder", iconColor: Theme.meta, name: title, meta: "\(objs.count)", open: open) { toggle(key) }
+                .contextMenu { DBSchemaMenu(connection: connection, schema: schema, project: project) }
             if open {
                 let sorted = objs.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
                 let shown = limit[key] ?? Self.page
@@ -112,14 +114,7 @@ struct DBTreeRows: View {
                 store.openTable(d, o, project: project)
             }
         }
-        .contextMenu {
-            if o.kind != .function { Button("Open") { store.openTable(d, o, project: project) } }
-            Button("Select in New Console") { store.newConsole(d, sql: "SELECT * FROM \(DataEdits.table(o, d.kind)) LIMIT 100;", project: project) }
-            Button("Copy Name") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(o.name, forType: .string)
-            }
-        }
+        .contextMenu { DBObjectMenu(connection: d, object: o, project: project) }
     }
 
     /// Filters this connection's objects by name.
@@ -209,7 +204,7 @@ struct DBLibraryTree: View {
                             Button("New Console") { store.newConsole(d) }
                             Button("Refresh") { store.loadTree(d, force: true) }
                             Divider()
-                            Button("Edit Connection…") { store.sheet = .editDatabase(d) }
+                            DatabaseContextMenu(db: d)
                         }
                     }
                 }
@@ -348,5 +343,89 @@ struct SidebarSearch: View {
         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(focused ? Theme.border.opacity(2) : Theme.divider))
         // Room above and below, so it never touches the row it opened from.
         .padding(.horizontal, 8).padding(.top, 4).padding(.bottom, 6)
+    }
+}
+
+private func copyText(_ s: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(s, forType: .string)
+}
+
+/// Right-click on a database (schema) or one of its folders.
+struct DBSchemaMenu: View {
+    @Environment(AppStore.self) private var store
+    let connection: DatabaseConnection
+    let schema: String
+    var project: ProjectID? = nil
+
+    var body: some View {
+        let d = connection
+        Button("New Console Here") {
+            // The console starts in this database (MySQL) or with it first on the search path (Postgres).
+            let start: String = switch d.kind {
+            case .mysql: "USE \(LiveDatabaseService.quote(schema, .mysql));\n"
+            case .postgres: "SET search_path TO \(LiveDatabaseService.quote(schema, .postgres));\n"
+            case .sqlite: ""
+            }
+            store.newConsole(d, sql: start, project: project)
+        }
+        Button("Refresh") { store.loadTree(d, force: true) }
+        if !d.isSample {
+            Divider()
+            Button("Copy Tables To…") { store.sheet = .copyDatabase(d.id, schema: schema, tables: nil) }
+        }
+        Divider()
+        Button("Copy Name") { copyText(schema) }
+    }
+}
+
+/// Right-click on a table, view or routine.
+struct DBObjectMenu: View {
+    @Environment(AppStore.self) private var store
+    let connection: DatabaseConnection
+    let object: DBObject
+    var project: ProjectID? = nil
+
+    var body: some View {
+        let d = connection, o = object
+        let name = DataEdits.table(o, d.kind)
+        if o.kind == .function {
+            Button("Open in Console") { store.newConsole(d, sql: "-- \(o.schema).\(o.name)\n", project: project) }
+        } else {
+            Button("Open") { store.openTable(d, o, project: project) }
+            Button("Show Structure") { open(.structure) }
+            Button("Show DDL") { open(.ddl) }
+            Divider()
+            Button("Select in New Console") { store.newConsole(d, sql: "SELECT * FROM \(name) LIMIT 100;", project: project) }
+            Button("Count Rows in New Console") { store.newConsole(d, sql: "SELECT COUNT(*) FROM \(name);", project: project) }
+            // Written into a console for you to check and run; nothing runs from here.
+            Menu("Generate SQL") {
+                Button("SELECT") { store.newConsole(d, sql: "SELECT *\nFROM \(name)\nWHERE 1 = 1\nLIMIT 100;", project: project) }
+                if o.kind == .table {
+                    Button("UPDATE") { store.newConsole(d, sql: "UPDATE \(name)\nSET column = value\nWHERE id = ?;", project: project) }
+                    Button("DELETE") { store.newConsole(d, sql: "DELETE FROM \(name)\nWHERE id = ?;", project: project) }
+                    Button(d.kind == .sqlite ? "DELETE All Rows" : "TRUNCATE") {
+                        store.newConsole(d, sql: d.kind == .sqlite ? "DELETE FROM \(name);" : "TRUNCATE TABLE \(name);", project: project)
+                    }
+                }
+                Button("DROP") { store.newConsole(d, sql: "DROP \(o.kind == .view ? "VIEW" : "TABLE") \(name);", project: project) }
+            }
+            if o.kind == .table, !d.isSample {
+                Divider()
+                Button("Copy Table To…") { store.sheet = .copyDatabase(d.id, schema: o.schema, tables: [o.name]) }
+            }
+        }
+        Divider()
+        Button("Copy Name") { copyText(o.name) }
+        Button("Copy Qualified Name") { copyText(name) }
+    }
+
+    /// Opens the table on one of its views (Structure, DDL).
+    private func open(_ view: DWTableView) {
+        store.openTable(connection, object, project: project)
+        let ws = store.dataWorkspace
+        guard let t = ws.tabs.first(where: { $0.connectionID == connection.id && $0.object == object && $0.projectID == project }) else { return }
+        ws.update(t.id) { $0.view = view }
+        if view == .ddl { store.loadStructure(t.id) }
     }
 }

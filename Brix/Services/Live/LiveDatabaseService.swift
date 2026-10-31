@@ -311,6 +311,8 @@ final class LiveDatabaseService: DatabaseService {
         return String(describing: error)
     }
 
+    static func isTrue(_ s: String?) -> Bool { s == "true" || s == "t" }
+
     static func quote(_ ident: String, _ kind: DBKind) -> String {
         kind == .mysql ? "`" + ident.replacingOccurrences(of: "`", with: "``") + "`" : "\"" + ident.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
@@ -396,10 +398,11 @@ final class LiveDatabaseService: DatabaseService {
                 "select greatest(reltuples, 0)::bigint, pg_size_pretty(pg_total_relation_size(oid)) from pg_class where oid = (quote_ident(\(s)) || '.' || quote_ident(\(t)))::regclass"
             ])
             let cols = res[0].rows.map { r in
-                DBColumn(name: r[0] ?? "", type: r[1] ?? "", nullable: r[2] == "t", defaultValue: r[3], isPK: r[4] == "t", fk: r[5])
+                // Booleans come back as "true"/"false" (older servers' text form is "t"/"f").
+                DBColumn(name: r[0] ?? "", type: r[1] ?? "", nullable: Self.isTrue(r[2]), defaultValue: r[3], isPK: Self.isTrue(r[4]), fk: r[5])
             }
             let idx = res[1].rows.map { r in
-                DBIndex(name: r[0] ?? "", columns: (r[1] ?? "").components(separatedBy: ", "), unique: r[2] == "t", method: r[3] ?? "", size: r[4] ?? "")
+                DBIndex(name: r[0] ?? "", columns: (r[1] ?? "").components(separatedBy: ", "), unique: Self.isTrue(r[2]), method: r[3] ?? "", size: r[4] ?? "")
             }
             return TableDetail(columns: cols, indexes: idx, rowEstimate: Int(res[2].rows.first?[0] ?? "") ?? 0, size: res[2].rows.first?[1] ?? "")
         case .mysql:
