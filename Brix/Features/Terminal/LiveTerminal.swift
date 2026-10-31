@@ -52,6 +52,9 @@ final class BrixTerminalView: LocalProcessTerminalView {
         m.addItem(item("Clear", #selector(menuClear)))
         m.addItem(item("Interrupt (⌃C)", #selector(menuInterrupt)))
         m.addItem(.separator())
+        if let st = store, let s = st.session(sessionID), s.kind == .agent, s.externalID != nil, st.agent(for: s)?.binary == "claude" {
+            m.addItem(item("Open as Chat", #selector(menuOpenAsChat)))
+        }
         m.addItem(item("Rename…", #selector(menuRename)))
         m.addItem(item("Close", #selector(menuClose)))
         return m
@@ -66,6 +69,7 @@ final class BrixTerminalView: LocalProcessTerminalView {
     @objc private func menuClear() { store?.clearSession(sessionID) }
     @objc private func menuInterrupt() { store?.interruptSession(sessionID) }
     @objc private func menuRename() { store?.sheet = .renameSession(sessionID) }
+    @objc private func menuOpenAsChat() { store?.reopen(sessionID, asChat: true) }
     @objc private func menuClose() { store?.closeSession(sessionID) }
 
     private var accent: AccentChoice = .lime

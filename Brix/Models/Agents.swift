@@ -39,15 +39,17 @@ struct AgentConfig: Codable, Hashable, Identifiable {
     /// `sessionID` names a new Claude Code conversation, or with `resume` continues one.
     func launchCommand(resourceNames: [String], sessionID: String? = nil, resume: Bool = false, databases: Bool = false) -> String {
         let base = command.trimmingCharacters(in: .whitespaces).isEmpty ? binary : command
+        var out = base
         if resume, let id = sessionID, Self.isSafeID(id) {
             switch binary {
-            case "claude": return base + " --resume " + id
+            // Claude keeps the linked-resources note below on a resume too.
+            case "claude": out += " --resume " + id
             case "codex": return base + " resume " + id
             default: break
             }
+        } else if binary == "claude", let id = sessionID, Self.isSafeID(id) {
+            out += " --session-id " + id
         }
-        var out = base
-        if binary == "claude", let id = sessionID, Self.isSafeID(id) { out += " --session-id " + id }
         guard acceptsSystemPrompt, !resourceNames.isEmpty else { return out }
         var note = "This project is managed in Brix. Linked resources (names only, no credentials): " + resourceNames.joined(separator: ", ") + "."
         if databases {

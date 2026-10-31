@@ -106,6 +106,7 @@ struct DatabaseEditorSheet: View {
                 SectionLabel("PASTE ANYTHING")
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: Binding(get: { pasted }, set: { onPaste($0) }))
+                        .noWritingTools()
                         .font(Typo.mono(11.5)).foregroundStyle(Theme.text)
                         .scrollContentBackground(.hidden)
                         .frame(height: 74)
@@ -563,7 +564,7 @@ struct DatabaseEditorSheet: View {
                     if kind != .sqlite {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Startup SQL").font(Typo.ui(11.5, .medium)).foregroundStyle(Theme.text2)
-                            TextEditor(text: $startupSQL).font(Typo.mono(12)).scrollContentBackground(.hidden).frame(height: 54)
+                            TextEditor(text: $startupSQL).noWritingTools().font(Typo.mono(12)).scrollContentBackground(.hidden).frame(height: 54)
                                 .padding(6).background(RoundedRectangle(cornerRadius: 8).fill(Theme.input))
                                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white(0.09)))
                                 .accessibilityLabel("Startup SQL")

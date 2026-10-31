@@ -301,7 +301,7 @@ final class WorkspaceStore {
         for d in saved where app.session(d.id) == nil {
             let s: TerminalSession?
             if d.kind == .agent, let a = app.agent(d.agentID) ?? app.enabledAgents.first {
-                s = app.newAgentSession(project: projectID, agent: a, resume: d.externalID, attach: false)
+                s = app.newAgentSession(project: projectID, agent: a, resume: d.externalID, attach: false, chat: d.isChat)
                 if let s, let i = app.sessions.firstIndex(where: { $0.id == s.id }) { app.sessions[i].task = d.task ?? "" }
             } else {
                 s = app.newTerminal(project: projectID, host: d.hostID, title: d.title, kind: d.kind, cwd: d.cwd, attach: false)
@@ -546,7 +546,7 @@ extension WorkspaceStore {
         }
         if let d = c.session {
             if d.kind == .agent, let a = app.agent(d.agentID) ?? app.enabledAgents.first,
-               let s = app.newAgentSession(project: projectID, agent: a, resume: d.externalID, attach: false) {
+               let s = app.newAgentSession(project: projectID, agent: a, resume: d.externalID, attach: false, chat: d.isChat) {
                 id = s.id
             } else if d.kind != .agent {
                 id = app.newTerminal(project: projectID, host: d.hostID, title: d.title, kind: d.kind, cwd: d.cwd, attach: false).id

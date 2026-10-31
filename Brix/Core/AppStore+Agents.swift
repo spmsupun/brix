@@ -46,18 +46,25 @@ extension AppStore {
 
     /// An agent outside any project: runs in your home folder and is listed under This Mac.
     @discardableResult
-    func startLocalAgent(_ a: AgentConfig) -> TerminalSession {
-        let external = a.binary == "claude" ? UUID().uuidString.lowercased() : nil
+    func startLocalAgent(_ a: AgentConfig, resume: String? = nil, chat: Bool? = nil, focus: Bool = true) -> TerminalSession {
+        // Never run two copies of one conversation; the second would fail.
+        if let resume, let live = sessions.first(where: { $0.externalID == resume && $0.isLive && $0.state != .finished && $0.state != .failed }) {
+            return live
+        }
+        let external = resume ?? (a.binary == "claude" ? UUID().uuidString.lowercased() : nil)
+        let canResume = resume != nil && (a.binary != "claude" || AgentTranscripts.claudeTranscriptExists(sessionID: resume!))
         let s = newTerminal(project: nil, title: a.name, kind: .agent,
-                            command: a.launchCommand(resourceNames: [], sessionID: external), attach: false,
-                            chat: settings.claudeNativeView && a.binary == "claude")
+                            command: a.launchCommand(resourceNames: [], sessionID: external, resume: canResume), attach: false,
+                            chat: a.binary == "claude" && (chat ?? settings.claudeNativeView))
         if let i = sessions.firstIndex(where: { $0.id == s.id }) {
             sessions[i].process = a.binary
             sessions[i].agentID = a.id
             sessions[i].externalID = external
         }
-        route = .terminals
-        focusedSessionID = s.id
+        if focus {
+            route = .terminals
+            focusedSessionID = s.id
+        }
         return session(s.id) ?? s
     }
 

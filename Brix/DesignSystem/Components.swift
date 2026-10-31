@@ -52,6 +52,14 @@ extension View {
     }
 }
 
+extension View {
+    /// No Writing Tools (Apple Intelligence) button in Brix's text boxes:
+    /// they hold prompts, SQL and notes, not prose to rewrite.
+    @ViewBuilder func noWritingTools() -> some View {
+        if #available(macOS 15.0, *) { writingToolsBehavior(.disabled) } else { self }
+    }
+}
+
 // MARK: - Grip
 
 struct Grip: View {

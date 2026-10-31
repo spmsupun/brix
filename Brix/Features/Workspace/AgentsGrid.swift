@@ -175,6 +175,10 @@ struct SessionActions: View {
              MenuSpec(title: "Interrupt", key: "⌃C") { store.interruptSession(sessionID) },
              MenuSpec(title: "Copy Directory") { store.copyToPasteboard(store.session(sessionID)?.cwd ?? "", label: "directory") },
              MenuSpec(title: "Show in Inspector") { store.inspector = .session(sessionID) },
+             MenuSpec(title: store.session(sessionID)?.isChat == true ? "Open as Terminal" : "Open as Chat",
+                      enabled: store.session(sessionID).map { $0.kind == .agent && $0.externalID != nil && store.agent(for: $0)?.binary == "claude" } ?? false) {
+                 store.reopen(sessionID, asChat: store.session(sessionID)?.isChat != true)
+             },
              .separator,
              MenuSpec(title: "Close") { store.closeSession(sessionID) }]
         }) {
@@ -249,6 +253,7 @@ struct AgentPane: View {
             if s.state == .running {
                 IconButton(symbol: "stop.circle", label: "Interrupt", shortcut: "⌃C", size: 22, iconSize: 11) { store.interruptSession(s.id) }
             }
+            AgentViewSwitch(sessionID: s.id)
             SessionActions(sessionID: s.id)
         }
         .padding(.horizontal, 12)

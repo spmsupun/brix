@@ -245,12 +245,14 @@ struct SessionDescriptor: Codable, Hashable {
     /// Agent conversation id for resume (Claude Code session id, Codex session id).
     var externalID: String?
     var task: String?
+    /// Shown as a chat rather than a terminal (Claude Code); nil before this existed.
+    var isChat: Bool?
 }
 
 extension SessionDescriptor {
     init(_ s: TerminalSession) {
         self.init(id: s.id, title: s.title, kind: s.kind, hostID: s.hostID, cwd: s.cwd, command: s.kind == .agent ? "agent" : nil,
-                  agentID: s.agentID, externalID: s.externalID, task: s.task.isEmpty ? nil : s.task)
+                  agentID: s.agentID, externalID: s.externalID, task: s.task.isEmpty ? nil : s.task, isChat: s.kind == .agent ? s.isChat : nil)
     }
 }
 

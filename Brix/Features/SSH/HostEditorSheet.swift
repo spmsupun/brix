@@ -63,6 +63,7 @@ struct HostEditorSheet: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Notes").font(Typo.ui(11.5, .medium)).foregroundStyle(Theme.text2)
                         TextEditor(text: $notes)
+                            .noWritingTools()
                             .font(Typo.ui(12.5)).scrollContentBackground(.hidden)
                             .padding(6).frame(height: 64)
                             .background(RoundedRectangle(cornerRadius: 8).fill(Theme.input))

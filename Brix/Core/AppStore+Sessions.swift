@@ -66,7 +66,8 @@ extension AppStore {
     /// Starts `agent` in the project. Callers that don't know which agent the
     /// user wants should call `startAgent(project:)`, which asks.
     @discardableResult
-    func newAgentSession(project id: ProjectID, agent a: AgentConfig, resume: String? = nil, attach: Bool = true) -> TerminalSession? {
+    /// `chat`: show it as a chat or a terminal; nil follows the setting.
+    func newAgentSession(project id: ProjectID, agent a: AgentConfig, resume: String? = nil, attach: Bool = true, chat: Bool? = nil) -> TerminalSession? {
         guard let p = project(id) else {
             toast(.info, "Open a project first", detail: "Agent sessions run inside a project folder.")
             return nil
@@ -88,7 +89,7 @@ extension AppStore {
         let pending = "s-pending-\(UUID().uuidString.prefix(6))"
         var s = newTerminal(project: id, title: a.name, kind: .agent, command: cmd,
                             env: AgentDBGateway.shared.environment(project: id, session: pending), attach: false,
-                            chat: settings.claudeNativeView && a.binary == "claude")
+                            chat: a.binary == "claude" && (chat ?? settings.claudeNativeView))
         gatewaySessions[pending] = s.id
         if let i = sessions.firstIndex(where: { $0.id == s.id }) {
             if s.isSampleSession {
@@ -208,7 +209,10 @@ extension AppStore {
     func clearSession(_ id: String) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         if sessions[i].isChat {
-            return
+            // Clear on a chat starts a new conversation: asked, since it can't be undone in place.
+            guard let chat = ClaudeChatRegistry.shared.chat(id) else { return }
+            confirm("Start a new conversation here?", "The current one stays in this project's past conversations, where you can resume it." + (chat.working ? " Claude is working; this stops it." : ""),
+                    confirm: "New Conversation", destructive: false) { chat.clear() }
         } else if sessions[i].isLive {
             TerminalRegistry.shared.clear(id)
         } else {
@@ -240,12 +244,12 @@ extension AppStore {
     }
 
     /// Input from a mock terminal's prompt line or Brix sending a prompt.
-    func sendInput(_ id: String, _ text: String) {
+    func sendInput(_ id: String, _ text: String, images: [ClaudeChat.Attachment] = []) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         let s = sessions[i]
         if let chat = ClaudeChatRegistry.shared.chat(id) {
-            if sessions[i].task.isEmpty { sessions[i].task = String(text.prefix(120)) }
-            chat.send(text)
+            if sessions[i].task.isEmpty, !text.isEmpty { sessions[i].task = String(text.prefix(120)) }
+            chat.send(text, images: images)
             return
         }
         if s.isLive {
@@ -431,6 +435,82 @@ extension AppStore {
         }
     }
 
+    /// A chat moved to another Claude conversation (/clear, a rewind or a fork):
+    /// resume and titles follow it.
+    func chatConversation(_ id: String, _ conversation: String) {
+        guard AgentConfig.isSafeID(conversation), let i = sessions.firstIndex(where: { $0.id == id }),
+              sessions[i].externalID != conversation else { return }
+        sessions[i].externalID = conversation
+        sessions[i].sessionName = nil
+    }
+
+    /// A chat's edit, as the terminal parser records them: Agent Files, activity, "editing".
+    func chatEdited(_ id: String, path: String, added: Int, removed: Int) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        // Relative to the session folder when inside it (symlinks such as /tmp → /private/tmp resolved).
+        let base = URL(fileURLWithPath: (sessions[i].cwd as NSString).expandingTildeInPath).resolvingSymlinksInPath().path + "/"
+        let full = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        let rel = full.hasPrefix(base) ? String(full.dropFirst(base.count)) : full
+        if let k = sessions[i].touched.firstIndex(where: { $0.path == rel }) {
+            sessions[i].touched[k].add += added
+            sessions[i].touched[k].del += removed
+        } else {
+            sessions[i].touched.append(FileTouch(path: rel, add: added, del: removed))
+            let s = sessions[i]
+            record(ActivityEvent(date: Date(), kind: .edit, projectID: s.projectID, actor: displayTitle(s),
+                                 text: "edited \((rel as NSString).lastPathComponent)", sessionID: s.id))
+        }
+    }
+
+    /// A new chat with the conversation up to before one of its messages.
+    func forkChat(_ id: String, at item: ClaudeChat.Item) {
+        guard let s = session(id), let chat = ClaudeChatRegistry.shared.chat(id) else { return }
+        let title = "Fork of " + displayTitle(s)
+        guard chat.canCut(item), let fork = chat.forkCommand(at: item) else { return }
+        let env = s.projectID.map { AgentDBGateway.shared.environment(project: $0, session: "s-fork-\(UUID().uuidString.prefix(6))") } ?? [:]
+        let f = newTerminal(project: s.projectID, title: title, kind: .agent, command: fork.command, cwd: s.cwd, env: env, attach: false, chat: true)
+        if let i = sessions.firstIndex(where: { $0.id == f.id }) {
+            sessions[i].agentID = s.agentID
+            sessions[i].process = "claude"
+            sessions[i].externalID = fork.id
+        }
+        if let p = s.projectID { workspace(for: p).attach(session: session(f.id) ?? f, preferAgentGrid: true) }
+        reveal(session: f.id)
+    }
+
+    /// Reopens a Claude session in the other view (chat or terminal), same conversation.
+    func reopen(_ id: String, asChat: Bool) {
+        guard let s = session(id), s.kind == .agent, let a = agent(for: s), a.binary == "claude", let ext = s.externalID else { return }
+        let go = { [weak self] in
+            guard let self else { return }
+            // Where it sits now, so the other view takes the same tab slot.
+            let ws = s.projectID.map { self.workspace(for: $0) }
+            let tree = ws?.state.panes ?? self.terminalTree
+            let group = tree.group(of: id)
+            let index = group?.tabs.firstIndex(of: id)
+            // Stop this one first: one conversation never runs in two processes.
+            TerminalRegistry.shared.stop(id)
+            ClaudeChatRegistry.shared.stop(id)
+            if let i = self.sessions.firstIndex(where: { $0.id == id }) { self.sessions[i].externalID = nil }
+            let n = s.projectID.flatMap { self.newAgentSession(project: $0, agent: a, resume: ext, attach: false, chat: asChat) }
+                ?? self.startLocalAgent(a, resume: ext, chat: asChat, focus: false)
+            if let ws { ws.state.panes.add(n.id, to: group?.id, at: index) } else { self.terminalTree.add(n.id, to: group?.id, at: index) }
+            self.closeSession(id, confirmRunning: false)
+            self.renameSession(n.id, to: s.title)
+            if let i = self.sessions.firstIndex(where: { $0.id == n.id }) {
+                self.sessions[i].sessionName = s.sessionName
+                self.sessions[i].task = s.task
+            }
+            self.reveal(session: n.id)
+        }
+        let queued = ClaudeChatRegistry.shared.chat(id)?.queued.count ?? 0
+        if s.state == .running || queued > 0 {
+            confirm("Stop Claude to switch views?", "Switching restarts it on the same conversation, which stops the current turn" + (queued > 0 ? " and drops \(queued) queued message\(queued == 1 ? "" : "s")." : "."), confirm: "Switch", action: go)
+        } else {
+            go()
+        }
+    }
+
     /// An agent's state read from its screen: working, asking, or waiting at its prompt.
     func liveAgentState(_ id: String, _ state: SessionState) {
         guard let s = session(id), s.isLive, s.state != .finished, s.state != .failed else { return }
@@ -492,8 +572,16 @@ extension AppStore {
         var remap: [String: String] = [:]
         for d in library.globalSessions where !(d.hostID.flatMap(host)?.tag.isProduction ?? false) {
             // Production SSH shells are not reopened without the user asking.
-            let s = newTerminal(project: nil, host: d.hostID, title: d.title, kind: d.kind, cwd: d.cwd, attach: false)
+            // An agent on This Mac resumes its conversation (it came back as a bare shell before).
+            // An agent whose CLI was removed from Brix comes back as a shell rather than under another agent.
+            let s: TerminalSession
+            if d.kind == .agent, d.hostID == nil, let a = agent(d.agentID) {
+                s = startLocalAgent(a, resume: d.externalID, chat: d.isChat, focus: false)
+            } else {
+                s = newTerminal(project: nil, host: d.hostID, title: d.title, kind: d.kind == .agent ? .shell : d.kind, cwd: d.cwd, attach: false)
+            }
             remap[d.id] = s.id
+            if d.kind == .agent { renameSession(s.id, to: d.title) }
         }
         terminalTree = WorkspaceStore.remapped(library.globalTree, remap) { _ in false }
         globalRestored = true
@@ -534,7 +622,9 @@ extension AppStore {
             }
         }.value
         for (id, ext, name) in found {
-            guard let i = sessions.firstIndex(where: { $0.id == id }) else { continue }
+            guard let i = sessions.firstIndex(where: { $0.id == id }),
+                  let was = targets.first(where: { $0.0 == id })?.1, sessions[i].externalID == was else { continue }
+            // (A rewind or clear may have moved it while this ran; that newer id wins.)
             if sessions[i].externalID != ext {
                 PerfMonitor.shared.note("session \(id) switched conversation to \(ext)")
                 sessions[i].externalID = ext

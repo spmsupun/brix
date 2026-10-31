@@ -380,6 +380,7 @@ struct NotesPanel: View {
             TextEditor(text: Binding(
                 get: { ws.project?.notes ?? "" },
                 set: { v in if var p = ws.project { p.notes = v; store.updateProject(p) } }))
+                .noWritingTools()
                 .font(Typo.ui(12.5))
                 .scrollContentBackground(.hidden)
                 .padding(8)

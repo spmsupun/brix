@@ -265,6 +265,8 @@ private struct PaneGroupView: View {
             .frame(height: TileMetrics.strip)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(PaneDrag.space)) } action: { drag.stripFrames[group.id] = $0 }
             HStack(spacing: 0) {
+                // A Claude agent's tab: switch the conversation between chat and terminal here.
+                if let a = active { AgentViewSwitch(sessionID: a).padding(.trailing, 6) }
                 IconButton(symbol: "rectangle.split.2x1", label: "Split Right", shortcut: "⌘D", size: 26, iconSize: 12) { splitNew(.right) }
                 IconButton(symbol: "rectangle.split.1x2", label: "Split Down", shortcut: "⇧⌘D", size: 26, iconSize: 12) { splitNew(.bottom) }
                 MenuButton(items: { paneMenu }) {

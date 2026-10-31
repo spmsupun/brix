@@ -236,6 +236,8 @@ extension ImportTests {
         let id = "3f2a8c1e-0000-4000-8000-123456789abc"
         XCTAssertEqual(claude.launchCommand(resourceNames: [], sessionID: id), "claude --session-id \(id)")
         XCTAssertEqual(claude.launchCommand(resourceNames: [], sessionID: id, resume: true), "claude --resume \(id)")
+        XCTAssertEqual(claude.launchCommand(resourceNames: ["db"], sessionID: id, resume: true).hasPrefix("claude --resume \(id) --append-system-prompt "), true,
+                       "a resumed conversation keeps the linked-resources note")
         let codex = AgentConfig.builtins.first { $0.id == "codex" }!
         XCTAssertEqual(codex.launchCommand(resourceNames: [], sessionID: id, resume: true), "codex resume \(id)")
         // Anything that isn't a plain id never reaches the shell.

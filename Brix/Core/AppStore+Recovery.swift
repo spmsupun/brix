@@ -76,7 +76,8 @@ extension AppStore {
     /// from real data. The installed app's files are only read, never changed;
     /// passwords stay with the installed app.
     func offerDevCopy() {
-        guard Persistence.isDevBuild, persistence.directory == Persistence.supportDirectory,
+        // Snapshot runs start from the sample workspace; a copy landing mid-run replaces it.
+        guard Persistence.isDevBuild, DebugSnapshot.directory == nil, persistence.directory == Persistence.supportDirectory,
               !FileManager.default.fileExists(atPath: persistence.url(".dev-copy-asked").path),
               library.projects.allSatisfy(\.isSample), library.hosts.allSatisfy(\.isSample) else { return }
         let stable = Persistence(directory: Persistence.applicationSupport.appendingPathComponent("Brix", isDirectory: true))

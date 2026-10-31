@@ -284,19 +284,43 @@ enum DebugSnapshot {
         if let pair = ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_CHAT"]?.split(separator: ",", maxSplits: 1).map(String.init), pair.count == 2 {
             // dir,prompt: a real Claude Code chat session (Sonnet) in dir. Each step
             // captures it; a waiting permission prompt is allowed one step after it shows.
+            // BRIX_SNAPSHOT_CHAT_IMAGE attaches an image to the prompt; from step 20
+            // the conversation is closed and resumed in a new chat, to show its history.
             var chatID = ""
+            let convo = UUID().uuidString.lowercased()
+            var projectID = ""
             s.append(Step(name: "Chat00") { st in
                 let p = st.addProject(AppStore.detect(url: URL(fileURLWithPath: pair[0])), pinned: true, preset: .agent, hosts: [], databases: [], docker: [])
                 st.openProject(p.id)
-                let c = st.newTerminal(project: p.id, title: "Claude Code", kind: .agent, command: "claude --model sonnet --permission-mode default", chat: true)
-                if let i = st.sessions.firstIndex(where: { $0.id == c.id }) { st.sessions[i].agentID = "claude"; st.sessions[i].process = "claude" }
+                projectID = p.id
+                let c = st.newTerminal(project: p.id, title: "Claude Code", kind: .agent, command: "claude --model sonnet --permission-mode default --session-id \(convo)", chat: true)
+                if let i = st.sessions.firstIndex(where: { $0.id == c.id }) { st.sessions[i].agentID = "claude"; st.sessions[i].process = "claude"; st.sessions[i].externalID = convo }
                 chatID = c.id
                 st.reveal(session: c.id)
-                st.sendInput(c.id, pair[1])
+                let images = ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_CHAT_IMAGE"].flatMap { NSImage(contentsOfFile: $0) }.flatMap(ClaudeChat.attachment)
+                st.sendInput(c.id, pair[1], images: images.map { [$0] } ?? [])
             })
             var seen: String?
             for n in 1..<40 {
-                s.append(Step(name: String(format: "Chat%02d", n)) { _ in
+                s.append(Step(name: String(format: "Chat%02d", n)) { st in
+                    if ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_CHAT_SWITCH"] != nil, n == 8 || n == 12 {
+                        // Chat to terminal, then back: same conversation, same tab slot.
+                        let before = st.sessions.map(\.id)
+                        st.reopen(chatID, asChat: n == 12)
+                        if let new = st.sessions.map(\.id).first(where: { !before.contains($0) }) { chatID = new }
+                    }
+                    if n == 12, ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_CHAT_REWIND"] != nil,
+                       let chat = ClaudeChatRegistry.shared.chat(chatID), let first = chat.items.first(where: { $0.kind == .user }) {
+                        // Rewind to before the first message, then ask what came before.
+                        chat.rewindConversation(to: first, edit: false)
+                        chat.send("Have I sent you any earlier message in this conversation? Answer yes or no, then one short sentence.")
+                    }
+                    if n == 20, ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_CHAT_REWIND"] == nil {
+                        st.closeSession(chatID, confirmRunning: false)
+                        let c = st.newTerminal(project: projectID, title: "Claude Code", kind: .agent, command: "claude --model sonnet --resume \(convo)", chat: true)
+                        chatID = c.id
+                        st.reveal(session: c.id)
+                    }
                     guard let chat = ClaudeChatRegistry.shared.chat(chatID) else { return }
                     if let ask = chat.asks.first {
                         if seen == ask.id { chat.allow(ask) } else { seen = ask.id }

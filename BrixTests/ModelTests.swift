@@ -395,6 +395,109 @@ final class ClaudePlanTests: XCTestCase {
     }
 }
 
+final class ChatHistoryTests: XCTestCase {
+    /// A transcript becomes chat items: your messages, replies, tool cards with
+    /// their results; side chains, meta notes and tagged command echoes are left out.
+    @MainActor
+    func testHistoryFromTranscript() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let lines = [
+            #"{"type":"user","uuid":"u1","message":{"role":"user","content":"fix the bug"}}"#,
+            #"{"type":"user","uuid":"u0","isMeta":true,"message":{"role":"user","content":"caveat"}}"#,
+            #"{"type":"user","uuid":"u2","message":{"role":"user","content":"<command-name>/clear</command-name>"}}"#,
+            #"{"type":"assistant","uuid":"a1","message":{"content":[{"type":"text","text":"Looking."},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/p/a.swift"}}]}}"#,
+            #"{"type":"assistant","uuid":"a9","isSidechain":true,"message":{"content":[{"type":"text","text":"subagent"}]}}"#,
+            #"{"type":"user","uuid":"u3","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"line 1"}]}}"#,
+            #"{"type":"user","uuid":"u4","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGk="}},{"type":"text","text":"see this"}]}}"#,
+        ]
+        try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        let items = try XCTUnwrap(ClaudeChat.history(url, cwd: "/p"))
+        XCTAssertEqual(items.map(\.text), ["fix the bug", "Looking.", "a.swift", "see this"])
+        XCTAssertEqual(items[2].result, "line 1")
+        XCTAssertEqual(items[3].images, [Data("hi".utf8)])
+        XCTAssertEqual(ClaudeChat.history(url, cwd: "/p", limit: 2)?.map(\.text), ["a.swift", "see this"])
+        XCTAssertNil(ClaudeChat.history(url.appendingPathExtension("missing"), cwd: "/p"))
+    }
+}
+
+final class ChatProtocolTests: XCTestCase {
+    /// Permission choices read like the terminal's, and say which ones are saved to a file.
+    func testSuggestions() {
+        let rule = ClaudeChat.suggestion(["type": "addRules", "rules": [["toolName": "Bash", "ruleContent": "mkdir newdir *"]], "behavior": "allow", "destination": "localSettings"], cwd: "/p")
+        XCTAssertEqual(rule?.label, "Yes, and don't ask again for Bash(mkdir newdir *) (saved in .claude/settings.local.json)")
+        XCTAssertEqual(rule?.saved, true)
+        let mode = ClaudeChat.suggestion(["type": "setMode", "mode": "acceptEdits", "destination": "session"], cwd: "/p")
+        XCTAssertEqual(mode?.label, "Yes, and switch to accept edits for this session")
+        XCTAssertEqual(mode?.saved, false)
+        XCTAssertNil(ClaudeChat.suggestion(["type": "removeRules"], cwd: "/p"))
+    }
+
+    func testCommandOutputAndNotices() {
+        XCTAssertEqual(ClaudeChat.commandOutput("<local-command-stdout>Set model to `sonnet`</local-command-stdout>"), "Set model to `sonnet`")
+        XCTAssertNil(ClaudeChat.commandOutput("plain text"))
+        XCTAssertEqual(ClaudeChat.notice(["subtype": "api_retry", "attempt": 2, "max_retries": 10])?.text, "API error, retrying (2 of 10)")
+        XCTAssertEqual(ClaudeChat.notice(["subtype": "compact_boundary", "compact_metadata": ["pre_tokens": 154000]])?.text, "Conversation compacted, 154k tokens before")
+        XCTAssertNil(ClaudeChat.notice(["subtype": "hook_started"]))
+    }
+}
+
+final class ChatSessionOpsTests: XCTestCase {
+    /// Rewind and fork rebuild the launch line: the conversation flags come off, the rest stays.
+    func testLaunchLineHelpers() {
+        let id = "0b5f2d3e-1111-2222-3333-444455556666"
+        let cmd = "claude --resume \(id) --resume-session-at \(id) --fork-session --append-system-prompt 'x y'"
+        XCTAssertEqual(ClaudeChat.base(cmd), "claude --append-system-prompt 'x y'")
+        XCTAssertEqual(ClaudeChat.base("claude --session-id \(id)"), "claude")
+        XCTAssertEqual(ClaudeChat.flag("--resume", in: cmd), id)
+        XCTAssertNil(ClaudeChat.flag("--model", in: cmd))
+    }
+
+    /// A fork's history stops at its cut; each message knows Claude's message before it.
+    @MainActor
+    func testHistoryCut() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let lines = [
+            #"{"type":"user","uuid":"u1","message":{"role":"user","content":"first"}}"#,
+            #"{"type":"assistant","uuid":"a1","message":{"content":[{"type":"text","text":"one"}]}}"#,
+            #"{"type":"user","uuid":"u2","message":{"role":"user","content":"second"}}"#,
+            #"{"type":"assistant","uuid":"a2","message":{"content":[{"type":"text","text":"two"}]}}"#,
+        ]
+        try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        let all = try XCTUnwrap(ClaudeChat.history(url, cwd: "/p"))
+        XCTAssertEqual(all.map(\.text), ["first", "one", "second", "two"])
+        XCTAssertNil(all[0].before)
+        XCTAssertEqual(all[2].before, "a1")
+        XCTAssertEqual(all[2].uuid, "u2")
+        XCTAssertEqual(ClaudeChat.history(url, cwd: "/p", until: "a1")?.map(\.text), ["first", "one"])
+    }
+}
+
+final class ChatMemoryTests: XCTestCase {
+    /// #note appends in place: a linked CLAUDE.md stays linked, and one that isn't UTF-8 is left alone.
+    @MainActor
+    func testAddMemoryKeepsTheFile() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir.appendingPathComponent("lib")),
+                             keychain: Keychain(service: "brix-test-\(UUID().uuidString)"), loadFromDisk: false)
+        let chat = ClaudeChat(sessionID: "s", cwd: dir.path, store: store)
+        let target = dir.appendingPathComponent("AGENTS.md")
+        try "# Rules".write(to: target, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("CLAUDE.md"), withDestinationURL: target)
+        XCTAssertNil(chat.addMemory("use tabs"))
+        XCTAssertEqual(try String(contentsOf: target, encoding: .utf8), "# Rules\n- use tabs\n")
+        XCTAssertNotNil(try FileManager.default.destinationOfSymbolicLink(atPath: dir.appendingPathComponent("CLAUDE.md").path))
+
+        let latin = Data([0x63, 0x61, 0x66, 0xE9])  // "café" in Latin-1
+        try latin.write(to: target)
+        XCTAssertNotNil(chat.addMemory("x"))
+        XCTAssertEqual(try Data(contentsOf: target), latin)
+    }
+}
+
 final class ChatDiffTests: XCTestCase {
     /// An edit's unchanged lines at either end are context; only the change is marked.
     func testDiffKeepsContext() {
