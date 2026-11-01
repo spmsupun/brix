@@ -10,6 +10,8 @@ struct ClaudeChatView: View {
     let chat: ClaudeChat
     @State private var draft = ""
     @State private var attachments: [ClaudeChat.Attachment] = []
+    /// The next "[Image #N]"; numbers never repeat within a message, so removing one doesn't shift the others.
+    @State private var nextImage = 1
     @State private var pasteMonitor: Any?
     /// Why the last images couldn't be attached; shown above the composer.
     @State private var attachError: String?
@@ -166,10 +168,28 @@ struct ClaudeChatView: View {
             let ok = made.compactMap { $0 }
             if ok.count < made.count { problems.append("Couldn't convert \(made.count - ok.count) image\(made.count - ok.count == 1 ? "" : "s").") }
             let room = max(0, Self.maxImages - attachments.count)
-            attachments += ok.prefix(room)
+            var added = Array(ok.prefix(room))
+            for i in added.indices { added[i].number = nextImage; nextImage += 1 }
+            attachments += added
+            if !added.isEmpty { insertTags(added.map { "[Image #\($0.number)] " }.joined()) }
             if ok.count > room { problems.append("Up to \(Self.maxImages) images per message.") }
             attachError = problems.isEmpty ? nil : problems.joined(separator: " ")
         }
+    }
+
+    /// Puts the image tags at the cursor, as the terminal does; at the end when the editor isn't focused (a drop).
+    private func insertTags(_ tags: String) {
+        if focused, let tv = NSApp.keyWindow?.firstResponder as? NSTextView, tv.isEditable {
+            tv.insertText(tags, replacementRange: tv.selectedRange())
+        } else {
+            draft += (draft.isEmpty || draft.last?.isWhitespace == true ? "" : " ") + tags
+        }
+    }
+
+    private func removeAttachment(_ a: ClaudeChat.Attachment) {
+        attachments.removeAll { $0.id == a.id }
+        draft = draft.replacingOccurrences(of: "[Image #\(a.number)] ", with: "").replacingOccurrences(of: "[Image #\(a.number)]", with: "")
+        if attachments.isEmpty { nextImage = 1 }
     }
 
     // MARK: Rows
@@ -303,8 +323,13 @@ struct ClaudeChatView: View {
                         if let img = NSImage(data: a.data) {
                             Image(nsImage: img).resizable().scaledToFill().frame(width: 56, height: 56)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(alignment: .bottomLeading) {
+                                    Text("#\(a.number)").font(.system(size: 9, weight: .bold)).monospacedDigit().foregroundStyle(.white)
+                                        .padding(.horizontal, 4).frame(height: 14).background(Capsule().fill(.black.opacity(0.7))).padding(3)
+                                        .help("[Image #\(a.number)] in your message")
+                                }
                                 .overlay(alignment: .topTrailing) {
-                                    Button { attachments.removeAll { $0.id == a.id } } label: {
+                                    Button { removeAttachment(a) } label: {
                                         Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                                             .frame(width: 16, height: 16).background(Circle().fill(.black.opacity(0.7)))
                                     }
@@ -323,6 +348,9 @@ struct ClaudeChatView: View {
                     }
                     TextEditor(text: $draft)
                         .noWritingTools()
+                        // With a mouse attached macOS shows an always-on scroll bar track in
+                        // the box; long drafts still scroll.
+                        .scrollIndicators(.never)
                         .font(Typo.ui(13)).foregroundStyle(Theme.text)
                         .scrollContentBackground(.hidden)
                         .focused($focused)
@@ -694,6 +722,7 @@ struct ClaudeChatView: View {
         store.sendInput(chat.sessionID, t, images: attachments)
         draft = ""
         attachments = []
+        nextImage = 1
         attachError = nil
     }
 }

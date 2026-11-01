@@ -522,3 +522,22 @@ final class ClaudeSymlinkFolderTests: XCTestCase {
         XCTAssertEqual(AgentTranscripts.claudeSessions(projectPath: "/Users/me/app", home: home.path).count, 1)
     }
 }
+
+final class ChatImageLabelTests: XCTestCase {
+    /// Each image follows its "[Image #N]" label, in the order attached; the text comes last.
+    func testImagesFollowTheirLabels() {
+        var a = ClaudeChat.Attachment(data: Data([1]), mediaType: "image/png"); a.number = 1
+        var b = ClaudeChat.Attachment(data: Data([2]), mediaType: "image/png"); b.number = 3
+        let parts = ClaudeChat.content("[Image #1] red, [Image #3] yellow", images: [a, b])
+        XCTAssertEqual(parts.map { $0["type"] as? String }, ["text", "image", "text", "image", "text"])
+        XCTAssertEqual(parts[0]["text"] as? String, "[Image #1]")
+        XCTAssertEqual((parts[1]["source"] as? [String: Any])?["data"] as? String, Data([1]).base64EncodedString())
+        XCTAssertEqual(parts[2]["text"] as? String, "[Image #3]")
+        XCTAssertEqual((parts[3]["source"] as? [String: Any])?["data"] as? String, Data([2]).base64EncodedString())
+        XCTAssertEqual(parts[4]["text"] as? String, "[Image #1] red, [Image #3] yellow")
+        // An untagged image (number 0) goes without a label.
+        XCTAssertEqual(ClaudeChat.content("", images: [ClaudeChat.Attachment(data: Data([1]), mediaType: "image/png")]).count, 1)
+        XCTAssertTrue(ClaudeChat.isImageLabel("[Image #12]"))
+        XCTAssertFalse(ClaudeChat.isImageLabel("[Image #1] make it red"))
+    }
+}

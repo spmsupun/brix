@@ -17,6 +17,25 @@ final class ClaudeChat {
         let id = UUID()
         var data: Data
         var mediaType: String
+        /// The N of the "[Image #N]" tag the composer put in the text; 0 when untagged.
+        var number = 0
+    }
+
+    /// A message's content blocks: each image right after its "[Image #N]" label, so
+    /// Claude can match the tags in the text to the pictures, then the text.
+    nonisolated static func content(_ text: String, images: [Attachment]) -> [[String: Any]] {
+        var parts: [[String: Any]] = []
+        for a in images {
+            if a.number > 0 { parts.append(["type": "text", "text": "[Image #\(a.number)]"]) }
+            parts.append(["type": "image", "source": ["type": "base64", "media_type": a.mediaType, "data": a.data.base64EncodedString()]])
+        }
+        if !text.isEmpty { parts.append(["type": "text", "text": text]) }
+        return parts
+    }
+
+    /// The label block `content` puts before an image; history leaves it out of the shown text.
+    nonisolated static func isImageLabel(_ s: String) -> Bool {
+        s.wholeMatch(of: /\[Image #\d+\]/) != nil
     }
 
     struct Item: Identifiable, Sendable {
@@ -309,11 +328,7 @@ final class ClaudeChat {
         if images.isEmpty {
             write(["type": "user", "uuid": uuid, "message": ["role": "user", "content": t]])
         } else {
-            var parts: [[String: Any]] = images.map {
-                ["type": "image", "source": ["type": "base64", "media_type": $0.mediaType, "data": $0.data.base64EncodedString()]]
-            }
-            if !t.isEmpty { parts.append(["type": "text", "text": t]) }
-            write(["type": "user", "uuid": uuid, "message": ["role": "user", "content": parts]])
+            write(["type": "user", "uuid": uuid, "message": ["role": "user", "content": Self.content(t, images: images)]])
         }
         interrupting = false
         setWorking(true)
@@ -1064,7 +1079,7 @@ final class ClaudeChat {
                     case "text":
                         let t = c["text"] as? String ?? ""
                         if t.hasPrefix("[Request interrupted") { out.append(Item(id: "h-\(uuid)-i", kind: .notice, text: "Interrupted")) }
-                        else if !t.hasPrefix("<") { text += (text.isEmpty ? "" : "\n") + t }
+                        else if !t.hasPrefix("<"), !Self.isImageLabel(t) { text += (text.isEmpty ? "" : "\n") + t }
                     case "image":
                         if let b = (c["source"] as? [String: Any])?["data"] as? String, let d = Data(base64Encoded: b) { images.append(d) }
                     default: break
