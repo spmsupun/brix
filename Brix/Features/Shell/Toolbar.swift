@@ -20,6 +20,16 @@ struct BrixToolbar: View {
                 presetControl(ws)
             }
             dockToggles
+            if let v = AppUpdater.shared.available {
+                Button { AppUpdater.shared.check() } label: {
+                    Label("Update", systemImage: "arrow.down.circle.fill")
+                        .font(Typo.ui(11.5, .semibold)).foregroundStyle(Theme.onAccent)
+                        .padding(.horizontal, 10).frame(height: 24)
+                        .background(Capsule().fill(accent))
+                }
+                .buttonStyle(.hand)
+                .help("Brix \(v) is available: see what's new and install")
+            }
             NoticesButton()
             addMenu
         }
@@ -270,12 +280,13 @@ private struct NoticeList: View {
     }
 
     private func row(_ n: AgentNotice) -> some View {
-        let gone = store.session(n.sessionID) == nil
+        let update = n.sessionID == AppUpdater.noticeID
+        let gone = !update && store.session(n.sessionID) == nil
         return Button {
             if let i = store.library.notices.firstIndex(where: { $0.id == n.id }) { store.library.notices[i].read = true }
             guard !gone else { return }
             close()
-            store.reveal(session: n.sessionID)
+            if update { AppUpdater.shared.check() } else { store.reveal(session: n.sessionID) }
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 Circle().fill(n.read ? Color.clear : accent).frame(width: 7, height: 7).padding(.top, 5)

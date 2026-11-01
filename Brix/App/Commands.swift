@@ -7,6 +7,11 @@ struct BrixCommands: Commands {
     private var ws: WorkspaceStore? { store.currentWorkspace }
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { AppUpdater.shared.check() }
+                .disabled(!AppUpdater.shared.enabled)
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("New Terminal") { newTerminal() }.keyboardShortcut("t", modifiers: .command)
             Button("New Agent Session…") { newAgent() }.keyboardShortcut("t", modifiers: [.command, .option])

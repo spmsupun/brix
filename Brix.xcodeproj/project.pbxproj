@@ -62,6 +62,7 @@
 		791ECE7E8AD2C7572C4F3378 /* ClaudeChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E703C0EF33F0BED957CA1907 /* ClaudeChat.swift */; };
 		7BA811F96FD84D61BD7FC78B /* DockHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0DE2352A5E657CE5E196E3 /* DockHost.swift */; };
 		7E31D0B751246C6269317834 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431E29C82D38812B0B2EB2A1 /* AppModels.swift */; };
+		7F25FD761B57C26CB0F0342F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5C5075D029118BD08659D548 /* Sparkle */; };
 		7FA48345484490CEE11AC2C2 /* LiveTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06FD02FD30B36AAE6D15226A /* LiveTerminal.swift */; };
 		7FFA947A1F28CEAE404CBD97 /* ReorderableTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A871909E8AB81D0CB8B72D /* ReorderableTabs.swift */; };
 		8368CD4973C232B4F91C4262 /* BrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93789C650C63158483609937 /* BrixApp.swift */; };
@@ -86,6 +87,7 @@
 		A9CF9256716B8C5C18943AEA /* DBDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D75050B552FBD1FB7E9E9F9 /* DBDiscovery.swift */; };
 		AAE847AFEFA897F4B3C865E1 /* DBCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E0840ACAF1F220A9050967C /* DBCopyTests.swift */; };
 		AB200BF46FD9D947D6F75C57 /* AgentTranscripts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0073D4D45840C7674C3C8AD /* AgentTranscripts.swift */; };
+		AE8F061FAD39EBAAE1209139 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5ACD256CBDAC4348363C373 /* Updater.swift */; };
 		B103CB3D417823A45219829A /* AppStore+DataWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664C2253791C3A4F9C6302D5 /* AppStore+DataWorkspace.swift */; };
 		B1FE223172EAA062A7FFE91A /* MacStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB42F6E043D58B61CFAEA72C /* MacStats.swift */; };
 		B4DFD3524165FCE4F7908FDD /* Motion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B658E357E054E47E35015F9C /* Motion.swift */; };
@@ -252,6 +254,7 @@
 		D06D6225A3D5CD992AAC3712 /* AppStore+Agents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+Agents.swift"; sourceTree = "<group>"; };
 		D3662FA2A8AD2D4721BD2DC1 /* ResizeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResizeHandle.swift; sourceTree = "<group>"; };
 		D4E32E1C9E707E53D2B21A7E /* BuildSite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildSite.swift; sourceTree = "<group>"; };
+		D5ACD256CBDAC4348363C373 /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
 		D60A140D5719E790B83418A7 /* AppStore+Activity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+Activity.swift"; sourceTree = "<group>"; };
 		D7FCBD86CC097B7C5B4388D8 /* DataWorkspaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataWorkspaceModel.swift; sourceTree = "<group>"; };
 		DAA14DF421F5F8E1D107BB60 /* ResourceIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceIcons.swift; sourceTree = "<group>"; };
@@ -281,6 +284,7 @@
 				157980FE01B15B3A533EB148 /* PostgresNIO in Frameworks */,
 				981AF0B0A0AF1C9CFEE46A79 /* MySQLNIO in Frameworks */,
 				DF98EF3862083D223AB484C0 /* GRDB in Frameworks */,
+				7F25FD761B57C26CB0F0342F /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -348,6 +352,7 @@
 				161195FDC799D06ED28476FF /* DebugSnapshot.swift */,
 				ED33C3D8F38C01FB05B8314F /* Notifications.swift */,
 				741B48D6C12AF4083DB250C6 /* PerfMonitor.swift */,
+				D5ACD256CBDAC4348363C373 /* Updater.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -711,6 +716,7 @@
 				3E4DEED8A08EF1E5797B079E /* PostgresNIO */,
 				493883ECC6748A0AB7436F1A /* MySQLNIO */,
 				3E43C7966A44E4544BED6167 /* GRDB */,
+				5C5075D029118BD08659D548 /* Sparkle */,
 			);
 			productName = Brix;
 			productReference = F1426B1ED0FB2FD0FCE4C3B6 /* Brix.app */;
@@ -761,6 +767,7 @@
 				CFE03EB3269B76C9C1736304 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				7B523772CAF4E3B76A8BC121 /* XCRemoteSwiftPackageReference "mysql-nio" */,
 				2B4EA77FEC658B0EFD7575F0 /* XCRemoteSwiftPackageReference "postgres-nio" */,
+				A2D7CE9A07095D38E12BF015 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				D59180FA692287282BEAEDAE /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -901,6 +908,7 @@
 				67B4F915ABB9B19822CC7A35 /* Tokens.swift in Sources */,
 				26768E6D2E126F99466FA4CA /* ToolStrip.swift in Sources */,
 				B71F4DFDA04B4543DE12BB54 /* Toolbar.swift in Sources */,
+				AE8F061FAD39EBAAE1209139 /* Updater.swift in Sources */,
 				BB8DD68B4EFD0816D4BC9AA8 /* WorkspaceStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1191,6 +1199,14 @@
 				minimumVersion = 1.7.0;
 			};
 		};
+		A2D7CE9A07095D38E12BF015 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
 		CFE03EB3269B76C9C1736304 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
@@ -1224,6 +1240,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7B523772CAF4E3B76A8BC121 /* XCRemoteSwiftPackageReference "mysql-nio" */;
 			productName = MySQLNIO;
+		};
+		5C5075D029118BD08659D548 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A2D7CE9A07095D38E12BF015 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		D734E22237DBBE64E0805FF0 /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;

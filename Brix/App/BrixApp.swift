@@ -23,6 +23,7 @@ struct BrixApp: App {
                     store.applyAppearance()
                     store.restoreSessionsAtLaunch()
                     DebugSnapshot.run(store: store)
+                    AppUpdater.shared.start(store: store)
                     // Launch timing: writes the time the first window appeared, then quits.
                     if let mark = ProcessInfo.processInfo.environment["BRIX_LAUNCH_MARK"] {
                         try? "\(Date().timeIntervalSince1970)".write(toFile: mark, atomically: true, encoding: .utf8)

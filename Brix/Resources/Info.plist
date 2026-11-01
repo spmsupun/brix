@@ -32,5 +32,13 @@
 	<string>© 2026 Supun Praneeth. MIT License.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/spmsupun/brix/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>VZjBMYUgGawS0JQBiTOTsF9oIZzG5br5fm5PO9X/iD0=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>14400</integer>
 </dict>
 </plist>

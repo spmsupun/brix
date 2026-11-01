@@ -23,6 +23,9 @@ packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift
     from: 7.0.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
 targets:
   Brix:
     type: application
@@ -34,6 +37,7 @@ targets:
       - package: PostgresNIO
       - package: MySQLNIO
       - package: GRDB
+      - package: Sparkle
     info:
       path: Brix/Resources/Info.plist
       properties:
@@ -47,6 +51,12 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "© 2026 Supun Praneeth. MIT License."
         NSPrincipalClass: NSApplication
+        # Sparkle: the feed is an asset of the newest GitHub release; every update
+        # must be signed with the key whose public half is here.
+        SUFeedURL: https://github.com/spmsupun/brix/releases/latest/download/appcast.xml
+        SUPublicEDKey: VZjBMYUgGawS0JQBiTOTsF9oIZzG5br5fm5PO9X/iD0=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 14400
     entitlements:
       path: Brix/Resources/Brix.entitlements
       properties:

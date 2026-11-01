@@ -315,18 +315,11 @@ struct ClaudeChatView: View {
                     }
                 }
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                Button { pickImages() } label: {
-                    Image(systemName: "paperclip").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text3)
-                        .frame(width: 22, height: 26).contentShape(Rectangle())
-                }
-                .buttonStyle(.hand)
-                .disabled(chat.exited != nil)
-                .help("Attach images (or paste or drop them here)")
+            VStack(alignment: .leading, spacing: 8) {
                 ZStack(alignment: .topLeading) {
                     if draft.isEmpty {
-                        Text(chat.exited != nil ? "This session has ended." : "Reply to Claude…  ⏎ send · ⇧⏎ new line · / commands · @ files · ! shell · # memory")
-                            .font(Typo.ui(13)).foregroundStyle(Theme.text3).padding(.top, 1).padding(.leading, 5).allowsHitTesting(false)
+                        Text(chat.exited != nil ? "This session has ended." : "Reply to Claude…")
+                            .font(Typo.ui(13)).foregroundStyle(Theme.text3).padding(.leading, 5).allowsHitTesting(false)
                     }
                     TextEditor(text: $draft)
                         .noWritingTools()
@@ -371,19 +364,44 @@ struct ClaudeChatView: View {
                             return .handled
                         }
                 }
-                Button {
-                    if chat.working, draft.isEmpty, attachments.isEmpty { chat.interrupt() } else { send() }
-                } label: {
-                    Image(systemName: chat.working && draft.isEmpty && attachments.isEmpty ? "stop.fill" : "arrow.up")
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.onAccent)
-                        .frame(width: 26, height: 26)
-                        .background(Circle().fill(chat.exited == nil ? accent : Theme.disabled))
+                HStack(spacing: 6) {
+                    Button { pickImages() } label: {
+                        Image(systemName: "paperclip").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text3)
+                            .frame(width: 24, height: 24).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.hand)
+                    .disabled(chat.exited != nil)
+                    .help("Attach images (or paste or drop them here)")
+                    MenuButton(items: modeMenu) { chip(footLabel(ClaudeChat.modes.first { $0.id == chat.permissionMode }?.name ?? chat.permissionMode,
+                                                                 symbol: chat.permissionMode == "plan" ? "list.bullet.clipboard" : "hand.raised",
+                                                                 tint: chat.permissionMode == "default" ? Theme.text2 : accent)) }
+                        .help("Permission mode (⇧⇥ to cycle)")
+                    MenuButton(items: modelMenu) { chip(footLabel(modelName, symbol: "cpu", tint: Theme.text2)) }
+                        .help("Model")
+                    if !effortLevels.isEmpty {
+                        MenuButton(items: effortMenu) { chip(footLabel(chat.effort.isEmpty ? "Effort" : "Effort: \(chat.effort)", symbol: "gauge.with.dots.needle.33percent", tint: Theme.text2)) }
+                            .help("How hard Claude thinks")
+                    }
+                    Spacer(minLength: 8)
+                    // Dropped when the pane is too narrow, rather than squeezing the chips.
+                    ViewThatFits(in: .horizontal) {
+                        Text("⏎ send · ⇧⏎ new line").font(Typo.ui(10.5)).foregroundStyle(Theme.text3).fixedSize()
+                        Color.clear.frame(width: 0, height: 0)
+                    }
+                    Button {
+                        if chat.working, draft.isEmpty, attachments.isEmpty { chat.interrupt() } else { send() }
+                    } label: {
+                        Image(systemName: chat.working && draft.isEmpty && attachments.isEmpty ? "stop.fill" : "arrow.up")
+                            .font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.onAccent)
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(chat.exited == nil ? accent : Theme.disabled))
+                    }
+                    .buttonStyle(.hand)
+                    .disabled(chat.exited != nil)
+                    .help(chat.working && draft.isEmpty && attachments.isEmpty ? "Stop (interrupt)" : "Send")
                 }
-                .buttonStyle(.hand)
-                .disabled(chat.exited != nil)
-                .help(chat.working && draft.isEmpty && attachments.isEmpty ? "Stop (interrupt)" : "Send")
             }
-            .padding(10)
+            .padding(.horizontal, 12).padding(.top, 11).padding(.bottom, 8)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white(0.04)))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(focused ? accent.opacity(0.45) : Theme.border))
             footer
@@ -459,17 +477,8 @@ struct ClaudeChatView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            MenuButton(items: modeMenu) { footLabel(ClaudeChat.modes.first { $0.id == chat.permissionMode }?.name ?? chat.permissionMode,
-                                                    symbol: chat.permissionMode == "plan" ? "list.bullet.clipboard" : "hand.raised",
-                                                    tint: chat.permissionMode == "default" ? Theme.text3 : accent) }
-                .help("Permission mode (⇧⇥ to cycle)")
-            MenuButton(items: modelMenu) { footLabel(modelName, symbol: "cpu", tint: Theme.text3) }
-                .help("Model")
-            if !effortLevels.isEmpty {
-                MenuButton(items: effortMenu) { footLabel(chat.effort.isEmpty ? "Effort" : "Effort: \(chat.effort)", symbol: "gauge.with.dots.needle.33percent", tint: Theme.text3) }
-                    .help("How hard Claude thinks")
-            }
-            Spacer()
+            if chat.exited == nil { Text("/ commands   @ files   ! shell   # memory").lineLimit(1).layoutPriority(-1) }
+            Spacer(minLength: 0)
             if let s = store.session(chat.sessionID), !s.plan.isEmpty {
                 Button { showTodos.toggle() } label: {
                     Label("\(s.plan.filter(\.done).count)/\(s.plan.count)", systemImage: "checklist")
@@ -578,6 +587,12 @@ struct ClaudeChatView: View {
             }
         }
         .padding(14).frame(width: 380)
+    }
+
+    /// A menu label inside the composer, outlined like a small button.
+    private func chip(_ label: some View) -> some View {
+        label.font(Typo.ui(11)).padding(.horizontal, 8).frame(height: 24)
+            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.controlStroke))
     }
 
     private func footLabel(_ text: String, symbol: String, tint: Color) -> some View {
