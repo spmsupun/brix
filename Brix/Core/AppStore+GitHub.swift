@@ -8,11 +8,13 @@ extension AppStore {
         library.projects.filter { !$0.isSample || $0.id == "atlas-web" }.filter { git[$0.id]?.isRepo == true || $0.isSample }
     }
 
-    func refreshGitHub(_ id: ProjectID) async {
+    func refreshGitHub(_ id: ProjectID, auth: GitHubAuth = GitHubAuth()) async {
         guard let p = project(id) else { return }
         if p.isSample { github[id] = GitHub.sample(p); return }
         if github[id] == nil { github[id] = .loading }
-        let (result, account) = await GitHub.load(p, prefer: p.githubAccountSeen)
+        let (result, account) = await GitHub.load(p, prefer: p.githubAccountSeen, auth: auth)
+        // A cancelled refresh (the view went away, a newer one started) says nothing.
+        guard !Task.isCancelled else { return }
         // A failed refresh keeps the last good data on screen, marked stale
         // (githubErrors) until a refresh succeeds.
         if case .failed = result, case .ready = github[id] ?? .loading {
@@ -27,25 +29,38 @@ extension AppStore {
         }
     }
 
-    /// Every minute, or every 15 seconds while any pipeline runs; only while a
-    /// Brix window is visible, and only for projects with a GitHub remote.
+    /// Every minute; a repo with a pipeline running every 15 seconds. Only while
+    /// a Brix window is visible, and only for projects with a GitHub remote.
+    /// gh's accounts and tokens are read once per round, not per repo.
     func startGitHubPolling() {
         githubTask?.cancel()
         githubTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
+            var lastFull = Date.distantPast
             while !Task.isCancelled {
                 guard let self else { return }
                 if self.windowVisible, GitHub.installed {
+                    let full = Date().timeIntervalSince(lastFull) >= 55
+                    let auth = GitHubAuth()
                     for p in self.githubProjects {
+                        if !full, !self.ownRunning(p.id) { continue }
                         if case .noRepo = self.github[p.id] ?? .loading, self.githubChecked[p.id].map({ Date().timeIntervalSince($0) < 600 }) == true { continue }
-                        await self.refreshGitHub(p.id)
+                        await self.refreshGitHub(p.id, auth: auth)
+                        guard !Task.isCancelled else { return }
                         self.githubChecked[p.id] = Date()
                     }
+                    if full { lastFull = Date() }
                 }
                 let running = self.library.projects.contains { self.runningPipelines($0.id) > 0 }
                 try? await Task.sleep(nanoseconds: running ? 15_000_000_000 : 60_000_000_000)
             }
         }
+    }
+
+    /// This repository itself has a workflow run going.
+    private func ownRunning(_ id: ProjectID) -> Bool {
+        guard githubErrors[id] == nil, case .ready(_, _, let runs) = github[id] ?? .loading else { return false }
+        return runs.contains { $0.result == .running }
     }
 
     /// Workflow runs in progress for a project (and its nested repositories).

@@ -64,7 +64,18 @@ final class AppStore {
 
     // UI state
     var toasts: [Toast] = []
-    var confirmation: Confirmation?
+    /// Confirmations in the order they were asked; the first is the one on screen.
+    var confirmations: [Confirmation] = []
+    /// Set for a moment after one closes, so the next presents once it has gone.
+    private var confirmationGap: UUID?
+    /// The confirmation on screen. Setting one queues it behind any already
+    /// waiting; setting nil cancels the one showing.
+    var confirmation: Confirmation? {
+        get { confirmationGap == nil ? confirmations.first : nil }
+        set {
+            if let newValue { confirmations.append(newValue) } else if let c = confirmations.first { answerConfirmation(c.id, confirmed: false) }
+        }
+    }
     var sheet: ActiveSheet?
     /// The first-launch guide's current step; nil when it isn't showing.
     var guideStep: Int?
@@ -95,10 +106,17 @@ final class AppStore {
     var agentCompletion: ((TerminalSession) -> Void)?
     /// Last write error per project for `brix.json`.
     var projectFileErrors: [ProjectID: String] = [:]
+    /// Projects whose brix.json connections are waiting on the user's answer.
+    @ObservationIgnored var projectFilesAsking: Set<ProjectID> = []
     /// Global terminals from last run have been restarted (saving waits for that).
     var globalRestored = false
+    /// Production sessions from last run not reopened at launch; kept in the saved list.
+    @ObservationIgnored var heldGlobalSessions: [SessionDescriptor] = []
     /// Tests and previews never start real processes on load.
     var restoreDisabled = false
+    /// Keep projects' brix.json up to date. Off in Brix Dev, which works in the
+    /// same repositories as the installed Brix.
+    @ObservationIgnored var writesProjectFiles = !Persistence.isDevBuild
     /// Window is narrower than Metrics.autoRailWidth.
     var windowNarrow = false
     /// User expanded the sidebar while the window is narrow.
@@ -111,6 +129,9 @@ final class AppStore {
     var dockerSelection: DockerSelection?
     /// Last folder shown in each host's file explorer.
     var remoteFilesPath: [ResourceID: String] = [:]
+    /// Each SSH host's last listing in the file browser, so switching away and back
+    /// shows it straight away instead of loading again.
+    @ObservationIgnored var remoteFilesListing: [ResourceID: (path: String, entries: [RemoteEntry], history: [String], at: Date)] = [:]
     /// Development aid: shows a tab drag frozen over a pane (snapshot checks).
     var tileDragPreview: (tab: String, target: PaneDropTarget, at: CGPoint)?
     /// The docker CLI is on this Mac (checked at launch and on refresh).
@@ -122,9 +143,21 @@ final class AppStore {
 
     private var saveTask: Task<Void, Never>?
     private var loaded = false
-    /// Set when the saved library couldn't be read or backed up; prevents overwriting it.
-    private var saveBlocked = false
+    /// Set while the saved library couldn't be read (or only partly); library.json
+    /// isn't written until the user chooses to save over it. The status bar shows it.
+    private(set) var saveBlocked = false
+    /// Why, for the status bar and the question on quit.
+    @ObservationIgnored private(set) var saveBlockedReason = ""
+    /// Asks whether to save over library.json; nil when there's nothing to offer.
+    @ObservationIgnored private var saveBlockedAsk: (() -> UUID)?
+    @ObservationIgnored private var saveBlockedAskID: UUID?
+    var canUnblockSave: Bool { saveBlockedAsk != nil }
+    /// Set when settings.json couldn't be read or kept aside; it isn't overwritten this run.
+    private var settingsSaveBlocked = false
     var gitErrors: [ProjectID: String] = [:]
+    /// Git status reads in flight, and those asked for again meanwhile.
+    @ObservationIgnored var gitRefreshing: Set<ProjectID> = []
+    @ObservationIgnored var gitRefreshAgain: Set<ProjectID> = []
     private var timers: [Task<Void, Never>] = []
 
     init(services: Services = Services(), persistence: Persistence = .standard, keychain: Keychain = .standard, loadFromDisk: Bool = true) {
@@ -140,24 +173,97 @@ final class AppStore {
 
     func load() {
         do {
-            if let lib = try persistence.load(Library.self, from: "library.json") { library = lib }
+            if let lib = try persistence.load(Library.self, from: "library.json") {
+                library = lib
+                let n = lib.skippedOnLoad, newer = lib.schemaVersion > Library.currentSchema
+                if n > 0 || newer {
+                    // The next save leaves out what this build couldn't read (or doesn't
+                    // know, for a newer Brix's file) for good, so keep the file as it was.
+                    let kept = keepCopy(of: "library.json", as: "library.partial-")
+                    if n > 0 {
+                        toast(.error, "Left out \(n) saved item\(n == 1 ? "" : "s") Brix couldn't read",
+                              detail: kept.map { "The library as it was is kept as \($0) in Brix's folder." } ?? "Brix couldn't keep a copy of the file as it was.")
+                    }
+                    // Without a copy, or with a newer Brix's file, nothing is saved over it unasked.
+                    if kept == nil || newer {
+                        saveBlocked = true
+                        let why = newer ? "Your library was saved by a newer Brix; saving here drops what this version doesn't know."
+                                        : "Brix left out \(n) item\(n == 1 ? "" : "s") it couldn't read and couldn't keep a copy of the file."
+                        saveBlockedReason = why
+                        saveBlockedAsk = { [weak self] in
+                            self?.confirm("Save your library with this version?", "\(why)\(kept.map { " A copy is kept as \($0)." } ?? "") Until you choose, Brix doesn't save over library.json.",
+                                          confirm: "Save Here", destructive: true,
+                                          onCancel: { [weak self] in
+                                              self?.toast(.info, "Your library isn't saved this run", detail: "library.json is left as it is.")
+                                          }) { [weak self] in self?.unblockSave() } ?? UUID()
+                        }
+                        reviewLibrarySave()
+                    }
+                }
+            }
         } catch {
-            // Keep the unreadable file for recovery instead of overwriting it.
-            let backup = "library.unreadable-\(Int(Date().timeIntervalSince1970)).json"
-            do {
-                try FileManager.default.copyItem(at: persistence.url("library.json"), to: persistence.url(backup))
-                toast(.error, "Couldn't read your saved library", detail: "A copy was kept as \(backup). \(error.localizedDescription)")
-            } catch let copyError {
-                saveBlocked = true
-                toast(.error, "Couldn't read or back up your saved library", detail: "Brix won't save until you restart. \(copyError.localizedDescription)")
+            // Keep the unreadable file for recovery, and save nothing over it until the user chooses.
+            saveBlocked = true
+            saveBlockedReason = "Brix couldn't read your saved library (\(error.localizedDescription))."
+            if let backup = keepCopy(of: "library.json", as: "library.unreadable-") {
+                saveBlockedAsk = { [weak self] in
+                    self?.confirm("Start with an empty library?",
+                                  "Brix couldn't read your saved library (\(error.localizedDescription)). A copy is kept as \(backup) and offered back when Brix can read it. Until you choose, Brix doesn't save over the file.",
+                                  confirm: "Start Empty", destructive: true,
+                                  onCancel: { [weak self] in
+                                      self?.toast(.info, "Your library isn't saved this run", detail: "library.json is left as it is. Quit Brix to restore or fix it.")
+                                  }) { [weak self] in self?.unblockSave() } ?? UUID()
+                }
+                reviewLibrarySave()
+            } else {
+                saveBlockedReason += " It couldn't be backed up either, so it's left as it is until you restart."
+                toast(.error, "Couldn't read or back up your saved library", detail: "Brix won't save your library until you restart. \(error.localizedDescription)")
             }
         }
         do {
-            if let s = try persistence.load(AppSettings.self, from: "settings.json") { settings = s }
+            if let s = try persistence.load(AppSettings.self, from: "settings.json") {
+                settings = s
+                // The next save leaves out the agents this build couldn't read, so keep the file as it was.
+                if s.skippedOnLoad > 0 {
+                    let kept = keepCopy(of: "settings.json", as: "settings.partial-")
+                    settingsSaveBlocked = kept == nil
+                    toast(.error, "Left out \(s.skippedOnLoad) agent\(s.skippedOnLoad == 1 ? "" : "s") Brix couldn't read from settings",
+                          detail: kept.map { "The settings as they were are kept as \($0) in Brix's folder." } ?? "Brix couldn't keep a copy, so settings aren't saved this run.")
+                }
+            }
         } catch {
-            toast(.error, "Couldn't read settings", detail: error.localizedDescription)
+            // Defaults from here on; the file is kept aside first, or left alone.
+            let kept = keepCopy(of: "settings.json", as: "settings.unreadable-")
+            settingsSaveBlocked = kept == nil
+            toast(.error, "Couldn't read settings", detail: (kept.map { "Using defaults. The old file is kept as \($0). " } ?? "Using defaults; settings aren't saved this run. ") + error.localizedDescription)
         }
         bootstrapRuntime()
+    }
+
+    /// The status bar's "Not saving" chip: asks again (unless already asking), or says why.
+    func reviewLibrarySave() {
+        guard saveBlocked else { return }
+        guard let ask = saveBlockedAsk else { toast(.error, "Brix isn't saving your library", detail: saveBlockedReason); return }
+        if let id = saveBlockedAskID, confirmations.contains(where: { $0.id == id }) { return }
+        saveBlockedAskID = ask()
+    }
+
+    /// The user chose to save over library.json.
+    func unblockSave() {
+        saveBlocked = false
+        saveBlockedAsk = nil
+        scheduleSave()
+    }
+
+    /// Copies a data file aside before it's replaced and returns the copy's name.
+    /// A copy with the same contents is reused, so each failed launch doesn't add another.
+    func keepCopy(of name: String, as prefix: String) -> String? {
+        guard let data = try? Data(contentsOf: persistence.url(name)) else { return nil }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: persistence.directory.path)) ?? []
+        if let same = names.first(where: { $0.hasPrefix(prefix) && (try? Data(contentsOf: persistence.url($0))) == data }) { return same }
+        let copy = "\(prefix)\(Int(Date().timeIntervalSince1970)).json"
+        do { try data.write(to: persistence.url(copy), options: .withoutOverwriting) } catch { return nil }
+        return copy
     }
 
     /// Debounced save so rapid edits (resizes, typing) don't thrash the disk.
@@ -172,21 +278,27 @@ final class AppStore {
     }
 
     func saveNow() {
-        guard !saveBlocked else { return }
-        do {
+        // Each file on its own, so one that fails doesn't stop the rest.
+        var failed: [String] = []
+        if !saveBlocked {
             var lib = library
+            lib.schemaVersion = Library.currentSchema
             if globalRestored {
                 lib.globalSessions = sessions.filter { $0.projectID == nil && $0.isLive && $0.state != .finished && $0.state != .failed }.map(SessionDescriptor.init)
+                    + heldGlobalSessions
                 var tree = terminalTree
                 tree.retain(Set(lib.globalSessions.map(\.id)))
                 lib.globalTree = tree
             }
-            try persistence.save(lib, to: "library.json")
-            try persistence.save(settings, to: "settings.json")
-            for ws in workspaces.values { try ws.save() }
-        } catch {
-            toast(.error, "Couldn't save", detail: error.localizedDescription)
+            do { try persistence.save(lib, to: "library.json") } catch { failed.append("library.json: \(error.localizedDescription)") }
         }
+        if !settingsSaveBlocked {
+            do { try persistence.save(settings, to: "settings.json") } catch { failed.append("settings.json: \(error.localizedDescription)") }
+        }
+        for ws in workspaces.values {
+            do { try ws.save() } catch { failed.append("\(project(ws.projectID)?.name ?? ws.projectID) layout: \(error.localizedDescription)") }
+        }
+        if !failed.isEmpty { toast(.error, "Couldn't save", detail: failed.joined(separator: "\n")) }
         writeProjectFiles()
     }
 
@@ -225,22 +337,30 @@ final class AppStore {
     }
 
     func loadSampleWorkspace() {
+        guard !library.projects.contains(where: \.isSample) else { return }
         let sample = Library.sample
-        // Merge so anything the user already added is kept.
+        // Merge so anything the user already added is kept. A sample entry whose id
+        // a real one already has is left out, and never linked to the real one.
         var lib = library
-        for p in sample.projects where !lib.projects.contains(where: { $0.id == p.id }) { lib.projects.append(p) }
-        for h in sample.hosts where !lib.hosts.contains(where: { $0.id == h.id }) { lib.hosts.append(h) }
-        for d in sample.databases where !lib.databases.contains(where: { $0.id == d.id }) { lib.databases.append(d) }
-        for c in sample.docker where !lib.docker.contains(where: { $0.id == c.id }) { lib.docker.append(c) }
-        lib.links.pairs.formUnion(sample.links.pairs)
-        lib.recentFiles += sample.recentFiles
-        lib.queryHistory += sample.queryHistory
+        let projects = sample.projects.filter { p in !lib.projects.contains { $0.id == p.id } }
+        let hosts = sample.hosts.filter { h in !lib.hosts.contains { $0.id == h.id } }
+        let dbs = sample.databases.filter { d in !lib.databases.contains { $0.id == d.id } }
+        let docker = sample.docker.filter { c in !lib.docker.contains { $0.id == c.id } }
+        lib.projects += projects
+        lib.hosts += hosts
+        lib.databases += dbs
+        lib.docker += docker
+        let added = Set(projects.map(\.id)), addedResources = Set(hosts.map(\.id) + dbs.map(\.id) + docker.map(\.id))
+        lib.links.pairs.formUnion(sample.links.pairs.filter { added.contains($0.project) && addedResources.contains($0.resource) })
+        lib.recentFiles += sample.recentFiles.filter { added.contains($0.project) }
+        lib.queryHistory += sample.queryHistory.filter { q in dbs.contains { $0.id == q.connectionID } }
         lib.hasOnboarded = true
-        if lib.openProjects.isEmpty { lib.openProjects = sample.openProjects }
+        if lib.openProjects.isEmpty { lib.openProjects = sample.openProjects.filter(added.contains) }
         library = lib
         if let mock = services.mock.git as? MockGitService { mock.states = MockData.git }
         bootstrapRuntime()
-        toast(.success, "Sample workspace loaded", detail: "6 projects, 6 hosts, 5 databases")
+        let count = { (n: Int, what: String) in "\(n) \(what)\(n == 1 ? "" : "s")" }
+        toast(.success, "Sample workspace loaded", detail: "\(count(projects.count, "project")), \(count(hosts.count, "host")), \(count(dbs.count, "database"))")
     }
 
     func removeSampleWorkspace() {
@@ -287,8 +407,29 @@ final class AppStore {
         toast(kind, title, detail: detail)
     }
 
-    func confirm(_ title: String, _ message: String, confirm: String, destructive: Bool = true, onCancel: (() -> Void)? = nil, action: @escaping () -> Void) {
-        confirmation = Confirmation(title: title, message: message, confirmTitle: confirm, destructive: destructive, action: action, onCancel: onCancel)
+    /// Asks after any confirmation already showing or waiting, never in place of it.
+    @discardableResult
+    func confirm(_ title: String, _ message: String, confirm: String, destructive: Bool = true, onCancel: (() -> Void)? = nil, action: @escaping () -> Void) -> UUID {
+        let c = Confirmation(title: title, message: message, confirmTitle: confirm, destructive: destructive, action: action, onCancel: onCancel)
+        confirmations.append(c)
+        return c.id
+    }
+
+    /// Closes a confirmation and runs its action, or its onCancel for anything
+    /// but a yes (a Cancel button, Esc, a dismissed alert). Each runs once: a
+    /// confirmation already answered is ignored. The next one then shows.
+    func answerConfirmation(_ id: UUID, confirmed: Bool) {
+        guard let i = confirmations.firstIndex(where: { $0.id == id }) else { return }
+        let c = confirmations.remove(at: i)
+        if i == 0, !confirmations.isEmpty {
+            let gap = UUID()
+            confirmationGap = gap
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if self?.confirmationGap == gap { self?.confirmationGap = nil }
+            }
+        }
+        if confirmed { c.action() } else { c.onCancel?() }
     }
 
     /// Runs `action` directly for non-production resources; asks first otherwise.
@@ -410,8 +551,15 @@ final class AppStore {
             Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    await self?.refreshMetrics()
                     await self?.refreshPlans()
+                }
+            },
+            Task { [weak self] in
+                // Server metrics log in to each connected server (over the shared
+                // SSH connection), so every 30 s and only while a window shows them.
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 30_000_000_000)
+                    if self?.windowVisible == true { await self?.refreshMetrics() }
                 }
             },
             Task { [weak self] in
@@ -445,10 +593,21 @@ final class AppStore {
         ]
     }
 
+    static let unreachable = "unreachable"
+
     func refreshMetrics() async {
-        for h in library.hosts where hostStatus[h.id] == .connected || hostStatus[h.id] == .idle {
-            guard h.isSample || hostStatus[h.id] == .connected else { continue }
-            if let m = try? await svc(h).metrics.metrics(h) { hostMetrics[h.id] = m; healthAt[h.id] = Date(); rememberOS(h.id, m.os) }
+        // A connected host that stops answering shows as unreachable (with the
+        // reason in healthError) and is tried again, back to connected when it answers.
+        for h in library.hosts where hostStatus[h.id] == .connected || hostStatus[h.id] == .idle || hostStatus[h.id] == .error(Self.unreachable) {
+            guard h.isSample || hostStatus[h.id] != .idle else { continue }
+            do {
+                let m = try await svc(h).metrics.metrics(h)
+                hostMetrics[h.id] = m; healthAt[h.id] = Date(); healthError[h.id] = nil; rememberOS(h.id, m.os)
+                if hostStatus[h.id] == .error(Self.unreachable) { hostStatus[h.id] = .connected }
+            } catch {
+                healthError[h.id] = error.localizedDescription
+                if hostStatus[h.id] == .connected { hostStatus[h.id] = .error(Self.unreachable) }
+            }
         }
     }
 

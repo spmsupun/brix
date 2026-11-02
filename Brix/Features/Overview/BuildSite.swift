@@ -7,33 +7,50 @@ struct HomeOverview: View {
     @Environment(AppStore.self) private var store
     @Environment(\.islandGap) private var gap
     /// When you last left Home; "since your last visit" counts from here.
+    /// Nil before the first visit ever.
     @State private var since: Date?
 
     var body: some View {
         let space = max(gap, 6)
-        VStack(spacing: space) {
-            BuildSite().frame(height: 450)
-            GeometryReader { geo in
-                // Columns 1.45 : 1 : 1, as designed.
-                let unit = (geo.size.width - space * 2) / 3.45
-                HStack(alignment: .top, spacing: space) {
-                    SinceLastVisit(since: since ?? Date().addingTimeInterval(-86_400)).frame(width: unit * 1.45)
-                    VStack(spacing: space) {
-                        UsageLimits()
-                        ThisMac().frame(maxHeight: .infinity)
+        GeometryReader { geo in
+            // The site gives up height first (down to 360), then the page scrolls
+            // so short windows never squeeze the panels under it.
+            let site = min(450, max(360, geo.size.height - 300 - space))
+            let rest = max(geo.size.height - site - space, 300)
+            // Columns 1.45 : 1 : 1, as designed.
+            let unit = (geo.size.width - space * 2) / 3.45
+            ScrollView {
+                VStack(spacing: space) {
+                    BuildSite().frame(height: site)
+                    HStack(alignment: .top, spacing: space) {
+                        SinceLastVisit(since: since).frame(width: unit * 1.45)
+                        VStack(spacing: space) {
+                            UsageLimits()
+                            ThisMac().frame(maxHeight: .infinity)
+                        }
+                        .frame(width: unit)
+                        ServersAndDocker().frame(width: unit)
                     }
-                    .frame(width: unit)
-                    ServersAndDocker().frame(width: unit)
+                    .frame(height: rest)
                 }
-                .frame(height: geo.size.height)
             }
+            .scrollDisabled(site + space + rest <= geo.size.height)
+            .scrollIndicators(.never)
         }
         .onAppear { since = store.library.lastHomeVisit }
         .onDisappear { store.library.lastHomeVisit = Date() }
+        // Quitting from Home counts as leaving it. The app's own save on quit
+        // may already have run, so save again.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            store.library.lastHomeVisit = Date()
+            store.saveNow()
+        }
         .task {
             // Today's totals for every project, for tower captions.
             for p in store.library.projects where store.dayStats[p.id] == nil {
-                store.dayStats[p.id] = await store.svc(p).activity.dayStats(p)
+                let stats = await store.svc(p).activity.dayStats(p)
+                guard !Task.isCancelled else { return }
+                if let stats { store.dayStats[p.id] = stats }
             }
         }
     }
@@ -51,8 +68,9 @@ struct BuildSite: View {
 
     var body: some View {
         // The site itself is static; the buddy, cranes, beacons and the glowing
-        // brick animate through KeyframeLoop, in the render layer.
-        GeometryReader { geo in
+        // brick animate through KeyframeLoop, in the render layer. The timeline
+        // redraws now and then so the date and a "shipped" mood don't go stale.
+        TimelineView(.periodic(from: .now, by: 30)) { _ in GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 grid(geo.size)
                 header.padding(.horizontal, 22).padding(.top, 18)
@@ -67,7 +85,7 @@ struct BuildSite: View {
                     .alignmentGuide(.leading) { _ in -196 }
                     .alignmentGuide(.top) { d in -(geo.size.height - 236 - d.height) }
             }
-        }
+        } }
         .background(siteBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border))

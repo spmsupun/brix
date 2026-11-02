@@ -313,7 +313,7 @@ private struct FullSidebar: View {
         if let w = sessions.first(where: { $0.state == .needsInput }) {
             return ("\(store.agent(for: w)?.name ?? "agent") needs input", Theme.amber)
         }
-        if let r = sessions.first(where: { $0.state == .running }) {
+        if sessions.contains(where: { $0.state == .running }) {
             return ("agent editing", Theme.text3)
         }
         return nil

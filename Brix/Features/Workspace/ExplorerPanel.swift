@@ -159,10 +159,19 @@ extension AppStore {
             let ws = workspace(for: projectID)
             if fresh { ws.attach(session: s, preferAgentGrid: true) }
             ws.focus(session: s.id)
-            if s.isLive {
-                // Give the CLI a moment to start before typing into it.
+            if s.isLive, fresh, !s.isChat {
+                // Type once the CLI is up: it has drawn its screen and has been
+                // waiting (not working) for a second. Gives up waiting after 30 s.
                 Task {
-                    try? await Task.sleep(nanoseconds: fresh ? 2_500_000_000 : 0)
+                    let deadline = Date().addingTimeInterval(30)
+                    var readySince: Date?
+                    while Date() < deadline {
+                        guard let cur = self.session(s.id) else { return }
+                        let drawn = (TerminalRegistry.shared.view(s.id)?.lastData ?? .distantPast) != .distantPast
+                        readySince = drawn && cur.state != .running ? readySince ?? Date() : nil
+                        if let r = readySince, Date().timeIntervalSince(r) >= 1 { break }
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                    }
                     self.sendInput(s.id, prompt)
                 }
             } else {

@@ -11,13 +11,45 @@ enum LiveServices {
 
 /// Builds `ssh` invocations so ~/.ssh/config and the agent apply.
 enum SSHCommand {
-    static func args(_ h: SSHHost, batch: Bool, extra: [String] = []) -> [String] {
-        var a = ["-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=15"]
+    /// One shared connection per host: metrics, Docker and file calls reuse it
+    /// instead of logging in each time. Kept in ~/.ssh (private to the user;
+    /// a socket in /tmp could be planted by someone else) and short, since a
+    /// socket path must fit in 104 bytes.
+    static let controlPath: String = {
+        let dir = NSHomeDirectory() + "/.ssh"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return dir + "/brix-%C"
+    }()
+
+    static func muxArgs() -> [String] {
+        ["-o", "ControlMaster=auto", "-o", "ControlPersist=60", "-o", "ControlPath=\(controlPath)"]
+    }
+
+    /// `mux: false` for a verbose login test: a shared master started with -v
+    /// keeps stderr open until it exits, so the reader would wait 60 s.
+    static func args(_ h: SSHHost, batch: Bool, extra: [String] = [], mux: Bool = true) -> [String] {
+        var a = ["-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=15"] + (mux ? muxArgs() : ["-o", "ControlMaster=no", "-o", "ControlPath=none"])
         if batch { a += ["-o", "BatchMode=yes"] }
         if h.port != 22 { a += ["-p", "\(h.port)"] }
         if h.auth == .key, !h.keyPath.isEmpty { a += ["-i", (h.keyPath as NSString).expandingTildeInPath, "-o", "IdentitiesOnly=yes"] }
         if h.auth == .password { a += ["-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no"] }
-        return a + extra + ["\(h.user)@\(h.host)"]
+        // "--": a user or host starting with "-" can't turn into an ssh option.
+        return a + extra + ["--", h.destination]
+    }
+
+    /// A user or host that ssh could read as an option, or that has spaces.
+    static func invalidPart(_ s: String) -> Bool {
+        s.hasPrefix("-") || s.rangeOfCharacter(from: .whitespacesAndNewlines) != nil
+    }
+
+    /// The last useful stderr line, with a hint when the host key is unknown.
+    static func message(_ r: ProcessOutput) -> String {
+        if r.stderr.contains("Host key verification failed") {
+            return "The server's host key isn't known yet. Check its fingerprint, then add it with ssh-keyscan to ~/.ssh/known_hosts (or connect once in Terminal)."
+        }
+        let last = r.stderr.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("debug1") && !$0.hasPrefix("OpenSSH") }.last
+        return last ?? "ssh exited with status \(r.status)"
     }
 
     /// The command line a terminal runs for an interactive shell on the host.
@@ -29,11 +61,24 @@ enum SSHCommand {
 
     /// SSH_ASKPASS helper so a Keychain password can be supplied without a TTY.
     /// The secret is passed only in the child's environment, never on disk.
+    /// Answers only password prompts. Anything else (a new host key's yes/no)
+    /// gets no answer, so ssh fails with "Host key verification failed"
+    /// instead of reading the password as the answer and asking again forever.
+    static let askpassScript = """
+    #!/bin/sh
+    case "$1" in
+      *[Pp]assword*|*[Pp]assphrase*) printf '%s\\n' "$BRIX_ASKPASS_SECRET" ;;
+      *) exit 1 ;;
+    esac
+
+    """
+
     static func askpassEnv(password: String) throws -> [String: String] {
         let dir = Persistence.supportDirectory
         let script = dir.appendingPathComponent("askpass.sh")
-        if !FileManager.default.fileExists(atPath: script.path) {
-            try "#!/bin/sh\nprintf '%s\\n' \"$BRIX_ASKPASS_SECRET\"\n".write(to: script, atomically: true, encoding: .utf8)
+        // Rewritten when it differs, so an older script is replaced.
+        if (try? String(contentsOf: script, encoding: .utf8)) != askpassScript {
+            try askpassScript.write(to: script, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
         }
         return ["SSH_ASKPASS": script.path, "SSH_ASKPASS_REQUIRE": "force", "DISPLAY": ":0", "BRIX_ASKPASS_SECRET": password]
@@ -46,20 +91,23 @@ enum SSHCommand {
             env = try askpassEnv(password: password)
         }
         let extra = verbose ? ["-v"] : []
-        return try await ProcessRunner.run("/usr/bin/ssh", args(h, batch: h.auth != .password, extra: extra) + [remote], env: env, timeout: timeout)
+        return try await ProcessRunner.run("/usr/bin/ssh", args(h, batch: h.auth != .password, extra: extra, mux: !verbose) + [remote], env: env, timeout: timeout)
     }
+}
+
+extension SSHHost {
+    /// What ssh connects to: the ~/.ssh/config alias when imported from there.
+    var destination: String { "\(user)@\(alias ?? host)" }
 }
 
 final class LiveSSHService: SSHService {
     func test(_ host: SSHHost, password: String?) async throws -> String {
         guard !host.host.isEmpty, !host.user.isEmpty else { throw ServiceError("Enter a host and user") }
+        guard !SSHCommand.invalidPart(host.user), !SSHCommand.invalidPart(host.alias ?? host.host) else { throw ServiceError("The user and host can't start with \"-\" or contain spaces") }
         let start = Date()
         let r = try await SSHCommand.run(host, password: password, remote: "echo brix-ok", timeout: 15, verbose: true)
         let ms = Int(Date().timeIntervalSince(start) * 1000)
-        guard r.ok, r.stdout.contains("brix-ok") else {
-            let last = r.stderr.split(separator: "\n").map(String.init).filter { !$0.hasPrefix("debug1:") && !$0.hasPrefix("OpenSSH") }.last
-            throw ServiceError(last?.trimmingCharacters(in: .whitespaces) ?? "ssh exited with status \(r.status)")
-        }
+        guard r.ok, r.stdout.contains("brix-ok") else { throw ServiceError(SSHCommand.message(r)) }
         let version = r.stderr.split(separator: "\n").first { $0.contains("remote software version") }
             .flatMap { $0.components(separatedBy: "remote software version ").last } ?? "SSH"
         return "\(version) · \(ms) ms"
@@ -84,7 +132,7 @@ final class LiveMetricsService: MetricsService {
 
     func metrics(_ host: SSHHost) async throws -> HostMetrics {
         let r = try await SSHCommand.run(host, password: passwordLookup?(host), remote: Self.script, timeout: 15)
-        guard r.ok else { throw ServiceError(r.stderr.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "\n").last.map(String.init) ?? "metrics failed") }
+        guard r.ok else { throw ServiceError(SSHCommand.message(r)) }
         // A login that printed nothing usable (a restricted shell, an unusual OS)
         // must not read as an idle, empty server.
         guard ["LOAD", "DISK"].allSatisfy({ k in r.stdout.contains("\n\(k)=") || r.stdout.hasPrefix("\(k)=") }) else {
@@ -110,27 +158,45 @@ final class LiveMetricsService: MetricsService {
 // MARK: - Docker
 
 final class LiveDockerService: DockerService {
+    /// Docker's own rule for container and stack names. Names from outside
+    /// (brix.json, typed in) are checked with this before they are saved.
+    static func isValidName(_ s: String) -> Bool {
+        s.range(of: #"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"#, options: .regularExpression) != nil
+    }
+
+    /// Every argument quoted, so a name or path can't run anything in the shell.
+    /// A leading "~/" (a compose file in the home folder) stays outside the quotes.
+    static func shellLine(_ args: [String]) -> String {
+        args.map { $0.hasPrefix("~/") ? "~/" + ProcessRunner.shellQuote(String($0.dropFirst(2))) : ProcessRunner.shellQuote($0) }.joined(separator: " ")
+    }
+
+    /// Docker's answer when `docker compose` isn't installed.
+    static func composeMissing(_ message: String) -> Bool {
+        let m = message.lowercased()
+        return m.contains("'compose' is not a docker command") || m.contains("unknown command: docker compose")
+            || m.contains("unknown shorthand flag") && m.contains("compose") || m.contains("docker: 'compose'")
+    }
+
     static func shell(_ c: DockerTarget, host: SSHHost?) -> String {
-        let inner = "docker exec -it \(c.name) sh -c 'command -v bash >/dev/null && exec bash || exec sh'"
+        let inner = shellLine(["docker", "exec", "-it", c.name, "sh", "-c", "command -v bash >/dev/null && exec bash || exec sh"])
         return wrap(inner, host: host)
     }
 
     static func follow(_ c: DockerTarget, host: SSHHost?) -> String {
-        wrap("docker logs --tail 200 -f \(c.name)", host: host)
+        wrap(shellLine(["docker", "logs", "--tail", "200", "-f", c.name]), host: host)
     }
 
     static func wrap(_ cmd: String, host: SSHHost?) -> String {
         guard let host else { return cmd }
-        return SSHCommand.interactive(host, remoteCommand: cmd).map { $0.contains(" ") ? ProcessRunner.shellQuote($0) : $0 }.joined(separator: " ")
+        return shellLine(SSHCommand.interactive(host, remoteCommand: cmd))
     }
 
     var passwordLookup: ((SSHHost) -> String?)?
 
     private func docker(_ args: [String], host: SSHHost?, timeout: TimeInterval = 20) async throws -> String {
         if let host {
-            let remote = (["docker"] + args).map { $0.contains(" ") || $0.contains("{") ? ProcessRunner.shellQuote($0) : $0 }.joined(separator: " ")
-            let r = try await SSHCommand.run(host, password: passwordLookup?(host), remote: remote, timeout: timeout)
-            guard r.ok else { throw ServiceError(r.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let r = try await SSHCommand.run(host, password: passwordLookup?(host), remote: Self.shellLine(["docker"] + args), timeout: timeout)
+            guard r.ok else { throw ServiceError(SSHCommand.message(r)) }
             return r.stdout
         }
         return try await ProcessRunner.check("docker", args, timeout: timeout)
@@ -171,23 +237,24 @@ final class LiveDockerService: DockerService {
         }
     }
 
-    func list(hosts: [SSHHost]) async throws -> [DockerTarget] {
-        var all: [DockerTarget] = []
-        var errors: [String] = []
-        do {
-            all += Self.parsePS(try await docker(["ps", "-a", "--format", "{{json .}}"], host: nil), hostID: nil)
-        } catch {
-            errors.append("Local: \(error.localizedDescription)")
+    func list(hosts: [SSHHost]) async throws -> DockerListing {
+        var out = DockerListing()
+        // No docker CLI here is only worth saying when there's nothing else to list.
+        if ProcessRunner.which("docker") != nil || hosts.isEmpty {
+            do {
+                out.targets += Self.parsePS(try await docker(["ps", "-a", "--format", "{{json .}}"], host: nil), hostID: nil)
+            } catch {
+                out.errors["local"] = "Local: \(error.localizedDescription)"
+            }
         }
         for h in hosts {
             do {
-                all += Self.parsePS(try await docker(["ps", "-a", "--format", "{{json .}}"], host: h), hostID: h.id)
+                out.targets += Self.parsePS(try await docker(["ps", "-a", "--format", "{{json .}}"], host: h), hostID: h.id)
             } catch {
-                errors.append("\(h.name): \(error.localizedDescription)")
+                out.errors[h.id] = "\(h.name): \(error.localizedDescription)"
             }
         }
-        if all.isEmpty, !errors.isEmpty { throw ServiceError(errors.joined(separator: "\n")) }
-        return all
+        return out
     }
 
     func inventory(host: SSHHost?) async throws -> DockerInventory {
@@ -196,10 +263,16 @@ final class LiveDockerService: DockerService {
         async let networks = docker(["network", "ls", "--format", "{{json .}}"], host: host)
         async let volumes = docker(["volume", "ls", "--format", "{{json .}}"], host: host)
         async let images = docker(["image", "ls", "--format", "{{json .}}"], host: host)
-        // Stacks need Compose v2; an engine without it still lists the rest.
-        let s = (try? await stacks).map { DockerParse.stacks($0, hostID: hid) } ?? []
-        return DockerInventory(stacks: s, networks: DockerParse.networks(try await networks, hostID: hid),
-                               volumes: DockerParse.volumes(try await volumes, hostID: hid), images: DockerParse.images(try await images, hostID: hid))
+        // Stacks need Compose v2; an engine without it still lists the rest, and says why stacks are missing.
+        var inv = DockerInventory(networks: DockerParse.networks(try await networks, hostID: hid),
+                                  volumes: DockerParse.volumes(try await volumes, hostID: hid), images: DockerParse.images(try await images, hostID: hid))
+        do {
+            inv.stacks = DockerParse.stacks(try await stacks, hostID: hid)
+        } catch {
+            // An engine without Compose v2 simply has no stacks; anything else is a real failure.
+            if !Self.composeMissing(error.localizedDescription) { inv.stacksError = error.localizedDescription }
+        }
+        return inv
     }
 
     func run(_ args: [String], host: SSHHost?, timeout: TimeInterval) async throws -> String {
@@ -222,7 +295,7 @@ final class LiveDockerService: DockerService {
     }
 
     func composeLogsCommand(_ stack: ComposeStack, host: SSHHost?) -> String {
-        Self.wrap((["docker"] + Self.composeArgs(stack) + ["logs", "--tail", "200", "-f"]).map { $0.contains(" ") ? ProcessRunner.shellQuote($0) : $0 }.joined(separator: " "), host: host)
+        Self.wrap(Self.shellLine(["docker"] + Self.composeArgs(stack) + ["logs", "--tail", "200", "-f"]), host: host)
     }
 
     func perform(_ action: DockerAction, on c: DockerTarget, host: SSHHost?) async throws -> DockerTarget {

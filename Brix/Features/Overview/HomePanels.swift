@@ -19,7 +19,8 @@ private struct PanelTop<Trailing: View>: View {
 /// unpushed commits, and agents that finished while you were away.
 struct SinceLastVisit: View {
     @Environment(AppStore.self) private var store
-    let since: Date
+    /// Nil on the first visit: everything counts.
+    let since: Date?
 
     struct Item: Identifiable {
         enum Tone { case waiting, failed, push, done, running }
@@ -34,6 +35,9 @@ struct SinceLastVisit: View {
 
     private var items: [Item] {
         var out: [Item] = []
+        // Things that happened are shown if they happened since; things that
+        // need you now (waiting agents, unreachable servers, running CI) always.
+        let since = since ?? .distantPast
         for s in store.waitingSessions {
             let p = s.projectID.flatMap(store.project).map(store.fullName) ?? "Terminals"
             let ask = s.lastOutput.split(separator: "\n").last.map(String.init) ?? "asked a question"
@@ -44,12 +48,12 @@ struct SinceLastVisit: View {
         var seen = Set<ProjectID>()
         for b in store.builds() where !seen.contains(b.projectID) && b.kind != .run {
             seen.insert(b.projectID)
-            guard !b.ok, let p = store.project(b.projectID) else { continue }
+            guard !b.ok, b.date > since, let p = store.project(b.projectID) else { continue }
             out.append(Item(id: "b-\(b.id)", tone: .failed, title: "\(b.task) failed in \(store.fullName(p))",
                             sub: "\(RelativeTime.ago(b.date)) · took \(AppStore.duration(b.duration))", action: "Fix with agent") { fix(b, p) })
         }
         for p in store.library.projects {
-            for r in store.failedPipelines(p.id).prefix(2) {
+            for r in store.failedPipelines(p.id).filter({ $0.updatedAt > since }).prefix(2) {
                 out.append(Item(id: "ci-\(r.id)", tone: .failed, title: "\(r.workflowName) failed in \(store.fullName(p))",
                                 sub: "\(r.headBranch) · \(r.displayTitle) · \(RelativeTime.ago(r.updatedAt))", action: "Open") {
                     if let u = URL(string: r.url), u.scheme == "https" { NSWorkspace.shared.open(u) }
@@ -68,11 +72,12 @@ struct SinceLastVisit: View {
             })
         }
         for p in store.library.projects where !p.isSample {
-            guard let g = store.git[p.id], g.isRepo, g.ahead > 0 else { continue }
+            guard let g = store.git[p.id], g.isRepo, g.ahead > 0, (g.commits.first?.date ?? .distantFuture) > since else { continue }
             out.append(Item(id: "p-\(p.id)", tone: .push, title: "\(store.fullName(p)) has \(g.ahead) commit\(g.ahead == 1 ? "" : "s") not pushed",
                             sub: "\(g.branch) · ahead of \(g.remote) by \(g.ahead)", action: "Push") { store.push(p.id) })
         }
-        let done = store.sessions.filter { $0.kind == .agent && ($0.state == .finished || ($0.state == .idle && !$0.touched.isEmpty)) }
+        // Sessions keep no finish time: started since, or finished and not opened yet.
+        let done = store.sessions.filter { $0.kind == .agent && ($0.state == .finished || ($0.state == .idle && !$0.touched.isEmpty)) && ($0.startedAt > since || $0.unseen) }
         if let first = done.first {
             let files = Set(done.flatMap { $0.touched.map(\.path) }).count
             out.append(Item(id: "done", tone: .done, title: done.count == 1 ? "\(store.displayTitle(first)) finished" : "\(done.count) agents finished",
@@ -86,8 +91,8 @@ struct SinceLastVisit: View {
         let all = items
         let need = all.filter(\.needsYou).count
         VStack(spacing: 0) {
-            PanelTop(title: "Since your last visit") {
-                Text(RelativeTime.ago(since)).font(Typo.ui(11)).foregroundStyle(Theme.text3)
+            PanelTop(title: since == nil ? "Since you started" : "Since your last visit") {
+                if let since { Text(RelativeTime.ago(since)).font(Typo.ui(11)).foregroundStyle(Theme.text3) }
                 Spacer(minLength: 0)
                 if need > 0 {
                     Text("\(need) need\(need == 1 ? "s" : "") you").font(Typo.ui(10, .bold)).foregroundStyle(Color(hex: 0x09090B))
@@ -298,14 +303,18 @@ struct ThisMac: View {
         }
         .island()
         .task {
-            // Two samples a moment apart give the first CPU reading.
+            // Two samples a second apart give the first CPU reading; the rest
+            // shows at once. Read off the main thread: free disk space comes from
+            // a system service that can take seconds on a busy Mac.
             let s = sampler
-            _ = s.read()
-            stats = s.read()
+            let read = { await Task.detached(priority: .utility) { s.read() }.value }
+            stats = await read()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            stats = await read()
             hogs = await Task.detached(priority: .background) { MacStats.hogs() }.value
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
-                if store.windowVisible { stats = s.read() }
+                if store.windowVisible { stats = await read() }
             }
         }
     }

@@ -29,6 +29,17 @@ enum MockData {
         SSHHost(id: "homelab", name: "Home Lab", host: "nas.local", user: "admin", auth: .password, keyPath: "", tag: .personal, notes: "Synology NAS.", os: "DSM 7.2", lastConnected: ago(40 * minute), isSample: true)
     ]
 
+    /// What Remote Files shows on a sample server: a fixed listing, no ssh.
+    static func remoteEntries(_ path: String) -> [RemoteEntry] {
+        func dir(_ n: String) -> RemoteEntry { RemoteEntry(name: n, isDirectory: true, isLink: false, size: 4096, modified: ago(day), mode: "755") }
+        func file(_ n: String, _ size: Int64) -> RemoteEntry { RemoteEntry(name: n, isDirectory: false, isLink: false, size: size, modified: ago(hour), mode: "644") }
+        switch path {
+        case "/home/deploy": return [dir("logs"), file(".bashrc", 3_771), file(".profile", 807)]
+        case "/home/deploy/logs": return [file("api.log", 184_320), file("worker.log", 52_114)]
+        default: return []
+        }
+    }
+
     static let hostStatus: [ResourceID: ConnectionStatus] = [
         "dev": .connected, "staging": .idle, "prod": .disconnected, "bastion": .disconnected, "runner": .idle, "homelab": .connected
     ]

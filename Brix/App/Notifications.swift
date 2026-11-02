@@ -1,5 +1,5 @@
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 import AppKit
 
 /// macOS notifications for agent sessions that finish or need input.
@@ -11,7 +11,9 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
         Bundle.main.bundleIdentifier == nil ? nil : UNUserNotificationCenter.current()
     }
 
-    func install() {
+    /// `store` is set at launch, so clicking a notification from an earlier run opens its session.
+    func install(store: AppStore? = nil) {
+        if let store { self.store = store }
         center?.delegate = self
     }
 
@@ -127,6 +129,6 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner])
+        completionHandler([.banner, .list, .sound])
     }
 }

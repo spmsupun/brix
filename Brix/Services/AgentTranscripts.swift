@@ -106,13 +106,10 @@ enum AgentTranscripts {
     }
 
     /// Title for a running Claude Code conversation (custom name first, then its own).
+    /// Asked every 15 s: an unchanged transcript comes from the cache.
     static func claudeTitle(sessionID: String, home: String = NSHomeDirectory()) -> String? {
-        let root = home + "/.claude/projects"
-        for d in (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? [] {
-            let f = URL(fileURLWithPath: "\(root)/\(d)/\(sessionID).jsonl")
-            if FileManager.default.fileExists(atPath: f.path) { return claudeEntry(f)?.title }
-        }
-        return nil
+        guard let f = transcriptURL(sessionID: sessionID, home: home) else { return nil }
+        return entries.value(f) { claudeEntry(f) }?.title
     }
 
     // MARK: Plan

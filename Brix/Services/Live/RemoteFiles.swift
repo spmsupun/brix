@@ -64,25 +64,26 @@ enum RemoteFiles {
         return p.isEmpty ? "/" : p
     }
 
-    /// scp arguments for a host (scp spells the port flag -P).
+    /// scp arguments for a host (scp spells the port flag -P). Ends with "--",
+    /// so the paths that follow are never read as options.
     static func scpArgs(_ h: SSHHost, recursive: Bool) -> [String] {
-        var a = ["-o", "ConnectTimeout=8", "-q"]
+        var a = ["-o", "ConnectTimeout=8", "-q"] + SSHCommand.muxArgs()
         if recursive { a.append("-r") }
         if h.auth != .password { a += ["-o", "BatchMode=yes"] }
         if h.port != 22 { a += ["-P", "\(h.port)"] }
         if h.auth == .key, !h.keyPath.isEmpty { a += ["-i", (h.keyPath as NSString).expandingTildeInPath, "-o", "IdentitiesOnly=yes"] }
         if h.auth == .password { a += ["-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no"] }
-        return a
+        return a + ["--"]
     }
 
-    static func remoteSpec(_ h: SSHHost, _ path: String) -> String { "\(h.user)@\(h.host):\(path)" }
+    static func remoteSpec(_ h: SSHHost, _ path: String) -> String { "\(h.destination):\(path)" }
 
     // MARK: Operations
 
     static func list(_ h: SSHHost, password: String?, path: String) async throws -> (path: String, entries: [RemoteEntry]) {
         let r = try await SSHCommand.run(h, password: password, remote: listCommand(path), timeout: 20)
         if r.status == 3 { throw ServiceError("No such folder: \(path)") }
-        guard r.ok || !r.stdout.isEmpty else { throw failure(r) }
+        guard r.ok else { throw failure(r) }
         return parseList(r.stdout)
     }
 
@@ -110,14 +111,23 @@ enum RemoteFiles {
         try await run(h, password: password, "rm -rf -- \(q(p))", timeout: 600)
     }
 
-    /// Reads a text file, refusing anything over `limit` bytes or with NUL bytes.
-    static func readText(_ h: SSHHost, password: String?, _ path: String, limit: Int = 2_000_000) async throws -> String {
+    /// Size and modification time ("123 1700000000"), GNU/busybox stat or BSD stat.
+    static func stampCommand(_ path: String) -> String {
+        "stat -c '%s %Y' -- \(q(path)) 2>/dev/null || stat -f '%z %m' -- \(q(path))"
+    }
+
+    /// Reads a text file, refusing anything over `limit` bytes, with NUL bytes
+    /// or not UTF-8 (saving it back would rewrite the bytes it couldn't read).
+    /// `stamp` is the file's size and time, for `writeText` to check against.
+    static func readText(_ h: SSHHost, password: String?, _ path: String, limit: Int = 2_000_000) async throws -> (text: String, stamp: String) {
         let r = try await SSHCommand.run(h, password: password,
-                                         remote: "s=$(wc -c < \(q(path))) || exit 2; [ \"$s\" -le \(limit) ] || { echo \"TOO_BIG $s\" >&2; exit 4; }; cat -- \(q(path))", timeout: 30)
+                                         remote: "s=$(wc -c < \(q(path))) || exit 2; [ \"$s\" -le \(limit) ] || { echo \"TOO_BIG $s\" >&2; exit 4; }; st=$(\(stampCommand(path))) || exit 2; printf '%s\\n' \"$st\"; cat -- \(q(path))", timeout: 30)
         if r.status == 4 { throw ServiceError("This file is too large to edit in Brix (over \(limit / 1_000_000) MB). Download it instead.") }
-        guard r.ok else { throw failure(r) }
-        if r.stdout.contains("\u{0}") { throw ServiceError("This looks like a binary file. Download it instead.") }
-        return r.stdout
+        guard r.ok, let nl = r.stdout.firstIndex(of: "\n") else { throw failure(r) }
+        let text = String(r.stdout[r.stdout.index(after: nl)...])
+        if text.contains("\u{0}") { throw ServiceError("This looks like a binary file. Download it instead.") }
+        if text.contains("\u{FFFD}") { throw ServiceError("This file isn't UTF-8 text, so Brix can't edit it safely. Download it instead.") }
+        return (text, String(r.stdout[..<nl]))
     }
 
     static func download(_ h: SSHHost, password: String?, remote: String, to local: URL, recursive: Bool) async throws {
@@ -130,14 +140,36 @@ enum RemoteFiles {
         try await scp(h, password: password, scpArgs(h, recursive: isDir.boolValue) + [local.path, remoteSpec(h, join(dir, ""))])
     }
 
-    /// Writes text back to a remote file by uploading a temporary copy.
-    static func writeText(_ h: SSHHost, password: String?, _ path: String, text: String) async throws {
+    /// Puts `upload` in place of `path` if `path` still has `stamp` (else exit 5),
+    /// then prints the new stamp. A symlink or someone else's file is written
+    /// through (mv would replace the link, or the owner); otherwise the upload
+    /// takes the file's mode and is moved over it.
+    static func replaceCommand(_ path: String, with upload: String, stamp: String) -> String {
+        """
+        st=$(\(stampCommand(path))); [ "$st" = \(q(stamp)) ] || { rm -f -- \(q(upload)); exit 5; }; \
+        { if [ -L \(q(path)) ] || [ ! -O \(q(path)) ]; then cat -- \(q(upload)) > \(q(path)) && rm -f -- \(q(upload)); \
+        else chmod -- "$(stat -c %a -- \(q(path)) 2>/dev/null || stat -f %Lp -- \(q(path)))" \(q(upload)) && mv -f -- \(q(upload)) \(q(path)); fi; } \
+        || { rm -f -- \(q(upload)); exit 1; }; \(stampCommand(path))
+        """
+    }
+
+    /// Writes text back to a remote file: uploads it beside the file, then
+    /// moves it into place, so a dropped connection never leaves half a file.
+    /// Refuses when the file changed since it was read (`stamp` from readText).
+    /// Returns the new stamp, for the next save.
+    static func writeText(_ h: SSHHost, password: String?, _ path: String, text: String, stamp: String) async throws -> String {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("brix-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmp) }
-        let file = tmp.appendingPathComponent((path as NSString).lastPathComponent)
+        let name = (path as NSString).lastPathComponent
+        let file = tmp.appendingPathComponent(name)
         try text.write(to: file, atomically: true, encoding: .utf8)
-        try await scp(h, password: password, scpArgs(h, recursive: false) + [file.path, remoteSpec(h, path)])
+        let upload = join(parent(path), ".\(name).brix-\(UUID().uuidString.prefix(8))")
+        try await scp(h, password: password, scpArgs(h, recursive: false) + [file.path, remoteSpec(h, upload)])
+        let r = try await SSHCommand.run(h, password: password, remote: replaceCommand(path, with: upload, stamp: stamp), timeout: 60)
+        if r.status == 5 { throw ServiceError("\(name) changed on the server since you opened it. Not saved; reopen it to see the new version.") }
+        guard r.ok else { throw failure(r) }
+        return r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func scp(_ h: SSHHost, password: String?, _ args: [String]) async throws {
@@ -150,8 +182,5 @@ enum RemoteFiles {
         guard r.ok else { throw failure(r) }
     }
 
-    private static func failure(_ r: ProcessOutput) -> ServiceError {
-        let msg = r.stderr.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty && !$0.hasPrefix("debug1") }.last
-        return ServiceError(msg ?? "exit status \(r.status)")
-    }
+    private static func failure(_ r: ProcessOutput) -> ServiceError { ServiceError(SSHCommand.message(r)) }
 }

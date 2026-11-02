@@ -50,7 +50,8 @@ struct MacStats: Equatable {
             return Double(busy - last.busy) / Double(total - last.total)
         }
 
-        /// Active, wired and compressed pages: what Activity Monitor calls "Memory Used".
+        /// App memory (internal minus purgeable), wired and compressed pages:
+        /// Activity Monitor's "Memory Used".
         static func memoryUsed() -> Double {
             var stats = vm_statistics64()
             var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
@@ -59,7 +60,8 @@ struct MacStats: Equatable {
             }
             guard r == KERN_SUCCESS else { return 0 }
             let page = Double(vm_kernel_page_size)
-            return (Double(stats.active_count) + Double(stats.wire_count) + Double(stats.compressor_page_count)) * page
+            let app = Double(stats.internal_page_count) - Double(stats.purgeable_count)
+            return (max(app, 0) + Double(stats.wire_count) + Double(stats.compressor_page_count)) * page
         }
 
         static func appFootprint() -> Double {

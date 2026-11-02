@@ -184,7 +184,8 @@ extension AppStore {
     /// next try reads the Keychain again (it may have been changed elsewhere).
     func noteDBError(_ d: DatabaseConnection, _ message: String) {
         let m = message.lowercased()
-        if ["password", "authentication", "access denied", "auth failed"].contains(where: m.contains) {
+        // Postgres 28P01 and MySQL 1045 only, not any message that mentions a password column.
+        if ["password authentication failed", "28p01", "(using password:"].contains(where: m.contains) {
             keychain.forget(Keychain.dbAccount(d.id))
         }
     }
@@ -321,7 +322,9 @@ extension AppStore {
             }
             let base = r.rows[row]
             guard let k = DataEdits.rowKey(base, columns: r.columns) else { return }
-            var e = t.edits[k.id] ?? DWRowEdit(key: k.key, original: Dictionary(uniqueKeysWithValues: r.columns.enumerated().map { ($1.name, $0 < base.count ? base[$0] : nil) }))
+            let cell = { (i: Int) in i < base.count ? base[i] : nil }
+            var e = t.edits[k.id] ?? DWRowEdit(key: k.key, original: Dictionary(uniqueKeysWithValues: r.columns.enumerated().map { ($1.name, cell($0)) }),
+                                               matchable: Set(r.columns.enumerated().filter { DataEdits.matchable(cell($0), $1) }.map(\.element.name)))
             if (e.original[name] ?? nil) == value { e.changes[name] = nil } else { e.changes[name] = .some(value) }
             t.edits[k.id] = e.changes.isEmpty ? nil : e
         }
@@ -332,8 +335,9 @@ extension AppStore {
             guard let r = t.result else { return }
             var new: [String: String] = [:]
             if let row, row < r.rows.count {
-                // Duplicate: every value but the primary key (the database assigns it).
-                for (i, c) in r.columns.enumerated() where !c.isPK && i < r.rows[row].count { new[c.name] = r.rows[row][i] }
+                // Duplicate: every value but the primary key (the database assigns it) and
+                // stand-ins like "<12 bytes>", which would be written as that text.
+                for (i, c) in r.columns.enumerated() where !c.isPK && i < r.rows[row].count && !DataEdits.placeholder(r.rows[row][i], c) { new[c.name] = r.rows[row][i] }
             }
             t.inserted.append(new)
             t.selection = DWCell(row: r.rows.count + t.inserted.count - 1, col: 0)
@@ -349,7 +353,7 @@ extension AppStore {
                 return
             }
             guard let k = DataEdits.rowKey(r.rows[row], columns: r.columns) else { return }
-            if t.deleted[k.id] != nil { t.deleted[k.id] = nil } else { t.deleted[k.id] = k.key }
+            if t.deleted[k.id] != nil { t.deleted[k.id] = nil } else { t.deleted[k.id] = DataEdits.deleteKey(r.rows[row], columns: r.columns, key: k.key) }
         }
     }
 
@@ -366,7 +370,7 @@ extension AppStore {
     func editBlocker(_ t: DWTab, _ d: DatabaseConnection) -> String? {
         if dataLocked(d) { return "Production: read-only here" }
         if t.object?.kind != .table { return "Views can't be edited" }
-        guard let cols = t.result?.columns ?? t.detail?.columns else { return "Loading" }
+        guard let cols = t.result.flatMap({ $0.columns.isEmpty ? nil : $0.columns }) ?? t.detail?.columns else { return "Loading" }
         let pk = cols.filter(\.isPK)
         if pk.isEmpty { return "No primary key: rows can't be matched, so they can't be edited" }
         if let c = pk.first(where: { !DataEdits.plainKey($0) }) { return "Primary key \(c.name) is \(c.type): its shown value can't be matched exactly, so rows can't be edited" }
@@ -401,7 +405,7 @@ extension AppStore {
                     let r = try await LiveDatabaseService.$owner.withValue(id.uuidString) {
                         try await self.svc(conn).db.executeBatch(conn, sqls: plan.map(\.sql), expect: plan.map(\.expect), password: self.dbPassword(conn))
                     }
-                    self.library.queryHistory.insert(QueryHistoryEntry(sql: sqls.joined(separator: "\n"), connectionID: conn.id, ranAt: Date(), rows: sqls.count, ms: r.elapsedMs), at: 0)
+                    self.library.queryHistory.insert(QueryHistoryEntry(sql: SQLText.redacted(sqls.joined(separator: "\n")), connectionID: conn.id, ranAt: Date(), rows: sqls.count, ms: r.elapsedMs), at: 0)
                     self.clearSubmitted(id, snapshot.edits, snapshot.inserted, snapshot.deleted)
                     self.toast(.success, "Saved \(sqls.count) change\(sqls.count == 1 ? "" : "s") to \(t.title)", detail: r.message)
                     self.loadTable(id)
@@ -414,10 +418,10 @@ extension AppStore {
             confirm("Write to \(d.name)?", "\(d.name) is read-only. Submit \(sqls.count) change\(sqls.count == 1 ? "" : "s") anyway?", confirm: "Submit") {
                 var u = d
                 u.writeUnlocked = true
-                run(u)
+                _ = run(u)
             }
         } else {
-            run(d)
+            _ = run(d)
         }
     }
 
@@ -468,7 +472,7 @@ extension AppStore {
         // PROD: only statements that read, on a read-only session. Checked here, not just in the UI.
         var d = d0
         if dataLocked(d0) || t.readOnlySession {
-            if let w = stmts.first(where: { !AgentDBPolicy.readOnlyStatement($0) }) {
+            if let w = stmts.first(where: { !AgentDBPolicy.readOnlyStatement($0, kind: d0.kind) }) {
                 let why = dataLocked(d0) ? "\(d0.name) is Production: INSERT, UPDATE, DELETE and DDL are blocked." : "This console is read-only."
                 ws.update(id) { $0.results.insert(DWConsoleResult(kind: .output, label: "Output", sql: w, error: why), at: 0); $0.activeResult = $0.results.first?.id }
                 return
@@ -482,26 +486,15 @@ extension AppStore {
             ws.update(id) { $0.results.insert(DWConsoleResult(kind: .output, label: "Output", sql: tx, error: "Transactions aren't available in a console: it shares one session with every tab on \(d0.name). Each statement commits on its own."), at: 0); $0.activeResult = $0.results.first?.id }
             return
         }
-        let needsUnlock = !dataLocked(d0) && !t.readOnlySession && d0.effectiveReadOnly && stmts.contains(where: Self.isWrite)
+        let needsUnlock = !dataLocked(d0) && !t.readOnlySession && d0.effectiveReadOnly && stmts.contains { Self.isWrite($0, kind: d0.kind) }
         let go = { (conn: DatabaseConnection) in
             ws.update(id) { $0.loading = true; $0.error = nil }
             ws.owners[id] = id.uuidString
-            ws.running[id] = Task { await LiveDatabaseService.$owner.withValue(id.uuidString) {
+            // The session is shared by every tab on this connection, so each statement switches
+            // to this console's schema first, in the same hold of the session.
+            ws.running[id] = Task { await LiveDatabaseService.$owner.withValue(id.uuidString) { await LiveDatabaseService.$schema.withValue(t.schema.isEmpty ? nil : t.schema) {
                 var out: [DWConsoleResult] = []
                 var n = 0
-                // The session is shared by every tab on this connection, so each run sets its own schema.
-                if !t.schema.isEmpty, conn.kind != .sqlite {
-                    let use = conn.kind == .postgres ? "SET search_path TO \(LiveDatabaseService.quote(t.schema, .postgres)), public" : "USE \(LiveDatabaseService.quote(t.schema, .mysql))"
-                    do {
-                        _ = try await self.svc(conn).db.execute(conn, sql: use, password: self.dbPassword(conn))
-                    } catch {
-                        // Running in the wrong schema would be worse than not running.
-                        out.append(DWConsoleResult(kind: .output, label: "Output", sql: use, error: "Couldn't switch to schema \(t.schema): \((error as? ServiceError)?.message ?? error.localizedDescription)"))
-                        ws.update(id) { $0.results = out; $0.activeResult = out.first?.id; $0.loading = false }
-                        ws.running[id] = nil
-                        return
-                    }
-                }
                 for s in stmts {
                     if Task.isCancelled { break }
                     let sql = mode == .explain ? (conn.kind == .sqlite ? "EXPLAIN QUERY PLAN " : "EXPLAIN ") + s : SQLText.limited(s, limit: t.limit)
@@ -515,11 +508,11 @@ extension AppStore {
                             n += 1
                             out.append(DWConsoleResult(kind: .result, label: "Result \(n)", sql: s, result: r))
                         }
-                        self.library.queryHistory.insert(QueryHistoryEntry(sql: s, connectionID: conn.id, ranAt: Date(), rows: r.totalRows, ms: r.elapsedMs), at: 0)
+                        self.library.queryHistory.insert(QueryHistoryEntry(sql: SQLText.redacted(s), connectionID: conn.id, ranAt: Date(), rows: r.totalRows, ms: r.elapsedMs), at: 0)
                     } catch {
                         let msg = Task.isCancelled ? "Stopped." : ((error as? ServiceError)?.message ?? error.localizedDescription)
                         out.append(DWConsoleResult(kind: .output, label: "Output", sql: s, error: msg))
-                        self.library.queryHistory.insert(QueryHistoryEntry(sql: s, connectionID: conn.id, ranAt: Date(), rows: 0, ms: 0, error: msg.components(separatedBy: "\n").first), at: 0)
+                        self.library.queryHistory.insert(QueryHistoryEntry(sql: SQLText.redacted(s), connectionID: conn.id, ranAt: Date(), rows: 0, ms: 0, error: msg.components(separatedBy: "\n").first), at: 0)
                         break
                     }
                 }
@@ -531,7 +524,7 @@ extension AppStore {
                     tab.selection = nil
                 }
                 ws.running[id] = nil
-            } }
+            } } }
         }
         if needsUnlock {
             confirm("Write to \(d0.name)?", "\(d0.name) is read-only. This changes data. Run it anyway?", confirm: "Run write") {

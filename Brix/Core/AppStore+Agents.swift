@@ -9,7 +9,7 @@ extension AppStore {
 
     func refreshAgentPaths() {
         var paths: [String: String] = [:]
-        for a in settings.agents { if let p = ProcessRunner.which(a.binary) { paths[a.id] = p } }
+        for a in settings.agents { if let p = ProcessRunner.which(a.executable) { paths[a.id] = p } }
         agentPaths = paths
     }
 

@@ -26,6 +26,8 @@ struct DockerDetailView: View {
     @State private var inspect: [String: Any] = [:]
     @State private var raw = ""
     @State private var stats: [String: String] = [:]
+    /// The last stats read failed; the numbers shown are from before.
+    @State private var statsError: String?
     @State private var users: [String] = []
     @State private var error: String?
     @State private var loading = true
@@ -118,21 +120,29 @@ struct DockerDetailView: View {
                 }
             }
         } catch {
+            // A newer selection's load owns the panel now.
+            guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
         }
         loading = false
     }
 
-    /// Live CPU and memory for running containers, every 3 seconds while shown.
+    /// Live CPU and memory for running containers, every 5 seconds while shown
+    /// (a remote engine reuses the host's shared SSH connection).
     private func pollStats() async {
         guard case .container(let id) = selection else { return }
         while !Task.isCancelled {
-            if let c = store.dockerTarget(id), c.state == .running,
-               let out = try? await docker(["stats", "--no-stream", "--format", "{{json .}}", c.name], timeout: 10),
-               let d = out.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
-                stats = obj.compactMapValues { $0 as? String }
+            if let c = store.dockerTarget(id), c.state == .running {
+                do {
+                    let out = try await docker(["stats", "--no-stream", "--format", "{{json .}}", c.name], timeout: 10)
+                    guard let obj = try JSONSerialization.jsonObject(with: Data(out.utf8)) as? [String: Any] else { throw ServiceError("Unexpected docker stats output") }
+                    stats = obj.compactMapValues { $0 as? String }
+                    statsError = nil
+                } catch {
+                    if !Task.isCancelled { statsError = error.localizedDescription }
+                }
             }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
         }
     }
 
@@ -308,7 +318,8 @@ struct DockerDetailView: View {
             FactRow(key: "Restarts", value: str(inspect["RestartCount"] ?? state["RestartCount"]))
         }
         if !stats.isEmpty {
-            InspectorSection(title: "Live stats") {
+            InspectorSection(title: statsError == nil ? "Live stats" : "Live stats (stale)") {
+                if let statsError { Text("Couldn't refresh: \(statsError)").font(Typo.ui(11)).foregroundStyle(Theme.amber).lineLimit(2).help(statsError) }
                 FactRow(key: "CPU", value: stats["CPUPerc"] ?? "–")
                 FactRow(key: "Memory", value: "\(stats["MemUsage"] ?? "–") (\(stats["MemPerc"] ?? "–"))")
                 FactRow(key: "Network", value: stats["NetIO"] ?? "–")

@@ -32,18 +32,31 @@ struct ReviewView: View {
             }
         }
         .island(Theme.editor)
-        .task(id: "\(change?.id ?? "")-\(change?.add ?? 0)-\(change?.del ?? 0)") { await load() }
+        .task(id: change.map(cacheKey) ?? "") { await load() }
+    }
+
+    /// A diff is reused only while the file is unchanged: same counts, size and
+    /// modification time (an edit that keeps the counts still shows).
+    private func cacheKey(_ c: GitFileChange) -> String {
+        let a = ws.project.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.url.appendingPathComponent(c.path).path) }
+        let t = (a?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        return "\(c.id)@\(c.add)-\(c.del)-\(a?[.size] as? Int ?? -1)-\(t)"
     }
 
     private func load() async {
         guard let p = ws.project, let c = change else { diff = nil; return }
-        if let cached = ws.diffs[c.id], cached.add == c.add, cached.del == c.del { diff = cached; return }
+        let key = cacheKey(c)
+        if let cached = ws.diffs[key] { diff = cached; return }
         loading = true
         do {
             let d = try await store.svc(p).git.diff(p, change: c)
-            ws.diffs[c.id] = d
+            ws.diffs = ws.diffs.filter { !$0.key.hasPrefix(c.id + "@") }
+            ws.diffs[key] = d
+            // A newer load owns what's shown now.
+            guard !Task.isCancelled else { return }
             diff = d
         } catch {
+            guard !Task.isCancelled, !(error is CancellationError) else { return }
             diff = nil
             store.toast(.error, "Couldn't load the diff", detail: error.localizedDescription)
         }
@@ -512,6 +525,7 @@ struct GitGlobalView: View {
                     VStack(spacing: 0) {
                         HStack(spacing: 8) {
                             Text("Repository").font(Typo.panelTitle).tracking(0.4).foregroundStyle(Theme.text2)
+                                .lineLimit(1).minimumScaleFactor(0.8)
                             Spacer()
                             SegmentedControl(options: [(0, "Changes"), (1, "History"), (2, "Branches")], selection: $tab, height: 22, fontSize: 11)
                         }
@@ -526,7 +540,13 @@ struct GitGlobalView: View {
                     .island()
                 }
             }
-            .onAppear { store.library.projects.forEach { store.refreshGit($0.id) } }
+            .task {
+                // Three projects at a time: each read is about six git processes.
+                let ids = store.library.projects.map(\.id)
+                for start in stride(from: 0, to: ids.count, by: 3) {
+                    for t in ids[start..<min(start + 3, ids.count)].compactMap({ store.refreshGit($0) }) { await t.value }
+                }
+            }
         }
     }
 

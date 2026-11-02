@@ -119,7 +119,9 @@ struct KeyframeLoop<Content: View>: NSViewRepresentable {
         host.rootView = AnyView(content().environment(store))
         let animate = !reduceMotion
         let key = "\(animate)|\(keyframes.stops.map(\.1))|\(keyframes.duration)|\(keyframes.delay)|\(anchor)|\(String(describing: still))"
-        guard key != context.coordinator.key || host.layer?.animation(forKey: "loop") == nil else { return }
+        // Still mode (Reduce Motion) holds its pose under "still…", never "loop".
+        let applied = host.layer?.animation(forKey: animate ? "loop" : "stilltransform") != nil
+        guard key != context.coordinator.key || !applied else { return }
         context.coordinator.key = key
         // Wait for a real size: the anchor and the layer's centre depend on it.
         // AppKit drops a layer's animations when its view leaves the window

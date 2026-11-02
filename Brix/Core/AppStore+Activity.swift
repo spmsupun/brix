@@ -33,17 +33,33 @@ extension AppStore {
 
     // MARK: Agent time
 
-    /// Seconds agents spent working, per project and day.
-    func addAgentTime(_ project: ProjectID?, _ seconds: TimeInterval) {
-        guard let project, seconds > 0 else { return }
-        library.daily[Self.dayKey("agent", project, Date()), default: 0] += min(seconds, 8 * 3600)
+    /// Seconds agents spent working, per project and day: a run over midnight
+    /// is split between the days, and counts at most its last 8 hours.
+    func addAgentTime(_ project: ProjectID?, from start: Date, to end: Date = Date()) {
+        guard let project else { return }
+        for (day, seconds) in Self.splitByDay(from: max(start, end.addingTimeInterval(-8 * 3600)), to: end) {
+            library.daily[Self.dayKey("agent", project, day), default: 0] += seconds
+        }
+    }
+
+    /// The seconds from start to end that fall on each calendar day, keyed by the day's start.
+    static func splitByDay(from start: Date, to end: Date, calendar: Calendar = .current) -> [(day: Date, seconds: TimeInterval)] {
+        var out: [(day: Date, seconds: TimeInterval)] = []
+        var t = start
+        while t < end {
+            let day = calendar.startOfDay(for: t)
+            let next = min(calendar.date(byAdding: .day, value: 1, to: day) ?? end, end)
+            out.append((day, next.timeIntervalSince(t)))
+            t = next
+        }
+        return out
     }
 
     /// Called whenever an agent's state changes, to count working time.
     func trackAgentTime(_ s: TerminalSession, from old: SessionState, to new: SessionState) {
         if new == .running, old != .running { runningSince[s.id] = Date() }
         if old == .running, new != .running {
-            addAgentTime(s.projectID, Date().timeIntervalSince(runningSince.removeValue(forKey: s.id) ?? s.startedAt))
+            addAgentTime(s.projectID, from: runningSince.removeValue(forKey: s.id) ?? s.startedAt)
         }
     }
 
@@ -61,7 +77,7 @@ extension AppStore {
         let ids = project.map { [$0] } ?? library.projects.map(\.id)
         let stored = ids.reduce(0.0) { $0 + (library.daily[Self.dayKey("agent", $1, Date())] ?? 0) }
         let live = sessions.filter { $0.kind == .agent && $0.state == .running && $0.isLive && (project == nil || $0.projectID == project) }
-            .reduce(0.0) { $0 + Date().timeIntervalSince(runningSince[$1.id] ?? $1.startedAt) }
+            .reduce(0.0) { $0 + Date().timeIntervalSince(max(runningSince[$1.id] ?? $1.startedAt, Calendar.current.startOfDay(for: Date()))) }
         return stored + live
     }
 
@@ -156,6 +172,7 @@ extension AppStore {
         }
         guard let p = project(id), old?.commits.first?.hash != new.commits.first?.hash || dayStats[id] == nil else { return }
         let service = svc(p).activity
+        // A failed read leaves nil, so the next refresh asks again.
         Task { dayStats[id] = await service.dayStats(p) }
     }
 

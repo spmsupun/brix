@@ -19,9 +19,14 @@ struct Project: Codable, Identifiable, Hashable {
     var envVarNames: [String] = []
     /// Agent started by default in this project; nil uses the app default.
     var agentID: String? = nil
-    /// nil means on: keep `brix.json` in the project folder up to date.
+    /// Keep `brix.json` in the project folder up to date. nil (projects added
+    /// before this was set explicitly) means on; new projects get true only when
+    /// their folder already had the file.
     var syncsSettingsFile: Bool? = nil
     var keepsSettingsFile: Bool { syncsSettingsFile ?? true }
+    /// brix.json's connections, agent and GitHub repository are waiting for (or
+    /// were refused) the user's yes: writes keep them in the file as they are.
+    var holdsFileConnections: Bool? = nil
     /// Sample projects are backed by mock services; real ones by live services.
     var isSample: Bool = false
     /// Optional fixed initials for the project mark.
@@ -50,6 +55,18 @@ struct Project: Codable, Identifiable, Hashable {
 
     var expandedPath: String { (path as NSString).expandingTildeInPath }
     var url: URL { URL(fileURLWithPath: expandedPath, isDirectory: true) }
+
+    /// An id for a new project: the name as a slug (a-z, 0-9 and dashes), with
+    /// -2, -3… when taken. Ids name files, so nothing else gets in.
+    static func makeID(_ name: String, prefix: String = "", taken: (ProjectID) -> Bool) -> ProjectID {
+        let folded = name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).lowercased()
+        let slug = folded.unicodeScalars.map { $0.isASCII && CharacterSet.alphanumerics.contains($0) ? String($0) : "-" }.joined()
+            .split(separator: "-").joined(separator: "-")
+        let base = prefix + (slug.isEmpty ? "project" : String(slug.prefix(60)))
+        var id = base, n = 1
+        while taken(id) { n += 1; id = "\(base)-\(n)" }
+        return id
+    }
 }
 
 // MARK: - SSH
@@ -80,6 +97,9 @@ struct SSHHost: Codable, Identifiable, Hashable {
     var os: String = ""
     var lastConnected: Date? = nil
     var isSample: Bool = false
+    /// The ~/.ssh/config Host it was imported from; ssh connects through it so
+    /// ProxyJump and the rest of that block still apply.
+    var alias: String? = nil
 
     var address: String { "\(user)@\(host)\(port == 22 ? "" : ":\(port)")" }
     /// For menus listing servers: two with the same name told apart by environment and address.
@@ -88,7 +108,7 @@ struct SSHHost: Codable, Identifiable, Hashable {
         var parts = ["ssh"]
         if port != 22 { parts += ["-p", "\(port)"] }
         if auth == .key, !keyPath.isEmpty { parts += ["-i", keyPath] }
-        parts.append("\(user)@\(host)")
+        parts.append("\(user)@\(alias ?? host)")
         return parts.joined(separator: " ")
     }
 }
@@ -361,6 +381,7 @@ extension Project {
         envVarNames = (try? c.decodeIfPresent([String].self, forKey: .envVarNames)) ?? []
         agentID = try? c.decodeIfPresent(String.self, forKey: .agentID)
         syncsSettingsFile = try? c.decodeIfPresent(Bool.self, forKey: .syncsSettingsFile)
+        holdsFileConnections = try? c.decodeIfPresent(Bool.self, forKey: .holdsFileConnections)
         isSample = (try? c.decodeIfPresent(Bool.self, forKey: .isSample)) ?? false
         mark = try? c.decodeIfPresent(String.self, forKey: .mark)
         iconSymbol = try? c.decodeIfPresent(String.self, forKey: .iconSymbol)
@@ -382,11 +403,12 @@ extension SSHHost {
         port = (try? c.decodeIfPresent(Int.self, forKey: .port)) ?? 22
         auth = (try? c.decodeIfPresent(SSHAuth.self, forKey: .auth)) ?? .key
         keyPath = (try? c.decodeIfPresent(String.self, forKey: .keyPath)) ?? "~/.ssh/id_ed25519"
-        tag = (try? c.decodeIfPresent(EnvTag.self, forKey: .tag)) ?? .dev
+        tag = (try? c.decodeIfPresent(EnvTag.self, forKey: .tag)) ?? .prod
         notes = (try? c.decodeIfPresent(String.self, forKey: .notes)) ?? ""
         os = (try? c.decodeIfPresent(String.self, forKey: .os)) ?? ""
         lastConnected = try? c.decodeIfPresent(Date.self, forKey: .lastConnected)
         isSample = (try? c.decodeIfPresent(Bool.self, forKey: .isSample)) ?? false
+        alias = try? c.decodeIfPresent(String.self, forKey: .alias)
     }
 }
 
@@ -398,7 +420,7 @@ extension DatabaseConnection {
         id = try c.decode(ResourceID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         kind = try c.decode(DBKind.self, forKey: .kind)
-        tag = (try? c.decodeIfPresent(EnvTag.self, forKey: .tag)) ?? .dev
+        tag = (try? c.decodeIfPresent(EnvTag.self, forKey: .tag)) ?? .prod
         host = (try? c.decodeIfPresent(String.self, forKey: .host)) ?? "localhost"
         port = (try? c.decodeIfPresent(Int.self, forKey: .port)) ?? kind.defaultPort
         database = (try? c.decodeIfPresent(String.self, forKey: .database)) ?? ""
@@ -423,16 +445,25 @@ extension DatabaseConnection {
     }
 }
 
+extension EnvTag {
+    /// A tag this build doesn't know (a newer Brix, a hand edit) reads as
+    /// Production: never quietly drop a server's protection to Development.
+    init(from decoder: Decoder) throws {
+        self = EnvTag(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .prod
+    }
+}
+
 // MARK: - Docker
 
 enum ContainerState: String, Codable {
-    case running, exited, restarting, paused
+    /// unknown: its engine didn't answer the last refresh.
+    case running, exited, restarting, paused, unknown
     var color: Color {
         switch self {
         case .running: Theme.green
         case .restarting: Theme.amber
         case .paused: Theme.amber
-        case .exited: Theme.disabled
+        case .exited, .unknown: Theme.disabled
         }
     }
 }
@@ -464,6 +495,7 @@ struct DockerTarget: Codable, Identifiable, Hashable {
         case .exited: return "Exited (\(exitCode))"
         case .restarting: return "Restarting"
         case .paused: return "Paused"
+        case .unknown: return "Unknown"
         }
     }
 
@@ -497,6 +529,25 @@ struct DockerTarget: Codable, Identifiable, Hashable {
     }
 }
 
+extension DockerTarget {
+    /// Only the identity is required; a target saved with fewer fields still loads.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(ResourceID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        image = (try? c.decodeIfPresent(String.self, forKey: .image)) ?? ""
+        ports = (try? c.decodeIfPresent(String.self, forKey: .ports)) ?? ""
+        hostID = try? c.decodeIfPresent(ResourceID.self, forKey: .hostID)
+        composeProject = (try? c.decodeIfPresent(String.self, forKey: .composeProject)) ?? ""
+        state = (try? c.decodeIfPresent(ContainerState.self, forKey: .state)) ?? .exited
+        startedAt = try? c.decodeIfPresent(Date.self, forKey: .startedAt)
+        exitCode = (try? c.decodeIfPresent(Int.self, forKey: .exitCode)) ?? 0
+        isSample = (try? c.decodeIfPresent(Bool.self, forKey: .isSample)) ?? false
+        statusText = (try? c.decodeIfPresent(String.self, forKey: .statusText)) ?? ""
+        composeService = (try? c.decodeIfPresent(String.self, forKey: .composeService)) ?? ""
+    }
+}
+
 // MARK: - Links (many-to-many)
 
 enum ResourceKind: String, Codable, CaseIterable {
@@ -511,6 +562,18 @@ struct LinkPair: Codable, Hashable {
 
 struct ProjectLinks: Codable, Equatable {
     var pairs: Set<LinkPair> = []
+    /// Links this build couldn't read, counted into Library.skippedOnLoad. Not saved.
+    var skippedOnLoad = 0
+
+    private enum CodingKeys: String, CodingKey { case pairs }
+
+    init() {}
+
+    /// A link of a kind this build doesn't know is dropped, not the whole set.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        pairs = Set(try c.decodeEach(LinkPair.self, forKey: .pairs, skipped: &skippedOnLoad))
+    }
 
     func isLinked(_ project: ProjectID, _ resource: ResourceID) -> Bool {
         pairs.contains { $0.project == project && $0.resource == resource }
@@ -660,6 +723,10 @@ struct GitFileChange: Codable, Identifiable, Hashable {
     var add: Int
     var del: Int
     var staged: Bool
+    /// A rename's source path; unstaging and diffing need both.
+    var origPath: String? = nil
+    /// Unmerged: the file has merge conflicts.
+    var conflict = false
 
     var name: String { (path as NSString).lastPathComponent }
     var dir: String {

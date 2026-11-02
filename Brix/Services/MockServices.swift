@@ -638,9 +638,9 @@ final class MockDatabaseService: DatabaseService {
 final class MockDockerService: DockerService {
     var containers: [DockerTarget] = MockData.docker
 
-    func list(hosts: [SSHHost]) async throws -> [DockerTarget] {
+    func list(hosts: [SSHHost]) async throws -> DockerListing {
         await simulatedDelay(0.2)
-        return containers
+        return DockerListing(targets: containers)
     }
 
     func inventory(host: SSHHost?) async throws -> DockerInventory {

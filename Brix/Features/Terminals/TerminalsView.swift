@@ -200,7 +200,7 @@ private struct SessionList: View {
         switch s.state {
         case .needsInput: "waiting for you"
         case .idle: s.unseen ? "done, not opened" : "idle"
-        case .running: s.kind == .agent ? AgentPane.duration(since: s.startedAt).replacingOccurrences(of: " min", with: "m") : (s.kind == .logs ? "tail" : (s.process.contains("dev") ? ":3000" : ""))
+        case .running: s.kind == .agent ? AgentPane.duration(since: store.runningSince[s.id] ?? s.startedAt).replacingOccurrences(of: " min", with: "m") : (s.kind == .logs ? "tail" : (s.process.contains("dev") ? ":3000" : ""))
         default: s.state.label.lowercased()
         }
     }

@@ -209,7 +209,8 @@ private struct DockerToolbar: View {
 
     @ViewBuilder private var error: some View {
         if let e = store.dockerTab == "containers" ? store.dockerError : store.dockerInventoryError {
-            Label(e.components(separatedBy: "\n").first ?? e, systemImage: "exclamationmark.triangle").font(Typo.ui(11.5)).foregroundStyle(Theme.amber).lineLimit(1)
+            let lines = e.components(separatedBy: "\n")
+            Label((lines.first ?? e) + (lines.count > 1 ? " (+\(lines.count - 1) more)" : ""), systemImage: "exclamationmark.triangle").font(Typo.ui(11.5)).foregroundStyle(Theme.amber).lineLimit(1)
                 .help(e)
         }
     }

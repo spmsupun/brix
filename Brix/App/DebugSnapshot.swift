@@ -6,7 +6,14 @@ import SwiftUI
 /// hierarchy, so no screen-recording permission is needed.
 @MainActor
 enum DebugSnapshot {
-    static var directory: String? { ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_DIR"] }
+    /// Debug builds only: a released Brix ignores BRIX_SNAPSHOT_*.
+    static var directory: String? {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_DIR"]
+        #else
+        nil
+        #endif
+    }
 
     struct Step {
         var name: String
@@ -431,6 +438,7 @@ enum DebugSnapshot {
                 capture(name: step.name, dir: dir)
             }
             // Frames of the window as the screen shows it, Core Animation included.
+            #if DEBUG
             if let n = ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_FRAMES"].flatMap(Int.init),
                let w = NSApp.windows.first(where: { $0.isVisible && $0.title == "Brix" }) ?? NSApp.mainWindow {
                 for i in 0..<n {
@@ -440,6 +448,7 @@ enum DebugSnapshot {
                     try? await Task.sleep(nanoseconds: 300_000_000)
                 }
             }
+            #endif
             if let hold = ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_HOLD"].flatMap(Double.init) {
                 try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
             }

@@ -96,13 +96,14 @@ struct ProjectFile: Codable, Equatable {
 }
 
 extension SSHHost {
+    /// Key paths and notes stay on this Mac: the file is shared with everyone who clones the repo.
     var fileEntry: ProjectFile.Host {
-        .init(name: name, host: host, user: user, port: port, auth: auth.rawValue, keyPath: auth == .key ? keyPath : nil, tag: tag.rawValue, notes: notes.isEmpty ? nil : notes)
+        .init(name: name, host: host, user: user, port: port, auth: auth.rawValue, tag: tag.rawValue)
     }
     init(entry e: ProjectFile.Host) {
         self.init(id: "h-\(UUID().uuidString.prefix(8).lowercased())", name: e.name, host: e.host, user: e.user, port: e.port ?? 22,
                   auth: e.auth.flatMap(SSHAuth.init) ?? .key, keyPath: e.keyPath ?? "~/.ssh/id_ed25519",
-                  tag: e.tag.flatMap(EnvTag.init) ?? EnvTag.guess(e.name), notes: e.notes ?? "")
+                  tag: EnvTag(file: e.tag, guessFrom: e.name + " " + e.host), notes: e.notes ?? "")
     }
     func matches(_ e: ProjectFile.Host) -> Bool { host == e.host && port == (e.port ?? 22) && user == e.user }
 }
@@ -114,14 +115,21 @@ extension DatabaseConnection {
               sslMode: sslMode.rawValue, tunnelHost: tunnelName, tag: tag.rawValue, readOnly: readOnly ? true : nil,
               agentAccess: agentAccess.rawValue)
     }
-    func matches(_ e: ProjectFile.Database) -> Bool {
+    /// Same server, database, user and route (`tunnel` is the file's tunnel host, resolved).
+    func matches(_ e: ProjectFile.Database, tunnel: ResourceID?) -> Bool {
         guard kind.rawValue == e.kind else { return false }
         if kind == .sqlite { return filePath == (e.filePath ?? "") }
         return host == (e.host ?? "localhost") && port == (e.port ?? kind.defaultPort) && database == (e.database ?? "")
+            && user == (e.user ?? "") && tunnelHostID == tunnel
     }
 }
 
 extension EnvTag {
+    /// A tag from brix.json: an unknown one is Production; none is guessed from the name.
+    init(file raw: String?, guessFrom text: String) {
+        if let raw { self = EnvTag(rawValue: raw) ?? .prod } else { self = EnvTag.guess(text) }
+    }
+
     /// Best guess from a name or address: anything that says prod is production.
     static func guess(_ text: String) -> EnvTag {
         let t = text.lowercased()

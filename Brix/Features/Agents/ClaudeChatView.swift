@@ -17,6 +17,13 @@ struct ClaudeChatView: View {
     @State private var attachError: String?
     private static let maxImages = 5
     @State private var dropping = false
+    /// Images still being scaled and encoded; a send waits for them.
+    @State private var converting = 0
+    /// Near the bottom of the chat: only then does new output scroll it.
+    @State private var atBottom = true
+    @State private var viewport: CGFloat = 0
+    /// A digit pressed for the prompt card's choices.
+    @State private var askKey: Int?
     @State private var showContext = false
     @State private var showTodos = false
     @State private var showTasks = false
@@ -42,19 +49,22 @@ struct ClaudeChatView: View {
                         if !chat.liveText.isEmpty {
                             MarkdownView(text: chat.liveText, scrolls: false)
                         }
-                        if chat.working, chat.asks.isEmpty, chat.liveText.isEmpty {
+                        if chat.working || chat.compacting, chat.asks.isEmpty, chat.liveText.isEmpty {
                             HStack(spacing: 8) {
                                 WorkingSpinner(color: accent, size: 12)
-                                Text("Working…").font(Typo.ui(12)).foregroundStyle(Theme.text3)
+                                Text(chat.compacting ? "Compacting the conversation…" : "Working…").font(Typo.ui(12)).foregroundStyle(Theme.text3)
                             }
                         }
                         Color.clear.frame(height: 1).id("bottom")
+                            // Within a little of the bottom counts, so a reply growing between scrolls is still followed.
+                            .onGeometryChange(for: Bool.self) { $0.frame(in: .scrollView).minY <= viewport + 150 } action: { atBottom = $0 }
                     }
                     .padding(.horizontal, 20).padding(.vertical, 16)
                     .frame(maxWidth: 820, alignment: .leading)
                     .frame(maxWidth: .infinity)
                 }
                 .defaultScrollAnchor(.bottom)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0 }
                 .contextMenu {
                     Button("Copy Last Reply") { if let r = chat.lastReply { copy(r) } }.disabled(chat.lastReply == nil)
                     Button("Interrupt") { chat.interrupt() }.disabled(!chat.working)
@@ -63,12 +73,13 @@ struct ClaudeChatView: View {
                     Divider()
                     Button("Close", role: .destructive) { store.closeSession(chat.sessionID) }
                 }
-                .onChange(of: chat.items.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
-                .onChange(of: chat.liveText.count / 200) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
-                .onChange(of: chat.asks.count) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+                // Scrolled up to read: left there, except for a message you send.
+                .onChange(of: chat.items.count) { _, _ in if atBottom || chat.items.last?.kind == .user { proxy.scrollTo("bottom", anchor: .bottom) } }
+                .onChange(of: chat.liveText.count / 200) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
+                .onChange(of: chat.asks.count) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
             }
             if let ask = chat.asks.first {
-                AskCard(chat: chat, ask: ask).id(ask.id).padding(.horizontal, 16).padding(.bottom, 8)
+                AskCard(chat: chat, ask: ask, key: $askKey).id(ask.id).padding(.horizontal, 16).padding(.bottom, 8)
                     .frame(maxWidth: 820).frame(maxWidth: .infinity)
             }
             composer
@@ -77,18 +88,22 @@ struct ClaudeChatView: View {
         .overlay {
             if dropping {
                 RoundedRectangle(cornerRadius: 10).strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4])).padding(6)
-                    .overlay(Text("Drop images to attach").font(Typo.ui(13, .semibold)).foregroundStyle(accent))
+                    .overlay(Text("Drop images to attach, or files to mention").font(Typo.ui(13, .semibold)).foregroundStyle(accent))
                     .allowsHitTesting(false)
             }
         }
         .onDrop(of: [.fileURL, .image], isTargeted: $dropping) { providers in
             for p in providers {
-                if p.canLoadObject(ofClass: URL.self) {
+                // A file (from Finder): an image is attached, anything else goes in as an @mention, as in the terminal.
+                // An image from a browser comes as its data; its web address is never fetched.
+                if p.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
                     _ = p.loadObject(ofClass: URL.self) { url, _ in
-                        guard let url else { return }
+                        guard let url, url.isFileURL else { DispatchQueue.main.async { attach([], failed: ["the dropped file"]) }; return }
                         let isImage = UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
                         let img = isImage ? NSImage(contentsOf: url) : nil
-                        DispatchQueue.main.async { attach(img.map { [$0] } ?? [], failed: img == nil ? [url.lastPathComponent] : []) }
+                        DispatchQueue.main.async {
+                            if isImage { attach(img.map { [$0] } ?? [], failed: img == nil ? [url.lastPathComponent] : []) } else { mention(url) }
+                        }
                     }
                 } else if p.canLoadObject(ofClass: NSImage.self) {
                     _ = p.loadObject(ofClass: NSImage.self) { img, _ in
@@ -99,11 +114,17 @@ struct ClaudeChatView: View {
             }
             return true
         }
-        .onChange(of: chat.prefill) { _, t in
-            guard let t else { return }
-            // Whatever was being typed stays, under the message brought back.
-            draft = draft.isEmpty ? t : t + "\n\n" + draft
+        .onChange(of: chat.prefill != nil) { _, has in
+            guard has, let p = chat.prefill else { return }
             chat.prefill = nil
+            // Its images come back too, numbered on from any already here, with the tags in its text to match.
+            let room = max(0, Self.maxImages - attachments.count)
+            let r = ClaudeChat.renumbered(p.text, Array(p.images.prefix(room)), from: nextImage)
+            nextImage += r.images.count
+            attachments += r.images
+            if p.images.count > room { attachError = "Up to \(Self.maxImages) images per message." }
+            // Whatever was being typed stays, under the message brought back.
+            draft = draft.isEmpty ? r.text : r.text + "\n\n" + draft
             focused = true
         }
         .onAppear {
@@ -112,9 +133,15 @@ struct ClaudeChatView: View {
             // ⌘V with an image on the clipboard attaches it; text pastes as usual.
             // Only in the key window, where this chat's editor has focus.
             pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
-                guard focused, e.window != nil, e.window === NSApp.keyWindow,
-                      e.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-                      e.charactersIgnoringModifiers == "v" else { return e }
+                guard focused, e.window != nil, e.window === NSApp.keyWindow else { return e }
+                let mods = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                // 1-9 pick a prompt's choice, as in the terminal, while nothing is typed (digits in a message stay digits).
+                if mods.subtracting([.capsLock, .numericPad]).isEmpty, draft.isEmpty, let ask = chat.asks.first,
+                   let n = Int(e.charactersIgnoringModifiers ?? ""), n >= 1, n <= AskCard.choices(ask) {
+                    askKey = n
+                    return nil
+                }
+                guard mods == .command, e.charactersIgnoringModifiers == "v" else { return e }
                 let found = ClaudeChat.images(on: .general)
                 guard !found.isEmpty else { return e }
                 attach(found)
@@ -131,6 +158,13 @@ struct ClaudeChatView: View {
     private var mention: String? {
         let last = draft.components(separatedBy: .whitespacesAndNewlines).last ?? ""
         return last.hasPrefix("@") ? String(last.dropFirst()) : nil
+    }
+
+    /// A dropped file as an @mention: relative to the session folder when inside it, quoted when it has spaces.
+    private func mention(_ url: URL) {
+        let base = chat.cwd.hasSuffix("/") ? chat.cwd : chat.cwd + "/"
+        let path = url.path.hasPrefix(base) ? String(url.path.dropFirst(base.count)) : url.path
+        insertTags("@" + (path.contains(" ") ? "\"\(path)\"" : path) + " ")
     }
 
     private func pickFile(_ path: String) {
@@ -162,7 +196,9 @@ struct ClaudeChatView: View {
     /// adds what fits under the limit and says what didn't make it.
     private func attach(_ images: [NSImage], failed: [String] = []) {
         let boxed = images.map { UncheckedImage(image: $0) }
+        converting += 1
         Task {
+            defer { converting -= 1 }
             let made = await Task.detached(priority: .userInitiated) { boxed.map { ClaudeChat.attachment($0.image) } }.value
             var problems = failed.map { "Couldn't read \($0)." }
             let ok = made.compactMap { $0 }
@@ -202,8 +238,8 @@ struct ClaudeChatView: View {
                 VStack(alignment: .trailing, spacing: 6) {
                     if !item.images.isEmpty {
                         HStack(spacing: 6) {
-                            ForEach(Array(item.images.enumerated()), id: \.offset) { _, d in
-                                if let img = NSImage(data: d) {
+                            ForEach(item.images) { a in
+                                if let img = Thumbnails.image(a.data) {
                                     Image(nsImage: img).resizable().scaledToFit()
                                         .frame(maxWidth: min(220, img.size.width), maxHeight: min(160, img.size.height))
                                         .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -225,8 +261,11 @@ struct ClaudeChatView: View {
         case .thinking:
             thinking(item.text, live: false)
         case .tool:
-            ToolCard(item: item, running: item.result == nil && chat.working,
-                     onBackground: ["Bash", "Task", "Agent"].contains(item.tool) && item.result == nil && chat.working ? { chat.background(item.id) } : nil)
+            // A `!` command runs here, not in Claude's turn: it has its own Stop.
+            let bash = chat.isRunningBash(item.id)
+            ToolCard(item: item, running: item.result == nil && (chat.working || bash),
+                     onBackground: !bash && ["Bash", "Task", "Agent"].contains(item.tool) && item.result == nil && chat.working ? { chat.background(item.id) } : nil,
+                     onStop: bash ? { chat.stopBash(item.id) } : nil)
         case .error:
             Text(item.text).font(Typo.ui(12.5)).foregroundStyle(Theme.red).textSelection(.enabled)
                 .padding(10).frame(maxWidth: .infinity, alignment: .leading)
@@ -320,7 +359,7 @@ struct ClaudeChatView: View {
             if !attachments.isEmpty {
                 HStack(spacing: 8) {
                     ForEach(attachments) { a in
-                        if let img = NSImage(data: a.data) {
+                        if let img = Thumbnails.image(a.data) {
                             Image(nsImage: img).resizable().scaledToFill().frame(width: 56, height: 56)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .overlay(alignment: .bottomLeading) {
@@ -719,6 +758,10 @@ struct ClaudeChatView: View {
             attachError = "Waiting for the ! command to finish, so its output goes with this message."
             return
         }
+        if converting > 0 {
+            attachError = "Still adding the image; send again in a moment."
+            return
+        }
         store.sendInput(chat.sessionID, t, images: attachments)
         draft = ""
         attachments = []
@@ -733,6 +776,8 @@ private struct ToolCard: View {
     let running: Bool
     /// Sends this running command or subagent to the background (⌃B).
     var onBackground: (() -> Void)? = nil
+    /// Stops a running `!` command.
+    var onStop: (() -> Void)? = nil
     @State private var open = false
 
     var body: some View {
@@ -753,6 +798,14 @@ private struct ToolCard: View {
                                 .background(RoundedRectangle(cornerRadius: 5).fill(Color.white(0.06)))
                         }
                         .buttonStyle(.hand).help("Keep it running in the background and carry on (⌃B)")
+                    }
+                    if let onStop {
+                        Button(action: onStop) {
+                            Text("Stop").font(Typo.ui(10.5, .medium)).foregroundStyle(Theme.text2)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 5).fill(Color.white(0.06)))
+                        }
+                        .buttonStyle(.hand).help("Stop this command; Claude still gets the command with your next message")
                     }
                     if running {
                         ProgressView().controlSize(.mini)
@@ -789,7 +842,7 @@ private struct ToolCard: View {
                     if !item.detail.isEmpty { mono(item.detail, limit: 60) }
                     if let r = item.result, !r.isEmpty { mono(r, limit: 80, color: item.failed ? Theme.red : Theme.text3) }
                     ForEach(Array(item.resultImages.enumerated()), id: \.offset) { _, d in
-                        if let img = NSImage(data: d) {
+                        if let img = Thumbnails.image(d) {
                             Image(nsImage: img).resizable().scaledToFit().frame(maxWidth: min(480, img.size.width), maxHeight: 320)
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
@@ -887,6 +940,8 @@ private struct AskCard: View {
     @Environment(\.accent) private var accent
     let chat: ClaudeChat
     let ask: ClaudeChat.Ask
+    /// A digit pressed in the chat (1-9): taken as a click on that choice.
+    @Binding var key: Int?
     @State private var picks: [String: Set<String>] = [:]
     /// Typed "Other" answers, per question.
     @State private var other: [String: String] = [:]
@@ -907,6 +962,29 @@ private struct AskCard: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.sheet))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.amber.opacity(0.45)))
+        .onChange(of: key) { _, k in
+            guard let k else { return }
+            key = nil
+            if !noting { press(k) }
+        }
+    }
+
+    /// How many numbered choices a prompt shows (questions have none).
+    static func choices(_ ask: ClaudeChat.Ask) -> Int {
+        !ask.questions.isEmpty ? 0 : (ask.tool == "ExitPlanMode" ? 3 : ask.suggestions.count + 2)
+    }
+
+    /// The numbered choice `n`, as its button does; the last one opens the note field.
+    private func press(_ n: Int) {
+        if ask.tool == "ExitPlanMode" {
+            if n == 1 { chat.approvePlan(ask, mode: "acceptEdits") } else if n == 2 { chat.approvePlan(ask, mode: "default") } else { noting = true }
+        } else if n == 1 {
+            chat.allow(ask)
+        } else if n - 2 < ask.suggestions.count {
+            chat.allow(ask, also: ask.suggestions[n - 2])
+        } else {
+            noting = true
+        }
     }
 
     // MARK: Plan
@@ -1053,6 +1131,19 @@ private struct AskCard: View {
         var answers: [String: String] = [:]
         for q in ask.questions { answers[q.question] = answer(for: q) }
         chat.answer(ask, answers)
+    }
+}
+
+/// Images decoded once, not on every render: a chat's body runs on each streamed change.
+@MainActor
+private enum Thumbnails {
+    private static let cache: NSCache<NSData, NSImage> = { let c = NSCache<NSData, NSImage>(); c.countLimit = 60; return c }()
+
+    static func image(_ data: Data) -> NSImage? {
+        if let hit = cache.object(forKey: data as NSData) { return hit }
+        guard let img = NSImage(data: data) else { return nil }
+        cache.setObject(img, forKey: data as NSData)
+        return img
     }
 }
 

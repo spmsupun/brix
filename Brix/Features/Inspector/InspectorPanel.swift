@@ -63,7 +63,8 @@ struct InspectorDetails: View {
                 case .none:
                     EmptyState(symbol: "sidebar.right", message: "Select a file, project, session, host, table or commit to see its details.")
                         .frame(height: 300)
-                case .file(let p, let path): FileInspector(projectID: p, path: path)
+                // Keyed by project and path: the same path in another project is another file.
+                case .file(let p, let path): FileInspector(projectID: p, path: path).id("\(p)|\(path)")
                 case .project(let p): ProjectInspector(projectID: p)
                 case .session(let id): SessionInspector(sessionID: id)
                 case .host(let id): HostInspector(hostID: id)
@@ -112,7 +113,7 @@ struct FileInspector: View {
     var body: some View {
         let p = store.project(projectID)
         let change = store.git[projectID]?.changes.first { $0.path == path }
-        let last = store.git[projectID]?.commits.first { c in c.files.contains { $0.path == path } } ?? store.git[projectID]?.commits.first
+        let last = store.git[projectID]?.commits.first { c in c.files.contains { $0.path == path } }
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: FileKinds.isImage(path) ? "photo" : "doc.text").font(.system(size: 16)).foregroundStyle(FileKinds.iconColor(for: path))
@@ -409,6 +410,7 @@ struct TableInspector: View {
                 detail = try await store.svc(db).db.tableDetail(db, object: object, password: store.dbPassword(db))
                 error = nil
             } catch {
+                guard !Task.isCancelled else { return }
                 self.error = error.localizedDescription
             }
         }
@@ -472,6 +474,7 @@ struct CommitDetail: View {
                 commit = try await store.svc(p).git.commitDetail(p, hash: hash)
                 error = nil
             } catch {
+                guard !Task.isCancelled else { return }
                 self.error = error.localizedDescription
             }
         }

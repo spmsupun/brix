@@ -379,7 +379,7 @@ final class GridTable: NSTableView {
         case 124: c.move(dRow: 0, dCol: 1)
         case 125: c.move(dRow: 1, dCol: 0)
         case 126: c.move(dRow: -1, dCol: 0)
-        case 36, 76 where e.modifierFlags.intersection([.command, .option, .control]).isEmpty: c.beginEdit(nil)
+        case 36 where e.modifierFlags.intersection([.command, .option, .control]).isEmpty, 76 where e.modifierFlags.intersection([.command, .option, .control]).isEmpty: c.beginEdit(nil)
         case 48 where e.modifierFlags.intersection([.command, .option, .control]).isEmpty:
             c.move(dRow: 0, dCol: e.modifierFlags.contains(.shift) ? -1 : 1)
         default: super.keyDown(with: e)

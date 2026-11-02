@@ -55,7 +55,9 @@ struct AddProjectSheet: View {
                 .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 8).fill(Color.white(0.05)))
             VStack(alignment: .leading, spacing: 2) {
                 Text(url?.lastPathComponent ?? "No folder chosen").font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text)
-                Text(url?.path ?? "Use a folder you have, or make a new one.").font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.middle)
+                // A path cuts in the middle; the hint wraps instead.
+                Text(url?.path ?? "Use a folder you have, or make a new one.").font(Typo.mono(11)).foregroundStyle(Theme.text3)
+                    .lineLimit(url == nil ? 2 : 1).truncationMode(.middle).fixedSize(horizontal: false, vertical: url == nil)
             }
             Spacer()
             SubtleButton(title: "New Folder…") { create() }

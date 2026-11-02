@@ -162,10 +162,13 @@ enum CommandCatalog {
 
     static func rank(_ items: [CommandItem], query: String) -> [CommandItem] {
         let q = query.trimmingCharacters(in: .whitespaces)
-        func gi(_ g: String) -> Int { groupOrder.firstIndex { g.hasPrefix($0) } ?? 99 }
+        // Exact names ("DATABASES" is not "DATA"); "FILES IN …" is FILES.
+        func gi(_ g: String) -> Int { groupOrder.firstIndex(of: g.hasPrefix("FILES IN ") ? "FILES" : g) ?? 99 }
+        // Group order, then group name, so groups never interleave.
+        func before(_ a: String, _ b: String) -> Bool { gi(a) != gi(b) ? gi(a) < gi(b) : a < b }
         if q.isEmpty {
             var perGroup: [String: Int] = [:]
-            return items.sorted { a, b in gi(a.group) != gi(b.group) ? gi(a.group) < gi(b.group) : a.boost > b.boost }
+            return items.sorted { a, b in a.group != b.group ? before(a.group, b.group) : a.boost > b.boost }
                 .filter { i in
                     let n = perGroup[i.group, default: 0]
                     perGroup[i.group] = n + 1
@@ -182,7 +185,7 @@ enum CommandCatalog {
         var perGroup: [String: Int] = [:]
         return scored.sorted { a, b in
             let ga = bestPerGroup[a.0.group]!, gb = bestPerGroup[b.0.group]!
-            if a.0.group != b.0.group { return ga != gb ? ga > gb : gi(a.0.group) < gi(b.0.group) }
+            if a.0.group != b.0.group { return ga != gb ? ga > gb : before(a.0.group, b.0.group) }
             return a.1 > b.1
         }
         .map(\.0)

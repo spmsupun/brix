@@ -72,7 +72,9 @@ struct ProjectScan {
             for c in children where !skip.contains(c) && !c.hasPrefix(".") {
                 var isDir: ObjCBool = false
                 let u = dir.appendingPathComponent(c)
-                if fm.fileExists(atPath: u.path, isDirectory: &isDir), isDir.boolValue {
+                // A symlinked folder isn't followed: it can point outside the project or loop back.
+                let link = (try? u.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true
+                if !link, fm.fileExists(atPath: u.path, isDirectory: &isDir), isDir.boolValue {
                     walk(u, rel: rel.isEmpty ? c : "\(rel)/\(c)", depth: depth + 1)
                 }
             }

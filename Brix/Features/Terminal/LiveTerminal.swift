@@ -1,30 +1,39 @@
 import AppKit
 import SwiftUI
 import SwiftTerm
+import os
 
-/// A SwiftTerm view running a real process in a PTY. Keeps a plain-text tail
-/// of the output so session cards can show the last lines.
+/// A SwiftTerm view running a real process in a PTY. Session cards read the
+/// last lines from its screen.
 final class BrixTerminalView: LocalProcessTerminalView {
     let sessionID: String
     weak var store: AppStore?
     private(set) var lastData = Date.distantPast
-    private var tail: [String] = [""]
     private var idle = true
     private var idleTimer: Timer?
-    private var escape = false
-    private var csi = false
-    private var osc = false
     private lazy var relay = DelegateRelay(owner: self)
+    /// Set on SwiftTerm's parse thread when output arrives; cleared on main.
+    private let outputPending = OSAllocatedUnfairLock(initialState: false)
 
     init(sessionID: String, store: AppStore, fontSize: CGFloat) {
         self.sessionID = sessionID
         self.store = store
-        super.init(frame: NSRect(x: 0, y: 0, width: 640, height: 360))
+        super.init(frame: NSRect(x: 0, y: 0, width: 640, height: 360), font: nil, options: TerminalOptions(scrollback: 10_000))
         wantsLayer = true
         processDelegate = relay
         applyTheme(fontSize: fontSize, accent: store.settings.accent)
         idleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkIdle() }
+        }
+        // SwiftTerm hands output straight to its parser and never calls
+        // dataReceived(slice:), so this is the only sign of output. It runs on the
+        // parse thread for every batch: at most one hop to main per 0.2 s.
+        let pending = outputPending
+        setProcessOutputHandler { [weak self] in
+            guard pending.withLock({ p in defer { p = true }; return !p }) else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                MainActor.assumeIsolated { self?.outputArrived() }
+            }
         }
     }
 
@@ -100,6 +109,29 @@ final class BrixTerminalView: LocalProcessTerminalView {
         if window != nil { needsDisplay = true }
     }
 
+    /// A click (or a move between panes) gave this terminal the keyboard: its
+    /// pane becomes the focused one. The pane's tap gesture never sees clicks
+    /// that the terminal handles itself. (SwiftTerm's becomeFirstResponder can't be
+    /// overridden; it sets this.)
+    override var hasFocus: Bool {
+        didSet { if hasFocus { store?.terminalFocused(sessionID) } }
+    }
+
+    /// Closing: SIGHUP to the shell's process group and its foreground job, as
+    /// closing a terminal window does (interactive zsh ignores SIGTERM and left
+    /// its jobs running), then SIGKILL to both if the shell is still there.
+    func hangUp() {
+        idleTimer?.invalidate()
+        let shell = process.shellPid
+        guard shell > 0, process.running else { return }
+        let fg = process.childfd >= 0 ? tcgetpgrp(process.childfd) : -1
+        let groups = Set([shell, fg].filter { $0 > 0 })
+        groups.forEach { killpg($0, SIGHUP) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [process] in
+            if process?.running == true { groups.forEach { killpg($0, SIGKILL) } }
+        }
+    }
+
     /// Moved to a screen with another scale (an external display): draw again.
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
@@ -112,18 +144,11 @@ final class BrixTerminalView: LocalProcessTerminalView {
         if grew { needsDisplay = true }
     }
 
-    override func dataReceived(slice: ArraySlice<UInt8>) {
-        super.dataReceived(slice: slice)
+    private func outputArrived() {
+        outputPending.withLock { $0 = false }
         lastData = Date()
-        appendTail(slice)
-        if isAgent {
-            if Self.screenShowsWork(rolling) {
-                lastWorkHint = Date()
-                rolling = ""
-            }
-            if agentState != .running { checkIdle() }
-            return
-        }
+        // An agent's state is read from its screen: now, rather than on the next tick.
+        if isAgent { checkIdle(); return }
         // Local shells are tracked by their foreground process in checkIdle.
         if idle, foregroundCommand() == nil {
             idle = false
@@ -131,38 +156,11 @@ final class BrixTerminalView: LocalProcessTerminalView {
         }
     }
 
-    /// Strips escape sequences and keeps the last 60 lines.
-    private func appendTail(_ bytes: ArraySlice<UInt8>) {
-        var current = tail.removeLast()
-        var scalars: [UInt8] = []
-        for b in bytes {
-            if osc { if b == 0x07 || b == 0x5C { osc = false }; continue }
-            if csi { if (0x40...0x7E).contains(b) { csi = false }; continue }
-            if escape {
-                escape = false
-                if b == 0x5B { csi = true } else if b == 0x5D { osc = true }
-                continue
-            }
-            switch b {
-            case 0x1B: escape = true
-            case 0x0A:
-                let line = String(decoding: scalars, as: UTF8.self)
-                current += line; rolling += line + " "; scalars = []
-                tail.append(current); current = ""
-            case 0x0D: break
-            case 0x08: if !scalars.isEmpty { scalars.removeLast() }
-            case 0..<0x20: break
-            default: scalars.append(b)
-            }
-        }
-        current += String(decoding: scalars, as: UTF8.self)
-        rolling += String(decoding: scalars, as: UTF8.self)
-        if rolling.count > 600 { rolling = String(rolling.suffix(300)) }
-        tail.append(current)
-        if tail.count > 60 { tail.removeFirst(tail.count - 60) }
+    /// The last 60 non-blank lines of the screen and the scrollback above it.
+    var recentLines: [String] {
+        let rows = terminalContentSnapshot(region: .history(maximumScrollbackRows: 60))?.rows.map(\.text) ?? []
+        return Array(rows.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.suffix(60))
     }
-
-    var recentLines: [String] { tail.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } }
 
     private func checkIdle() {
         // Agent TUIs redraw (clocks, status lines) even when waiting, so output
@@ -213,7 +211,7 @@ final class BrixTerminalView: LocalProcessTerminalView {
     /// For a local shell: "" when the shell itself is in front (waiting at its
     /// prompt), else the name of the command running in it. nil when that can't
     /// be told (an ssh session, or the terminal has no process yet).
-    private func foregroundCommand() -> String? {
+    func foregroundCommand() -> String? {
         guard let s = store?.session(sessionID), s.kind == .shell, s.hostID == nil else { return nil }
         let shell = process.shellPid, fd = process.childfd
         guard shell > 0, fd >= 0 else { return nil }
@@ -231,8 +229,6 @@ final class BrixTerminalView: LocalProcessTerminalView {
 
     /// A prompt was just sent: count as working until the agent's own hint shows.
     func markWorking() { lastWorkHint = Date() }
-    /// Printable output with escape codes removed, newest last.
-    private var rolling = ""
 
     /// The bottom of the screen, where an agent's spinner, prompt box and
     /// questions live. Chat text further up never counts. Room for the task
@@ -250,6 +246,13 @@ final class BrixTerminalView: LocalProcessTerminalView {
     static func screenShowsWork(_ screen: String) -> Bool {
         let s = screen.lowercased()
         if s.contains("esc to interrupt") || s.contains("ctrl+c to interrupt") { return true }
+        // Claude waiting on its own background agents or shells ("✱ Waiting for 1 background agent
+        // to finish") is still busy, though nothing spins.
+        if s.range(of: #"waiting for \d+ background (agent|task|shell)"#, options: .regularExpression) != nil { return true }
+        // Its agent list under the prompt while background agents run: "● main" then a
+        // "○ general-purpose  Running the tests" row for each of them.
+        if screen.range(of: #"(?m)^\s*●\s+main\s*$"#, options: .regularExpression) != nil,
+           screen.range(of: #"(?m)^\s*○\s+\S+\s{2,}\S"#, options: .regularExpression) != nil { return true }
         // Claude Code's spinner row: one of its star glyphs, then a capitalised word and an ellipsis
         // ("✶ Cogitating…", "✳ Sautéing…", "✢ Dilly-dallying…", "· Beboppin'…"). Claude no longer
         // prints "esc to interrupt" there, so this row is the only sign.
@@ -383,15 +386,16 @@ final class TerminalRegistry {
     func stop(_ id: String) {
         places[id] = nil
         if let v = views.removeValue(forKey: id) {
-            v.terminate()
+            v.hangUp()
             v.removeFromSuperview()
         }
     }
 
-    /// ponytail: "busy" means output in the last 3 s; inspect the PTY's
-    /// foreground process group if this needs to be exact.
+    /// A local shell is busy while a command runs in front of it (npm run dev,
+    /// vim); anything else (ssh, logs) while it printed in the last 3 s.
     func hasChildProcess(_ id: String) -> Bool {
         guard let v = views[id] else { return false }
+        if let fg = v.foregroundCommand() { return !fg.isEmpty }
         return Date().timeIntervalSince(v.lastData) < 3
     }
 
@@ -454,7 +458,15 @@ struct LiveTerminalSurface: NSViewRepresentable {
                 term.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -4)
             ])
             let had = (term.window?.firstResponder as? NSView).map { $0 === term || $0.isDescendant(of: term) } ?? false
-            if focus || had { DispatchQueue.main.async { term.window?.makeFirstResponder(term) } }
+            if focus || had {
+                DispatchQueue.main.async {
+                    // Only the focused session takes the keyboard, and never from a
+                    // text field or editor being typed in (a restore or a new tab
+                    // elsewhere used to pull typing into the newest terminal).
+                    guard had || (term.store?.focusedSessionID == sessionID && !(term.window?.firstResponder is NSTextView)) else { return }
+                    term.window?.makeFirstResponder(term)
+                }
+            }
         }
     }
 }

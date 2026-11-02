@@ -93,7 +93,7 @@ enum DockerAction: String {
 }
 
 protocol DockerService: AnyObject {
-    func list(hosts: [SSHHost]) async throws -> [DockerTarget]
+    func list(hosts: [SSHHost]) async throws -> DockerListing
     func perform(_ action: DockerAction, on c: DockerTarget, host: SSHHost?) async throws -> DockerTarget
     func logs(_ c: DockerTarget, host: SSHHost?) async throws -> [String]
     /// Command run in a terminal for "shell" and "logs -f".

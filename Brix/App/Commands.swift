@@ -31,6 +31,7 @@ struct BrixCommands: Commands {
             Button("Save All") { ws?.saveAll() }.keyboardShortcut("s", modifiers: [.command, .option])
             Divider()
             Button("Close Tab") { closeTab() }.keyboardShortcut("w", modifiers: .command)
+                .disabled(!canCloseTab)
         }
 
         CommandGroup(after: .sidebar) {
@@ -57,15 +58,16 @@ struct BrixCommands: Commands {
             Button("Maximize Pane") { tiled { $0.toggleMaximizePane() } }.keyboardShortcut(.return, modifiers: [.command, .shift])
             Button("Close Pane") { tiled { $0.closeFocusedPane() } }.keyboardShortcut("w", modifiers: [.option, .command])
             Divider()
-            Button("Focus Pane Left") { tiled { $0.focusPane(.left) } }.keyboardShortcut(.leftArrow, modifiers: [.option, .command])
-            Button("Focus Pane Right") { tiled { $0.focusPane(.right) } }.keyboardShortcut(.rightArrow, modifiers: [.option, .command])
-            Button("Focus Pane Above") { tiled { $0.focusPane(.top) } }.keyboardShortcut(.upArrow, modifiers: [.option, .command])
-            Button("Focus Pane Below") { tiled { $0.focusPane(.bottom) } }.keyboardShortcut(.downArrow, modifiers: [.option, .command])
+            // Disabled without a pane that way, so the keys reach the terminal or editor.
+            Button("Focus Pane Left") { tiled { $0.focusPane(.left) } }.keyboardShortcut(.leftArrow, modifiers: [.option, .command]).disabled(!hasNeighbour(.left))
+            Button("Focus Pane Right") { tiled { $0.focusPane(.right) } }.keyboardShortcut(.rightArrow, modifiers: [.option, .command]).disabled(!hasNeighbour(.right))
+            Button("Focus Pane Above") { tiled { $0.focusPane(.top) } }.keyboardShortcut(.upArrow, modifiers: [.option, .command]).disabled(!hasNeighbour(.top))
+            Button("Focus Pane Below") { tiled { $0.focusPane(.bottom) } }.keyboardShortcut(.downArrow, modifiers: [.option, .command]).disabled(!hasNeighbour(.bottom))
             Divider()
-            Button("Move Tab Left") { tiled { $0.moveTabToNeighbour(.left) } }.keyboardShortcut(.leftArrow, modifiers: [.control, .shift])
-            Button("Move Tab Right") { tiled { $0.moveTabToNeighbour(.right) } }.keyboardShortcut(.rightArrow, modifiers: [.control, .shift])
-            Button("Move Tab Up") { tiled { $0.moveTabToNeighbour(.top) } }.keyboardShortcut(.upArrow, modifiers: [.control, .shift])
-            Button("Move Tab Down") { tiled { $0.moveTabToNeighbour(.bottom) } }.keyboardShortcut(.downArrow, modifiers: [.control, .shift])
+            Button("Move Tab Left") { tiled { $0.moveTabToNeighbour(.left) } }.keyboardShortcut(.leftArrow, modifiers: [.control, .shift]).disabled(!hasNeighbour(.left))
+            Button("Move Tab Right") { tiled { $0.moveTabToNeighbour(.right) } }.keyboardShortcut(.rightArrow, modifiers: [.control, .shift]).disabled(!hasNeighbour(.right))
+            Button("Move Tab Up") { tiled { $0.moveTabToNeighbour(.top) } }.keyboardShortcut(.upArrow, modifiers: [.control, .shift]).disabled(!hasNeighbour(.top))
+            Button("Move Tab Down") { tiled { $0.moveTabToNeighbour(.bottom) } }.keyboardShortcut(.downArrow, modifiers: [.control, .shift]).disabled(!hasNeighbour(.bottom))
             Button("Next Tab") { ws?.cycleTab(1) }.keyboardShortcut(.tab, modifiers: .control)
             Button("Previous Tab") { ws?.cycleTab(-1) }.keyboardShortcut(.tab, modifiers: [.control, .shift])
         }
@@ -112,6 +114,7 @@ struct BrixCommands: Commands {
             }
             Divider()
             Button("Load Sample Workspace") { store.loadSampleWorkspace() }
+                .disabled(store.library.projects.contains(where: \.isSample))
             Button("Remove Sample Workspace") { store.removeSampleWorkspace() }
                 .disabled(!store.library.projects.contains(where: \.isSample))
         }
@@ -129,6 +132,20 @@ struct BrixCommands: Commands {
 
     private func newAgent() {
         store.startAgent(project: nil)
+    }
+
+    /// ⌘W is disabled when there's no tab it would close, rather than swallowed.
+    private var canCloseTab: Bool {
+        if store.route == .databases { return store.dataWorkspace.active != nil }
+        guard let ws else { return false }
+        return ws.state.layout.centre == .agents && !ws.state.panes.isEmpty
+    }
+
+    /// The tiled centre is showing and the focused pane has a neighbour that way.
+    private func hasNeighbour(_ edge: PaneEdge) -> Bool {
+        guard let ws, ws.layout.centre == .agents, !ws.state.panes.isEmpty,
+              let g = ws.state.panes.focusedGroup.flatMap({ ws.state.panes.group($0)?.id }) ?? ws.state.panes.groups.first?.id else { return false }
+        return ws.state.panes.neighbour(of: g, edge) != nil
     }
 
     private func closeTab() {

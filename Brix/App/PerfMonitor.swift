@@ -32,10 +32,12 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber, @unchecked Sendabl
         let t = Thread { [weak self] in self?.watchdog() }
         t.name = "brix.perf.watchdog"
         t.start()
+        #if DEBUG
         // `BRIX_PERF_SELFTEST=1`: block the main thread for 2 s once, to check a stall is caught.
         if ProcessInfo.processInfo.environment["BRIX_PERF_SELFTEST"] != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { Thread.sleep(forTimeInterval: 2) }
         }
+        #endif
     }
 
     // MARK: Main-thread stalls

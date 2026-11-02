@@ -132,6 +132,14 @@ struct AppSettings: Codable, Equatable {
     var uiFont: UIFontChoice = .system
     /// Family for code, terminals and SQL; empty means SF Mono.
     var codeFont = ""
+    /// Agents this build couldn't read and left out when loading. Not saved.
+    var skippedOnLoad = 0
+
+    private enum CodingKeys: String, CodingKey {
+        case accent, spacing, density, sidebarPosition, sidebarStyle, sidebarWidth, sidebarHidden, terminalFontSize, notifyFinished, notifyNeedsInput,
+             badgeDock, notifySound, notifySoundName, notifyVolume, collapsedSections, appearance, expandedProjects, agents, defaultAgent,
+             agentSidePanel, claudeNativeView, showToolStrips, uiFont, codeFont
+    }
 
     init() {}
 
@@ -158,7 +166,10 @@ struct AppSettings: Codable, Equatable {
         collapsedSections = (try? c.decode(Set<String>.self, forKey: .collapsedSections)) ?? d.collapsedSections
         appearance = (try? c.decode(AppearanceMode.self, forKey: .appearance)) ?? d.appearance
         expandedProjects = (try? c.decode(Set<String>.self, forKey: .expandedProjects)) ?? d.expandedProjects
-        agents = AgentConfig.mergingBuiltins((try? c.decode([AgentConfig].self, forKey: .agents)) ?? d.agents)
+        // One by one, so an agent that doesn't read doesn't reset the whole list.
+        var skipped = 0
+        agents = AgentConfig.mergingBuiltins(c.contains(.agents) ? ((try? c.decodeEach(AgentConfig.self, forKey: .agents, skipped: &skipped)) ?? d.agents) : d.agents)
+        skippedOnLoad = skipped
         defaultAgent = try? c.decode(String.self, forKey: .defaultAgent)
         agentSidePanel = (try? c.decode(Bool.self, forKey: .agentSidePanel)) ?? d.agentSidePanel
         claudeNativeView = (try? c.decode(Bool.self, forKey: .claudeNativeView)) ?? d.claudeNativeView

@@ -31,9 +31,12 @@ enum ConfigImporter {
             let host = fields["hostname"] ?? a
             if ["github.com", "gitlab.com", "bitbucket.org", "ssh.dev.azure.com"].contains(host.lowercased()) { return }
             let key = fields["identityfile"]
-            out.append(SSHHost(id: "h-\(UUID().uuidString.prefix(8).lowercased())", name: a, host: host, user: fields["user"] ?? NSUserName(),
-                               port: fields["port"].flatMap(Int.init) ?? 22, auth: key == nil ? .agent : .key,
-                               keyPath: key ?? "~/.ssh/id_ed25519", tag: EnvTag.guess(a + " " + host)))
+            var h = SSHHost(id: "h-\(UUID().uuidString.prefix(8).lowercased())", name: a, host: host, user: fields["user"] ?? NSUserName(),
+                            port: fields["port"].flatMap(Int.init) ?? 22, auth: key == nil ? .agent : .key,
+                            keyPath: key ?? "~/.ssh/id_ed25519", tag: EnvTag.guess(a + " " + host))
+            // Connect through the alias, so ProxyJump and the rest of its block apply.
+            h.alias = a
+            out.append(h)
         }
         for raw in text.components(separatedBy: .newlines) {
             let line = raw.trimmingCharacters(in: .whitespaces)
@@ -87,7 +90,9 @@ enum ConfigImporter {
             db.name = e.attribute(forName: "name")?.stringValue ?? db.name
             db.tag = EnvTag.guess(db.name + " " + db.host)
             var tunnel: String?
-            if let l = localDoc, !uuid.isEmpty, let le = (try? l.nodes(forXPath: "//data-source[@uuid='\(uuid)']"))?.first {
+            // Matched by comparing, not by putting the uuid into the XPath (a quote in it would break the query).
+            if let l = localDoc, !uuid.isEmpty,
+               let le = ((try? l.nodes(forXPath: "//data-source")) ?? []).first(where: { ($0 as? XMLElement)?.attribute(forName: "uuid")?.stringValue == uuid }) {
                 if let u = (try? le.nodes(forXPath: "user-name").first?.stringValue) ?? nil { db.user = u }
                 let enabled = (try? le.nodes(forXPath: "ssh-properties/enabled").first?.stringValue) ?? nil
                 if enabled == "true" { tunnel = (try? le.nodes(forXPath: "ssh-properties/ssh-config-id").first?.stringValue) ?? nil }

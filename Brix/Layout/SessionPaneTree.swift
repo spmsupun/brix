@@ -230,7 +230,7 @@ private struct PaneGroupView: View {
         .clipShape(shape)
         // With panes side by side, the focused one gets a faint accent border so it's
         // clear where typing goes; a lone pane keeps the plain one.
-        .overlay(shape.strokeBorder(focused && tree.groups.count > 1 ? accent.opacity(0.22) : Theme.border, lineWidth: 1))
+        .overlay(shape.strokeBorder(focused && tree.maximized == nil && tree.groups.count > 1 ? accent.opacity(0.22) : Theme.border, lineWidth: 1))
     }
 
     private func focus(keyboard: Bool = true) {

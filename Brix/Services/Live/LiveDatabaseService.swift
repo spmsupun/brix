@@ -30,6 +30,11 @@ final class LiveDatabaseService: DatabaseService {
 
     /// Who a call belongs to (a tab id), so Stop only cancels that tab's query.
     @TaskLocal static var owner: String?
+    /// The schema a console runs in: switched to before each call, in the same hold of the session.
+    @TaskLocal static var schema: String?
+    /// An agent's call (through the gateway): at most 30 s and `AgentDBPolicy.rowCap` rows,
+    /// and a read runs in a read-only transaction that's rolled back.
+    @TaskLocal static var agent = false
 
     private func run(_ c: DatabaseConnection, password: String?, _ sqls: [String], atomic: Bool = false, expect: [Int?] = []) async throws -> [RawResult] {
         switch c.kind {
@@ -84,19 +89,36 @@ final class LiveDatabaseService: DatabaseService {
         }
         guard let session else { throw ServiceError("No session") }
         session.lastUse = Date()
+        let agentRead = Self.agent && readOnly(c) && !atomic
         do {
             try await session.setReadOnly(readOnly(c))
+            if Self.agent {
+                // Agents get a session of their own (see AgentDBGateway), so this stays there.
+                let t = min(c.queryTimeout ?? 30, 30)
+                if c.kind == .postgres { _ = try await session.query("SET statement_timeout = \(t * 1000)") } else {
+                    // MySQL's applies to SELECTs; MariaDB names it differently (seconds, every statement).
+                    let mysql = "SET SESSION max_execution_time = \(t * 1000)", maria = "SET SESSION max_statement_time = \(t)"
+                    do { _ = try await session.query(c.flavor == .mariadb ? maria : mysql) } catch { _ = try await session.query(c.flavor == .mariadb ? mysql : maria) }
+                }
+            }
+            if let schema = Self.schema {
+                let use = c.kind == .postgres ? "SET search_path TO \(Self.quote(schema, .postgres)), public" : "USE \(Self.quote(schema, .mysql))"
+                // Running in the wrong schema would be worse than not running.
+                do { _ = try await session.query(use) } catch { throw ServiceError("Couldn't switch to schema \(schema): \(Self.describe(error))") }
+            }
             var out: [RawResult] = []
             if atomic { _ = try await session.query("BEGIN") }
+            if agentRead { _ = try await session.query(c.kind == .postgres ? "BEGIN READ ONLY" : "START TRANSACTION READ ONLY") }
             for (i, sql) in sqls.enumerated() {
-                let r = try await session.query(sql)
+                let r = try await session.query(sql, cap: Self.agent ? AgentDBPolicy.rowCap : .max, describe: !atomic)
                 try Self.verify(r, sql, expected: expect.indices.contains(i) ? expect[i] : nil)
                 out.append(r)
             }
             if atomic { _ = try await session.query("COMMIT") }
+            if agentRead { _ = try await session.query("ROLLBACK") }
             return out
         } catch {
-            if atomic {
+            if atomic || agentRead {
                 do { _ = try await session.query("ROLLBACK") } catch {
                     // A session we can't roll back can't be trusted for the next call.
                     await pool.remove(c.id)?.close()
@@ -251,8 +273,15 @@ final class LiveDatabaseService: DatabaseService {
         do {
             let queue = try openSQLite(path, config, timeout: c.connectTimeout ?? 5)
             sqliteRunning(c.id, queue)
-            defer { sqliteRunning(c.id, nil) }
-            return try await queue.write { db in
+            // An agent's call stops after 30 s, like on the servers.
+            // ponytail: interrupts whatever the file's queue runs at that moment; a per-call progress handler if that bites.
+            let deadline = Self.agent ? DispatchWorkItem { queue.interrupt() } : nil
+            if let deadline { DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: deadline) }
+            defer { sqliteRunning(c.id, nil); deadline?.cancel() }
+            let cap = Self.agent ? AgentDBPolicy.rowCap : .max
+            // A PRAGMA such as foreign_keys does nothing inside a transaction, so those run outside one.
+            let pragma = sqls.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("pragma") }
+            let body: @Sendable (Database) throws -> [RawResult] = { db in
                 try sqls.enumerated().map { i, sql in
                     let stmt = try db.makeStatement(sql: sql)
                     var r = RawResult()
@@ -264,7 +293,9 @@ final class LiveDatabaseService: DatabaseService {
                         try Self.verify(r, sql, expected: want)
                         return r
                     }
-                    let rows = try Row.fetchAll(stmt)
+                    var rows: [Row] = []
+                    let cursor = try Row.fetchCursor(stmt)
+                    while rows.count < cap, let row = try cursor.next() { rows.append(row.copy()) }
                     r.rows = rows.map { row in
                         (0..<row.count).map { i -> String? in
                             switch row[i] as DatabaseValue? {
@@ -293,10 +324,11 @@ final class LiveDatabaseService: DatabaseService {
                     return r
                 }
             }
+            return pragma ? try await queue.writeWithoutTransaction(body) : try await queue.write(body)
         } catch let e as DatabaseError {
             // A broken handle shouldn't be reused: open the file fresh next time.
             if [ResultCode.SQLITE_CANTOPEN, .SQLITE_CORRUPT, .SQLITE_NOTADB, .SQLITE_IOERR].contains(e.resultCode.primaryResultCode) {
-                sqliteLock.lock(); sqliteOpen = sqliteOpen.filter { !$0.key.hasPrefix(path + "|") }; sqliteLock.unlock()
+                sqliteLock.withLock { sqliteOpen = sqliteOpen.filter { !$0.key.hasPrefix(path + "|") } }
             }
             throw ServiceError(e.message ?? e.description)
         }
@@ -312,6 +344,25 @@ final class LiveDatabaseService: DatabaseService {
     }
 
     static func isTrue(_ s: String?) -> Bool { s == "true" || s == "t" }
+
+    /// A file only this user can read, alone in a new private folder: for a password a
+    /// tool reads, instead of its environment. `removeSecret` deletes it.
+    static func secretFile(_ text: String, name: String = "secret") throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let file = dir.appendingPathComponent(name)
+        guard FileManager.default.createFile(atPath: file.path, contents: Data(text.utf8), attributes: [.posixPermissions: 0o600]) else {
+            try? FileManager.default.removeItem(at: dir)
+            throw ServiceError("Couldn't write a temporary file for the password")
+        }
+        return file
+    }
+
+    static func removeSecret(_ file: URL) {
+        do { try FileManager.default.removeItem(at: file.deletingLastPathComponent()) } catch {
+            logger.warning("couldn't remove \(file.deletingLastPathComponent().path): \(error.localizedDescription)")
+        }
+    }
 
     static func quote(_ ident: String, _ kind: DBKind) -> String {
         kind == .mysql ? "`" + ident.replacingOccurrences(of: "`", with: "``") + "`" : "\"" + ident.replacingOccurrences(of: "\"", with: "\"\"") + "\""
@@ -439,12 +490,14 @@ final class LiveDatabaseService: DatabaseService {
         let table = c.kind == .sqlite ? Self.quote(object.name, .sqlite) : Self.quote(object.schema, c.kind) + "." + Self.quote(object.name, c.kind)
         let f = filter.trimmingCharacters(in: .whitespacesAndNewlines)
         let whereClause = f.isEmpty ? "" : " where \(f)"
-        let order = sort.map { " order by \(Self.quote($0.column, c.kind)) \($0.ascending ? "asc" : "desc")" } ?? ""
+        let detail = try? await tableDetail(c, object: object, password: password)
+        // Unsorted pages go in key order, so none repeat or go missing.
+        let pk = (detail?.columns ?? []).filter(\.isPK).map { Self.quote($0.name, c.kind) }.joined(separator: ", ")
+        let order = sort.map { " order by \(Self.quote($0.column, c.kind)) \($0.ascending ? "asc" : "desc")" } ?? (pk.isEmpty ? "" : " order by \(pk)")
         let select = "select * from \(table)\(whereClause)\(order) limit \(pageSize) offset \(page * pageSize)"
         let count = f.isEmpty && object.rowEstimate != nil && (object.rowEstimate ?? 0) > 50_000
             ? "select \(object.rowEstimate ?? 0)"
             : "select count(*) from \(table)\(whereClause)"
-        let detail = try? await tableDetail(c, object: object, password: password)
         let res = try await run(c, password: password, [select, count])
         let types = Dictionary(detail?.columns.map { ($0.name, $0) } ?? [], uniquingKeysWith: { a, _ in a })
         let cols = res[0].columns.enumerated().map { i, n in
@@ -459,13 +512,18 @@ final class LiveDatabaseService: DatabaseService {
         let table = c.kind == .sqlite ? Self.quote(object.name, .sqlite) : Self.quote(object.schema, c.kind) + "." + Self.quote(object.name, c.kind)
         let f = w.trimmingCharacters(in: .whitespacesAndNewlines), o = orderBy.trimmingCharacters(in: .whitespacesAndNewlines)
         let whereClause = f.isEmpty ? "" : " where \(f)"
-        let select = "select * from \(table)\(whereClause)\(o.isEmpty ? "" : " order by \(o)") limit \(pageSize) offset \(page * pageSize)"
-        let count = f.isEmpty && (object.rowEstimate ?? 0) > 50_000 ? "select \(object.rowEstimate ?? 0)" : "select count(*) from \(table)\(whereClause)"
         let columns: [DBColumn]
         if let known { columns = known } else { columns = try await tableDetail(c, object: object, password: password).columns }
+        // Pages need a fixed order, or rows repeat or go missing between them: the key's, unless sorted.
+        let pk = columns.filter(\.isPK).map { Self.quote($0.name, c.kind) }.joined(separator: ", ")
+        let order = o.isEmpty ? (pk.isEmpty ? "" : " order by \(pk)") : " order by \(o)"
+        let select = "select * from \(table)\(whereClause)\(order) limit \(pageSize) offset \(page * pageSize)"
+        let count = f.isEmpty && (object.rowEstimate ?? 0) > 50_000 ? "select \(object.rowEstimate ?? 0)" : "select count(*) from \(table)\(whereClause)"
         let res = try await run(c, password: password, [select, count])
         let types = Dictionary(columns.map { ($0.name, $0) }, uniquingKeysWith: { a, _ in a })
-        let cols = res[0].columns.enumerated().map { i, n in types[n] ?? DBColumn(name: n, type: i < res[0].types.count ? res[0].types[i] : "") }
+        // An empty page may not name its columns; the table's are the same.
+        let names = res[0].columns.isEmpty ? columns.map(\.name) : res[0].columns
+        let cols = names.enumerated().map { i, n in types[n] ?? DBColumn(name: n, type: i < res[0].types.count ? res[0].types[i] : "") }
         let total = Int(res[1].rows.first?.first.flatMap { $0 } ?? "") ?? res[0].rows.count
         return QueryResult(columns: cols, rows: res[0].rows, totalRows: total, elapsedMs: (Date().timeIntervalSince(start) * 1000).rounded())
     }
@@ -527,10 +585,23 @@ final class SSHTunnel {
         let local = freePort()
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        p.arguments = SSHCommand.args(host, batch: host.auth != .password, extra: ["-N", "-o", "ExitOnForwardFailure=yes", "-L", "127.0.0.1:\(local):\(target):\(port)"])
+        p.arguments = SSHCommand.args(host, batch: host.auth != .password,
+                                      extra: ["-N", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveCountMax=3", "-L", "127.0.0.1:\(local):\(target):\(port)"])
         var env = ProcessRunner.environment()
-        if host.auth == .password, let password {
-            for (k, v) in try SSHCommand.askpassEnv(password: password) { env[k] = v }
+        // The password goes in a file only this user can read, gone once ssh has signed in
+        // (or given up), rather than in the environment of a process that lives for hours.
+        var secret: URL?
+        defer { if let secret { LiveDatabaseService.removeSecret(secret) } }
+        if host.auth == .password {
+            guard let password, !password.isEmpty else { throw ServiceError("No password saved for \(host.name), so the SSH tunnel can't sign in") }
+            let file = try LiveDatabaseService.secretFile(password + "\n")
+            secret = file
+            let askpass = file.deletingLastPathComponent().appendingPathComponent("askpass")
+            try "#!/bin/sh\nexec /bin/cat \"${0%/*}/\(file.lastPathComponent)\"\n".write(to: askpass, atomically: false, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: askpass.path)
+            env["SSH_ASKPASS"] = askpass.path
+            env["SSH_ASKPASS_REQUIRE"] = "force"
+            env["DISPLAY"] = ":0"
         }
         p.environment = env
         let err = ProcessRunner.pipe()
@@ -543,7 +614,15 @@ final class SSHTunnel {
                 let msg = String(decoding: err.fileHandleForReading.availableData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                 throw ServiceError("SSH tunnel via \(host.name) failed: \(msg.isEmpty ? "exit \(p.terminationStatus)" : msg)")
             }
-            if portOpen(local) { return tunnel }
+            if portOpen(local) {
+                // Keep reading what ssh says from here on, so a full pipe never stalls it.
+                err.fileHandleForReading.readabilityHandler = { h in
+                    let d = h.availableData
+                    if d.isEmpty { h.readabilityHandler = nil; return }
+                    LiveDatabaseService.logger.warning("ssh tunnel via \(host.name): \(String(decoding: d, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))")
+                }
+                return tunnel
+            }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         tunnel.close()
@@ -588,51 +667,135 @@ final class DBSession: @unchecked Sendable {
         }
     }
 
-    func query(_ sql: String) async throws -> LiveDatabaseService.RawResult {
+    /// Runs one statement: its columns (even with no rows), at most `cap` rows, and the
+    /// rows an INSERT, UPDATE or DELETE changed. `describe`: a Postgres query that
+    /// returns no rows is described by a second, empty query (not inside a transaction).
+    func query(_ sql: String, cap: Int = .max, describe: Bool = false) async throws -> LiveDatabaseService.RawResult {
         var r = LiveDatabaseService.RawResult()
         if let pg {
-            let rows = try await pg.simpleQuery(sql).get()
-            if let first = rows.first {
-                let ra = first.makeRandomAccess()
+            let got = PGRows(cap: cap)
+            try await pg.query(sql, [], onMetadata: { got.tag = $0 }, onRow: { got.add($0) }).get()
+            var head = got.rows.first
+            if head == nil, describe, got.tag?.command == "SELECT", let probe = Self.describeSQL(sql) {
+                // Best effort: without it the empty result just has no column names.
+                do { head = try await pg.simpleQuery(probe).get().first } catch {
+                    LiveDatabaseService.logger.debug("couldn't describe an empty result: \(LiveDatabaseService.describe(error))")
+                }
+            }
+            if let head {
+                let ra = head.makeRandomAccess()
                 r.columns = ra.map(\.columnName)
                 r.types = ra.map { String(describing: $0.dataType).lowercased() }
             }
-            r.rows = rows.map { row in row.makeRandomAccess().map(Self.text) }
+            r.rows = got.rows.map { row in row.makeRandomAccess().map(Self.text) }
+            if let tag = got.tag, tag.command != "SELECT" { r.affected = tag.rows }
         } else if let my {
-            let rows = try await my.simpleQuery(sql).get()
-            if let first = rows.first {
-                r.columns = first.columnDefinitions.map(\.name)
-                r.types = first.columnDefinitions.map { "\($0.columnType)".lowercased() }
-            }
-            r.rows = rows.map { row in
-                zip(row.columnDefinitions, row.values).map { def, value in
-                    MySQLData(type: def.columnType, format: row.format, buffer: value, isUnsigned: def.flags.contains(.COLUMN_UNSIGNED)).string
+            let q = MySQLTextQuery(sql, cap: cap)
+            try await my.send(q, logger: LiveDatabaseService.logger).get()
+            r.columns = q.columns.map(\.name)
+            r.types = q.columns.map { "\($0.columnType)".lowercased() }
+            r.rows = q.rows.map { values in
+                zip(q.columns, values).map { def, value in
+                    MySQLData(type: def.columnType, format: .text, buffer: value, isUnsigned: def.flags.contains(.COLUMN_UNSIGNED)).string
                 }
             }
+            r.affected = q.affected.map(Int.init)
         }
         return r
     }
 
-    /// A Postgres value as text. Results arrive in binary for most types
-    /// (integers, numeric, uuid, timestamps), so each is decoded by its type.
+    /// A query that returns one row of NULLs with the columns `sql` would return, without
+    /// running it (the join is on false). Only for what can be a subquery.
+    static func describeSQL(_ sql: String) -> String? {
+        let s = sql.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ";")))
+        let head = SQLText.code(s, mysql: false).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ["select", "with", "values", "table "].contains(where: head.hasPrefix) else { return nil }
+        return "select brix_q.* from (select 1) brix_one left join (\n\(s)\n) brix_q on false"
+    }
+
+    /// A Postgres value as text. Results arrive in binary, so each type is decoded
+    /// by its own layout; one Brix can't read shows as "<type value>".
     static func text(_ cell: PostgresCell) -> String? {
-        guard var bytes = cell.bytes else { return nil }
-        if cell.format == .text { return bytes.readString(length: bytes.readableBytes) }
+        guard var b = cell.bytes else { return nil }
+        if cell.format == .text { return b.readString(length: b.readableBytes) }
+        let other = "<\(cell.dataType) value>"
         switch cell.dataType {
+        case .text, .varchar, .bpchar, .name, .char, .json, .jsonb, .xml, .unknown: return (try? cell.decode(String.self)) ?? other
         case .bool: return (try? cell.decode(Bool.self)).map { $0 ? "true" : "false" }
-        case .int2, .int4, .int8, .oid: return (try? cell.decode(Int64.self)).map(String.init)
+        case .int2, .int4, .int8: return (try? cell.decode(Int64.self)).map(String.init)
+        case .oid, .regclass, .regproc, .regtype, .regnamespace, .regrole, .xid, .cid: return b.readInteger(as: UInt32.self).map(String.init) ?? other
         case .float4, .float8: return (try? cell.decode(Double.self)).map { String($0) }
-        case .numeric: return (try? cell.decode(Decimal.self)).map { "\($0)" }
+        case .numeric: return numeric(&b) ?? other
         case .uuid: return (try? cell.decode(UUID.self)).map { $0.uuidString.lowercased() }
-        case .timestamptz: return (try? cell.decode(Date.self)).map { stamp.string(from: $0) }
-        case .timestamp: return (try? cell.decode(Date.self)).map { naive.string(from: $0) }
+        case .timestamptz: return b.readInteger(as: Int64.self).map { stamp($0, utc: true) } ?? other
+        case .timestamp: return b.readInteger(as: Int64.self).map { stamp($0, utc: false) } ?? other
         case .date: return (try? cell.decode(Date.self)).map { day.string(from: $0) }
-        case .bytea: return "<\(bytes.readableBytes) bytes>"
+        case .time: return b.readInteger(as: Int64.self).map { clock($0) } ?? other
+        case .timetz:
+            guard let t = b.readInteger(as: Int64.self), let west = b.readInteger(as: Int32.self) else { return other }
+            let east = -Int(west), h = abs(east) / 3600, m = abs(east) % 3600 / 60
+            return clock(t) + (east < 0 ? "-" : "+") + String(format: "%02d", h) + (m == 0 ? "" : String(format: ":%02d", m))
+        case .interval:
+            guard let t = b.readInteger(as: Int64.self), let days = b.readInteger(as: Int32.self), let months = b.readInteger(as: Int32.self) else { return other }
+            let unit = { (n: Int32, one: String, many: String) in n == 0 ? nil : "\(n) \(abs(n) == 1 ? one : many)" }
+            let parts = [unit(months / 12, "year", "years"), unit(months % 12, "mon", "mons"), unit(days, "day", "days")].compactMap { $0 }
+            return (parts + (t != 0 || parts.isEmpty ? [(t < 0 ? "-" : "") + clock(abs(t))] : [])).joined(separator: " ")
+        case .bytea: return "<\(b.readableBytes) bytes>"
+        case .int2Array, .int4Array, .int8Array: return (try? cell.decode([Int64].self)).map { "{" + $0.map(String.init).joined(separator: ",") + "}" } ?? other
+        case .textArray, .varcharArray, .bpcharArray, .nameArray:
+            return (try? cell.decode([String].self)).map { "{" + $0.map(arrayItem).joined(separator: ",") + "}" } ?? other
         default:
-            if let s = try? cell.decode(String.self) { return s }
-            return bytes.readString(length: bytes.readableBytes).flatMap { $0.unicodeScalars.allSatisfy { $0.value >= 9 } ? $0 : nil }
-                ?? "<\(cell.dataType) value>"
+            // Enums, citext and other types of the database's own arrive as their text.
+            if cell.dataType.isUserDefined, let s = b.readString(length: b.readableBytes), s.unicodeScalars.allSatisfy({ $0.value >= 9 }) { return s }
+            return other
         }
+    }
+
+    /// Postgres's binary numeric: base-10000 digits, so any size and scale survive, and NaN and Infinity too.
+    static func numeric(_ b: inout ByteBuffer) -> String? {
+        guard let n = b.readInteger(as: Int16.self), let weight = b.readInteger(as: Int16.self),
+              let sign = b.readInteger(as: UInt16.self), let scale = b.readInteger(as: Int16.self) else { return nil }
+        switch sign {
+        case 0xC000: return "NaN"
+        case 0xD000: return "Infinity"
+        case 0xF000: return "-Infinity"
+        default: break
+        }
+        var digits: [Int] = []
+        for _ in 0..<max(0, Int(n)) { guard let d = b.readInteger(as: Int16.self) else { return nil }; digits.append(Int(d)) }
+        let digit = { (i: Int) in digits.indices.contains(i) ? digits[i] : 0 }
+        var int = weight < 0 ? "0" : String(digit(0))
+        if weight > 0 { for i in 1...Int(weight) { int += String(format: "%04d", digit(i)) } }
+        var frac = "", i = Int(weight) + 1
+        while frac.count < Int(scale) { frac += String(format: "%04d", digit(i)); i += 1 }
+        let s = int + (scale > 0 ? "." + frac.prefix(Int(scale)) : "")
+        return sign == 0x4000 ? "-" + s : s
+    }
+
+    /// Microseconds from 2000-01-01 as Postgres prints them, the fraction only when there is one.
+    /// `utc`: a timestamptz, shown in UTC with its offset.
+    static func stamp(_ micros: Int64, utc: Bool) -> String {
+        if micros == .max { return "infinity" }
+        if micros == .min { return "-infinity" }
+        var (secs, frac) = micros.quotientAndRemainder(dividingBy: 1_000_000)
+        if frac < 0 { secs -= 1; frac += 1_000_000 }
+        return naive.string(from: Date(timeIntervalSince1970: 946_684_800 + TimeInterval(secs))) + fraction(frac) + (utc ? "+00" : "")
+    }
+
+    /// A time of day (or an interval's time) from microseconds: 25:00:00 past a day.
+    static func clock(_ micros: Int64) -> String {
+        let (secs, frac) = micros.quotientAndRemainder(dividingBy: 1_000_000)
+        return String(format: "%02lld:%02lld:%02lld", secs / 3600, secs % 3600 / 60, secs % 60) + fraction(frac)
+    }
+
+    private static func fraction(_ micros: Int64) -> String {
+        micros == 0 ? "" : "." + String(String(format: "%06lld", micros).reversed().drop { $0 == "0" }.reversed())
+    }
+
+    /// An array element as Postgres writes it: quoted when it has to be.
+    private static func arrayItem(_ s: String) -> String {
+        guard s.isEmpty || s.lowercased() == "null" || s.contains(where: { "{},\"\\".contains($0) || $0.isWhitespace }) else { return s }
+        return "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
     private static func formatter(_ f: String, utc: Bool) -> DateFormatter {
@@ -642,7 +805,6 @@ final class DBSession: @unchecked Sendable {
         if utc { d.timeZone = TimeZone(identifier: "UTC") }
         return d
     }
-    private static let stamp = formatter("yyyy-MM-dd HH:mm:ssxxx", utc: false)
     private static let naive = formatter("yyyy-MM-dd HH:mm:ss", utc: true)
     private static let day = formatter("yyyy-MM-dd", utc: true)
 
@@ -652,6 +814,58 @@ final class DBSession: @unchecked Sendable {
         // (MySQLNIO asserts if one is freed while still open).
         if let my { my.close().whenComplete { _ in _ = my } }
         tunnel?.close()
+    }
+}
+
+/// Rows of a Postgres query as they arrive (on the event loop), up to a cap, and its command tag.
+private final class PGRows: @unchecked Sendable {
+    private let lock = NSLock()
+    private let cap: Int
+    private var kept: [PostgresRow] = []
+    private var meta: PostgresQueryMetadata?
+    init(cap: Int) { self.cap = cap }
+    func add(_ row: PostgresRow) { lock.withLock { if kept.count < cap { kept.append(row) } } }
+    var rows: [PostgresRow] { lock.withLock { kept } }
+    var tag: PostgresQueryMetadata? {
+        get { lock.withLock { meta } }
+        set { lock.withLock { meta = newValue } }
+    }
+}
+
+/// MySQL's text query, like MySQLNIO's simpleQuery, but it keeps the columns of an
+/// empty result and the OK packet's row count, and stops keeping rows after `cap`.
+private final class MySQLTextQuery: MySQLCommand, @unchecked Sendable {
+    let sql: String
+    let cap: Int
+    var columns: [MySQLProtocol.ColumnDefinition41] = []
+    var rows: [[ByteBuffer?]] = []
+    var affected: UInt64?
+    private var expected: Int?
+
+    init(_ sql: String, cap: Int) { self.sql = sql; self.cap = cap }
+
+    func activate(capabilities: MySQLProtocol.CapabilityFlags) throws -> MySQLCommandState {
+        MySQLCommandState(response: [try .encode(MySQLProtocol.COM_QUERY(query: sql), capabilities: capabilities)])
+    }
+
+    func handle(packet: inout MySQLPacket, capabilities: MySQLProtocol.CapabilityFlags) throws -> MySQLCommandState {
+        if packet.isError { throw MySQLError.server(try packet.decode(MySQLProtocol.ERR_Packet.self, capabilities: capabilities)) }
+        guard let expected else {
+            if packet.isOK {
+                affected = try packet.decode(MySQLProtocol.OK_Packet.self, capabilities: capabilities).affectedRows
+                return MySQLCommandState(done: true)
+            }
+            self.expected = Int(try packet.decode(MySQLProtocol.COM_QUERY_Response.self, capabilities: capabilities).columnCount)
+            return MySQLCommandState()
+        }
+        if columns.count < expected {
+            columns.append(try packet.decode(MySQLProtocol.ColumnDefinition41.self, capabilities: capabilities))
+            return MySQLCommandState()
+        }
+        if packet.isEOF { return MySQLCommandState(done: true) }
+        let row = try MySQLProtocol.TextResultSetRow.decode(from: &packet, columnCount: columns.count)
+        if rows.count < cap { rows.append(row.values) }
+        return MySQLCommandState()
     }
 }
 

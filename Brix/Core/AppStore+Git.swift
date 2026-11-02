@@ -1,20 +1,37 @@
 import SwiftUI
 
 extension AppStore {
-    func refreshGit(_ id: ProjectID) {
-        guard let p = project(id) else { return }
-        Task {
-            do {
+    /// One read per project at a time: a request while one runs makes it run
+    /// once more, so an older result never lands after a newer one. Returns the
+    /// read it started, if it started one.
+    @discardableResult
+    func refreshGit(_ id: ProjectID) -> Task<Void, Never>? {
+        guard let p = project(id) else { return nil }
+        guard gitRefreshing.insert(id).inserted else { gitRefreshAgain.insert(id); return nil }
+        return Task {
+            let result: Result<GitRepoState, Error>
+            do { result = .success(try await svc(p).git.status(p)) } catch { result = .failure(error) }
+            gitRefreshing.remove(id)
+            // Asked again meanwhile (files changed, a git action finished): this may be stale.
+            if gitRefreshAgain.remove(id) != nil { refreshGit(id); return }
+            switch result {
+            case .success(let new):
                 let old = git[id]
-                let new = try await svc(p).git.status(p)
                 git[id] = new
                 gitErrors[id] = nil
                 gitChanged(id, from: old, to: new)
-            } catch {
-                git[id] = .empty
+            case .failure(let error):
+                // Keep the last good status (a hiccup isn't "not a repository").
+                if git[id] == nil { git[id] = .empty }
                 gitErrors[id] = error.localizedDescription
             }
         }
+    }
+
+    /// A git action's own result; a read already running is then out of date.
+    private func setGit(_ id: ProjectID, _ s: GitRepoState) {
+        git[id] = s
+        if gitRefreshing.contains(id) { gitRefreshAgain.insert(id) }
     }
 
     /// Runs a git operation with busy state and an error toast.
@@ -25,7 +42,7 @@ extension AppStore {
         let t = progress ? toast(.progress, "\(label)…") : nil
         Task {
             do {
-                git[id] = try await op(svc(p).git, p)
+                setGit(id, try await op(svc(p).git, p))
                 if let t { finish(t, .success, success ?? label) } else if let success { toast(.success, success) }
             } catch {
                 if let t { dismissToast(t) }
@@ -37,13 +54,26 @@ extension AppStore {
 
     func isGitBusy(_ id: ProjectID, _ label: String) -> Bool { gitBusy.contains("\(id):\(label)") }
 
-    func stage(_ id: ProjectID, _ paths: [String]) { gitOp(id, "Stage") { try await $0.stage($1, paths: paths) } }
-    func unstage(_ id: ProjectID, _ paths: [String]) { gitOp(id, "Unstage") { try await $0.unstage($1, paths: paths) } }
+    /// Staging a file with merge conflicts marks it resolved, so that asks first.
+    func stage(_ id: ProjectID, _ paths: [String]) {
+        let run: () -> Void = { [weak self] in self?.gitOp(id, "Stage") { try await $0.stage($1, paths: paths) } }
+        let conflicted = git[id]?.unstaged.filter { c in c.conflict && paths.contains { $0 == "." || $0 == c.path } }.map(\.name) ?? []
+        if conflicted.isEmpty { run(); return }
+        let what = conflicted.count == 1 ? conflicted[0] : "\(conflicted.count) files"
+        confirm("Mark \(what) as resolved?", "Staging tells Git the merge conflicts are fixed. Make sure no conflict markers are left.", confirm: "Stage", destructive: false, action: run)
+    }
+
+    /// A staged rename unstages with its source path, or the deletion stays staged.
+    func unstage(_ id: ProjectID, _ paths: [String]) {
+        let sources = git[id]?.staged.filter { paths.contains($0.path) }.compactMap(\.origPath) ?? []
+        gitOp(id, "Unstage") { try await $0.unstage($1, paths: paths + sources) }
+    }
 
     func stageAll(_ id: ProjectID) {
         let paths = git[id]?.unstaged.map(\.path) ?? []
         guard !paths.isEmpty else { return }
-        stage(id, paths)
+        // One pathspec for the whole project folder rather than every path on the command line.
+        stage(id, project(id)?.isSample == true ? paths : ["."])
     }
 
     func unstageAll(_ id: ProjectID) {
@@ -66,7 +96,7 @@ extension AppStore {
         gitBusy.insert("\(id):Commit")
         Task {
             do {
-                git[id] = try await svc(p).git.commit(p, message: message)
+                setGit(id, try await svc(p).git.commit(p, message: message))
                 toast(.success, "Committed \(count) file\(count == 1 ? "" : "s")", detail: message.components(separatedBy: "\n").first)
                 then(true)
             } catch {

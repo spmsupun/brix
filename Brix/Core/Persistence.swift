@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import CryptoKit
 
 /// JSON files in ~/Library/Application Support/Brix. Secrets never go here.
 struct Persistence {
@@ -19,8 +20,14 @@ struct Persistence {
     static var applicationSupport: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0] }
 
     /// "Brix" for the installed app, "Brix Dev" for development builds (from Info.plist).
-    static var dataFolderName: String {
-        (Bundle.main.object(forInfoDictionaryKey: "BrixDataFolder") as? String).flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : $0 } ?? "Brix"
+    static var dataFolderName: String { infoValue("BrixDataFolder", release: "Brix", dev: "Brix Dev") }
+
+    /// A Debug/Release value from Info.plist. When it's missing or wasn't filled in,
+    /// a build with the .dev bundle id still gets the development value, so it
+    /// never falls back to the installed app's data or passwords.
+    static func infoValue(_ key: String, release: String, dev: String) -> String {
+        let v = (Bundle.main.object(forInfoDictionaryKey: key) as? String).flatMap { $0.isEmpty || $0.contains("$(") ? nil : $0 }
+        return v ?? (Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true ? dev : release)
     }
 
     /// True for a Brix Dev build.
@@ -46,7 +53,27 @@ struct Persistence {
         return d
     }()
 
-    func url(_ name: String) -> URL { directory.appendingPathComponent(name) }
+    func url(_ name: String) -> URL { directory.appendingPathComponent(Self.safeName(name)) }
+
+    /// "workspaces/<project id>.json" names one file in that folder whatever the
+    /// id holds: a "/" is escaped and a leading "." too, so "../x" can't climb out.
+    static func safeName(_ name: String) -> String {
+        let folder = "workspaces/", ext = ".json"
+        guard name.hasPrefix(folder), name.hasSuffix(ext), name.count > folder.count + ext.count else { return name }
+        var id = String(name.dropFirst(folder.count).dropLast(ext.count)).replacingOccurrences(of: "/", with: "%2F")
+        if id.hasPrefix(".") { id = "%2E" + id.dropFirst() }
+        return folder + id + ext
+    }
+
+    /// Digest of what this run last wrote to each file, so a save that changes
+    /// nothing skips the disk. Shared by copies of this Persistence.
+    private final class Written: @unchecked Sendable {
+        private let lock = NSLock()
+        private var digests: [String: SHA256.Digest] = [:]
+        func same(_ path: String, _ d: SHA256.Digest) -> Bool { lock.lock(); defer { lock.unlock() }; return digests[path] == d }
+        func put(_ path: String, _ d: SHA256.Digest) { lock.lock(); digests[path] = d; lock.unlock() }
+    }
+    private let written = Written()
 
     /// Returns nil when the file does not exist; throws when it exists but is unreadable.
     func load<T: Decodable>(_ type: T.Type, from name: String) throws -> T? {
@@ -58,7 +85,10 @@ struct Persistence {
 
     func save<T: Encodable>(_ value: T, to name: String) throws {
         let data = try Self.encoder.encode(value)
-        try data.write(to: url(name), options: .atomic)
+        let u = url(name), digest = SHA256.hash(data: data)
+        if written.same(u.path, digest), FileManager.default.fileExists(atPath: u.path) { return }
+        try data.write(to: u, options: .atomic)
+        written.put(u.path, digest)
     }
 
     func delete(_ name: String) {
@@ -72,8 +102,7 @@ struct Keychain {
 
     /// Development builds use their own entries (from Info.plist), so they never
     /// read or change the installed app's passwords.
-    static let standard = Keychain(service: (Bundle.main.object(forInfoDictionaryKey: "BrixKeychainService") as? String)
-        .flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : $0 } ?? "com.brix.credentials")
+    static let standard = Keychain(service: Persistence.infoValue("BrixKeychainService", release: "com.brix.credentials", dev: "com.brix.credentials.dev"))
 
     /// Secrets already read this run. A Keychain read is a system call (and on
     /// a freshly signed debug build it can prompt), so each one is read once.

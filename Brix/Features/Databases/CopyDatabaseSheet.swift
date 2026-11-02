@@ -295,7 +295,9 @@ struct CopyDatabaseSheet: View {
     }
 
     private func start() {
-        guard let plan, let s = source, let t = target else { return }
+        guard var plan, let s = source, let t = target else { return }
+        // Production only gets here once its name is typed (the button stays off till then).
+        if plan.target.tag.isProduction { plan.target.writeUnlocked = true }
         step = .copying
         copied = [:]
         outcomes = []

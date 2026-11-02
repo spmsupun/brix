@@ -30,6 +30,9 @@ final class WorkspaceStore {
     var drafts: [String: String] = [:]
     /// Saved sessions have been recreated; until then saving keeps the saved list.
     private(set) var restored = false
+    /// Production server sessions not reopened at launch: still saved, so they're
+    /// not lost for good because Brix didn't reopen them unasked.
+    private var heldSessions: [SessionDescriptor] = []
 
     var layout: DockLayout {
         get { state.layout }
@@ -51,17 +54,29 @@ final class WorkspaceStore {
             }
         } catch {
             state = WorkspaceState(layout: defaultLayout)
-            app.toast(.error, "Couldn't restore the layout for \(projectID)", detail: error.localizedDescription)
+            // Keep the unreadable file for recovery instead of overwriting it with defaults.
+            let file = "workspaces/\(projectID).json", backup = "workspaces/\(projectID).unreadable-\(Int(Date().timeIntervalSince1970)).json"
+            do {
+                try FileManager.default.copyItem(at: app.persistence.url(file), to: app.persistence.url(backup))
+                app.toast(.error, "Couldn't restore the layout for \(projectID)", detail: "A copy was kept as \(backup). \(error.localizedDescription)")
+            } catch let copyError {
+                saveBlocked = true
+                app.toast(.error, "Couldn't read or back up the layout for \(projectID)", detail: "It won't be saved until you restart. \(copyError.localizedDescription)")
+            }
         }
         adoptTiledCentre()
     }
 
+    /// The saved layout couldn't be read or backed up: saving would overwrite it.
+    private var saveBlocked = false
+
     /// Saves with the project's current live sessions, however they were opened,
     /// so every terminal and agent comes back after a relaunch or a crash.
     func save() throws {
+        guard !saveBlocked else { return }
         var s = state
         if restored, project?.isSample == false {
-            s.sessions = projectSessions.filter(\.isLive).filter { $0.state != .finished && $0.state != .failed }.map(SessionDescriptor.init)
+            s.sessions = projectSessions.filter(\.isLive).filter { $0.state != .finished && $0.state != .failed }.map(SessionDescriptor.init) + heldSessions
         }
         try app.persistence.save(s, to: "workspaces/\(projectID).json")
     }
@@ -238,7 +253,7 @@ final class WorkspaceStore {
     /// Puts a session somewhere visible: the agents grid for agents, otherwise a terminal panel.
     func attach(session s: TerminalSession, preferAgentGrid: Bool = false) {
         if !state.sessions.contains(where: { $0.id == s.id }), s.isLive {
-            state.sessions.append(SessionDescriptor(id: s.id, title: s.title, kind: s.kind, hostID: s.hostID, cwd: s.cwd, command: s.kind == .agent ? "agent" : nil, agentID: s.agentID))
+            state.sessions.append(SessionDescriptor(s))
         }
         if preferAgentGrid || s.kind == .agent || layout.centre == .agents {
             state.panes.add(s.id)
@@ -297,22 +312,49 @@ final class WorkspaceStore {
         guard let p = project, !p.isSample else { return }
         let saved = state.sessions
         state.sessions = []
+        // Restarting doesn't move the focus to whichever session came back last.
+        let focused = app.focusedSessionID
+        defer { app.focusedSessionID = focused }
         var remap: [String: String] = [:]
-        for d in saved where app.session(d.id) == nil {
-            let s: TerminalSession?
-            if d.kind == .agent, let a = app.agent(d.agentID) ?? app.enabledAgents.first {
-                s = app.newAgentSession(project: projectID, agent: a, resume: d.externalID, attach: false, chat: d.isChat)
-                if let s, let i = app.sessions.firstIndex(where: { $0.id == s.id }) { app.sessions[i].task = d.task ?? "" }
-            } else {
-                s = app.newTerminal(project: projectID, host: d.hostID, title: d.title, kind: d.kind, cwd: d.cwd, attach: false)
-            }
-            if let s {
-                remap[d.id] = s.id
-                app.renameSession(s.id, to: d.title)
-            }
+        // Production SSH shells are not reopened without the user asking, as on the Terminals screen.
+        for d in saved where app.session(d.id) == nil && d.restorable {
+            if d.hostID.flatMap(app.host)?.tag.isProduction ?? false { heldSessions.append(d); continue }
+            guard let s = restart(d) else { continue }
+            remap[d.id] = s.id
+            app.renameSession(s.id, to: d.title)
         }
-        state.panes = Self.remapped(state.panes, remap) { [app] in app.session($0) != nil }
+        if !heldSessions.isEmpty {
+            let n = heldSessions.count
+            app.toast(.info, "\(n) production session\(n == 1 ? " was" : "s were") not reopened in \(p.name)",
+                      detail: "Brix doesn't reconnect to Production servers unasked. Open \(n == 1 ? "it" : "them") again from the server when you need \(n == 1 ? "it" : "them").")
+        }
+        state.panes = Self.remapped(state.panes, remap) { [app] id in
+            Self.keepsSavedTab(id, session: { app.session($0) != nil }, connection: { app.database($0) != nil })
+        }
         state.panelSession = state.panelSession.compactMapValues { remap[$0] ?? (app.session($0) != nil ? $0 : nil) }
+    }
+
+    /// Starts a saved session again: an agent resumes its conversation; one whose
+    /// agent was removed from Brix comes back as a shell rather than under
+    /// another agent with the old conversation id.
+    private func restart(_ d: SessionDescriptor) -> TerminalSession? {
+        if d.kind == .agent, let a = app.agent(d.agentID) {
+            let s = app.newAgentSession(project: projectID, agent: a, resume: d.externalID, attach: false, chat: d.isChat)
+            if let s, let i = app.sessions.firstIndex(where: { $0.id == s.id }) { app.sessions[i].task = d.task ?? "" }
+            return s
+        }
+        return app.newTerminal(project: projectID, host: d.hostID, title: d.title, kind: d.kind == .agent ? .shell : d.kind,
+                               command: d.kind == .agent ? nil : d.command, cwd: d.cwd, attach: false)
+    }
+
+    /// Whether a saved tiled-centre tab comes back after a relaunch: files and
+    /// panels do, a data tab while its connection is saved (it reopens from its
+    /// id), and a session once it has been restarted.
+    nonisolated static func keepsSavedTab(_ id: String, session: (String) -> Bool, connection: (ResourceID) -> Bool) -> Bool {
+        if GridItemID.kind(id) == .dataTab {
+            return GridItemID.panelInstance(id)?.resourceID.flatMap(GridItemID.dataTabRef).map { connection($0.connection) } ?? false
+        }
+        return GridItemID.isPanel(id) || GridItemID.isFile(id) || session(id)
     }
 
     /// Swaps restored session ids into a saved tree, dropping ones that are gone.
@@ -403,14 +445,16 @@ final class WorkspaceStore {
         adoptTiledCentre()
     }
 
-    /// Rebuilds a saved tiled centre: placeholders become fresh shells or this
-    /// project's open agents; open sessions with no place join the first pane.
+    /// Rebuilds a saved tiled centre: placeholders become this project's open
+    /// shells and agents, or fresh shells when there are too few; open sessions
+    /// with no place join the first pane.
     private func applyPresetTree(_ preset: PaneTree) {
         var agents = projectSessions.filter { $0.kind == .agent }.map(\.id)
+        var shells = projectSessions.filter { $0.kind == .shell && $0.hostID == nil }.map(\.id)
         var map: [String: String] = [:]
         for tab in preset.allTabs where tab.hasPrefix("new:") {
             if tab.hasPrefix("new:terminal") {
-                map[tab] = app.newTerminal(project: projectID, attach: false).id
+                map[tab] = shells.isEmpty ? app.newTerminal(project: projectID, attach: false).id : shells.removeFirst()
             } else if tab.hasPrefix("new:agent"), !agents.isEmpty {
                 map[tab] = agents.removeFirst()
             }
@@ -545,14 +589,8 @@ extension WorkspaceStore {
             return
         }
         if let d = c.session {
-            if d.kind == .agent, let a = app.agent(d.agentID) ?? app.enabledAgents.first,
-               let s = app.newAgentSession(project: projectID, agent: a, resume: d.externalID, attach: false, chat: d.isChat) {
-                id = s.id
-            } else if d.kind != .agent {
-                id = app.newTerminal(project: projectID, host: d.hostID, title: d.title, kind: d.kind, cwd: d.cwd, attach: false).id
-            } else {
-                return
-            }
+            guard let s = restart(d) else { return }
+            id = s.id
             app.renameSession(id, to: d.title)
         } else if let path = GridItemID.filePath(id), !state.openFiles.contains(path) {
             state.openFiles.append(path)

@@ -175,8 +175,8 @@ struct HostEditorSheet: View {
         let hst = host.trimmingCharacters(in: .whitespaces)
         let usr = user.trimmingCharacters(in: .whitespaces)
         if n.isEmpty { e["name"] = "Enter a name" }
-        if hst.isEmpty { e["host"] = "Enter a host" } else if hst.contains(" ") || hst.contains("@") { e["host"] = "Host only, without user@ or spaces" }
-        if usr.isEmpty { e["user"] = "Enter a user" }
+        if hst.isEmpty { e["host"] = "Enter a host" } else if SSHCommand.invalidPart(hst) || hst.contains("@") { e["host"] = "Host only, without user@, spaces or a leading -" }
+        if usr.isEmpty { e["user"] = "Enter a user" } else if SSHCommand.invalidPart(usr) || usr.contains("@") { e["user"] = "No spaces, @ or leading -" }
         guard let p = Int(port), (1...65535).contains(p) else {
             e["port"] = "1 to 65535"
             errors = e
@@ -191,6 +191,8 @@ struct HostEditorSheet: View {
         errors = e
         guard e.isEmpty else { return nil }
         var h = existing ?? SSHHost(id: UUID().uuidString, name: n, host: hst, user: usr, tag: tag)
+        // A changed host no longer means the ~/.ssh/config entry it came from.
+        if hst != h.host { h.alias = nil }
         h.name = n; h.host = hst; h.user = usr; h.port = p; h.auth = auth
         h.keyPath = auth == .key ? keyPath : ""
         h.tag = tag; h.notes = notes

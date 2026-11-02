@@ -144,6 +144,7 @@ private struct GeneralSettings: View {
                     Text("GitHub is set per repository: open one of \(project.name)'s repositories to change its repository or account.")
                         .font(Typo.ui(11.5)).foregroundStyle(Theme.text3).fixedSize(horizontal: false, vertical: true)
                 }
+                hiddenRepos
                 Toggle("Pinned to the top of lists", isOn: Binding(get: { project.isPinned }, set: { _ in store.togglePin(project.id) })).toggleStyle(.bx)
                     .font(Typo.ui(12.5)).foregroundStyle(Theme.text).frame(width: 340)
                 if !project.isSample {
@@ -185,8 +186,29 @@ private struct GeneralSettings: View {
         .task(id: project.id) {
             var p = project
             p.githubRepo = nil
-            detected = await GitHub.detectRepo(p)
+            detected = try? await GitHub.detectRepo(p)
             if GitHub.installed { accounts = (try? await GitHub.accounts()) ?? [] }
+        }
+    }
+
+    /// Repositories inside this folder that were removed on their own, so discovery skips them.
+    @ViewBuilder private var hiddenRepos: some View {
+        let root = (project.expandedPath as NSString).standardizingPath + "/"
+        let hidden = project.parentID == nil ? store.library.dismissedRepos.filter { $0.hasPrefix(root) }.sorted() : []
+        if !hidden.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Hidden repositories").font(Typo.ui(11.5, .medium)).foregroundStyle(Theme.text2)
+                ForEach(hidden, id: \.self) { path in
+                    HStack {
+                        Text(String(path.dropFirst(root.count))).font(Typo.mono(12)).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        SubtleButton(title: "Restore", height: 24) {
+                            store.library.dismissedRepos.remove(path)
+                            Task { await store.discoverSubProjects(project.id) }
+                        }
+                    }
+                }
+            }
         }
     }
 

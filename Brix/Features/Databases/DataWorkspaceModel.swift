@@ -57,6 +57,9 @@ struct DWRowEdit: Equatable {
     var key: [String: String?]
     var original: [String: String?]
     var changes: [String: String?] = [:]
+    /// Columns whose loaded value SQL can match exactly (not rounded, not a stand-in):
+    /// an UPDATE also checks those it changes still hold it, so a concurrent edit isn't overwritten.
+    var matchable: Set<String> = []
 }
 
 struct DWConsoleResult: Identifiable, Equatable {
@@ -202,13 +205,106 @@ enum SQLText {
         return line(of: r.location, in: sql)
     }
 
-    /// A SELECT gets the console's row limit unless it has one.
+    /// A SELECT gets the console's row limit unless it has one of its own (a LIMIT
+    /// in a subquery doesn't count).
     static func limited(_ sql: String, limit: Int) -> String {
         let s = strip(sql)
-        let lower = s.lowercased()
-        guard lower.hasPrefix("select") || lower.hasPrefix("with"), lower.range(of: #"\blimit\s+\d+"#, options: .regularExpression) == nil,
-              lower.range(of: #"\bfetch\s+first\b"#, options: .regularExpression) == nil else { return s }
+        var depth = 0
+        let top = String(code(s, mysql: false).filter { c in
+            if c == "(" { depth += 1 } else if c == ")" { depth -= 1 }
+            return depth == 0 && c != ")"
+        }).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard top.hasPrefix("select") || top.hasPrefix("with"), top.range(of: #"\blimit\s+(\d+|all)\b"#, options: .regularExpression) == nil,
+              top.range(of: #"\bfetch\s+(first|next)\b"#, options: .regularExpression) == nil else { return s }
         return s + "\nLIMIT \(limit)"
+    }
+
+    /// The SQL as keyword checks read it: lowercased, comments dropped, string literals
+    /// emptied to `''` (or with `keepLiterals`, their text kept), quotes around names
+    /// dropped. `mysql` picks MySQL's lexer (backslash escapes, `#` and `-- ` comments,
+    /// "…" strings, code inside `/*! … */`); else Postgres's (E'…' escapes, $tag$
+    /// quotes, nested comments), which also fits SQLite.
+    static func code(_ sql: String, mysql: Bool, keepLiterals: Bool = false) -> String {
+        let s = Array(sql.lowercased().unicodeScalars)
+        var out = String.UnicodeScalarView()
+        func at(_ k: Int) -> Unicode.Scalar? { k >= 0 && k < s.count ? s[k] : nil }
+        func word(_ c: Unicode.Scalar?) -> Bool { c.map { $0 == "_" || $0 == "$" || $0.properties.isAlphabetic || ("0"..."9").contains($0) } ?? false }
+        func blank(_ c: Unicode.Scalar?) -> Bool { c.map { $0.properties.isWhitespace || $0.value < 32 } ?? true }
+        var i = 0, inCode = false  // inside MySQL's /*! … */
+        while i < s.count {
+            let c = s[i]
+            if (c == "-" && at(i + 1) == "-" && (!mysql || blank(at(i + 2)))) || (mysql && c == "#") {
+                while i < s.count, s[i] != "\n" { i += 1 }
+                out.append(" ")
+            } else if inCode, c == "*", at(i + 1) == "/" {
+                inCode = false; i += 2; out.append(" ")
+            } else if c == "/", at(i + 1) == "*" {
+                if mysql, at(i + 2) == "!" {
+                    // MySQL runs what's inside: kept, without the marker and version.
+                    i += 3; while let d = at(i), ("0"..."9").contains(d) { i += 1 }
+                    inCode = true
+                } else {
+                    var depth = 0
+                    while i < s.count {
+                        if s[i] == "/", at(i + 1) == "*", !mysql || depth == 0 { depth += 1; i += 2 }
+                        else if s[i] == "*", at(i + 1) == "/" { depth -= 1; i += 2; if depth == 0 { break } }
+                        else { i += 1 }
+                    }
+                }
+                out.append(" ")
+            } else if c == "'" || (mysql && c == "\"") {
+                let escapes = mysql || (at(i - 1) == "e" && !word(at(i - 2)))
+                var text = String.UnicodeScalarView()
+                i += 1
+                while i < s.count {
+                    if escapes, s[i] == "\\" { text.append(contentsOf: s[i..<min(i + 2, s.count)]); i += 2; continue }
+                    if s[i] == c { if at(i + 1) == c { text.append(c); i += 2; continue }; break }
+                    text.append(s[i]); i += 1
+                }
+                i += 1
+                out.append(contentsOf: keepLiterals ? " \(String(text)) ".unicodeScalars : "''".unicodeScalars)
+            } else if !mysql, c == "$", !word(at(i - 1)), let tagEnd = (i + 1..<s.count).first(where: { !word(s[$0]) || s[$0] == "$" }), s[tagEnd] == "$",
+                      !(at(i + 1).map { ("0"..."9").contains($0) } ?? false) {
+                // $tag$ … $tag$
+                let tag = Array(s[i...tagEnd])
+                var j = tagEnd + 1
+                while j < s.count, !(s[j] == "$" && Array(s[j..<min(j + tag.count, s.count)]) == tag) { j += 1 }
+                if keepLiterals { out.append(" "); out.append(contentsOf: s[min(tagEnd + 1, s.count)..<j]); out.append(" ") } else { out.append(contentsOf: "''".unicodeScalars) }
+                i = min(j + tag.count, s.count)
+            } else if c == "`" || (!mysql && c == "\"") {
+                // A quoted name: its text, without the quotes.
+                i += 1
+                while i < s.count {
+                    if s[i] == c { if at(i + 1) == c { out.append(c); i += 2; continue }; break }
+                    out.append(s[i]); i += 1
+                }
+                i += 1
+            } else {
+                out.append(c); i += 1
+            }
+        }
+        return String(out)
+    }
+
+    /// The SQL as each engine that could run it reads it: checks pass only if they pass for all.
+    static func variants(_ sql: String, _ kind: DBKind?) -> [String] {
+        switch kind {
+        case .mysql: [code(sql, mysql: true)]
+        case .postgres: [code(sql, mysql: false)]
+        default: [code(sql, mysql: false), code(sql, mysql: true)]
+        }
+    }
+
+    /// Every name-like word in the SQL, quoted text included (lowercased).
+    static func identifiers(_ sql: String) -> [String] {
+        [false, true].flatMap { code(sql, mysql: $0, keepLiterals: true).matches(of: #/[a-z_][a-z0-9_$]*/#).map { String($0.output) } }
+    }
+
+    /// The SQL for query history: string literals after PASSWORD or IDENTIFIED BY
+    /// (ALTER USER, CREATE ROLE, SET PASSWORD) replaced, so no secret is saved.
+    static func redacted(_ sql: String) -> String {
+        guard let r = sql.range(of: #"(?i)\b(password|identified\b)"#, options: .regularExpression) else { return sql }
+        return String(sql[..<r.lowerBound]) + sql[r.lowerBound...].replacingOccurrences(of: #"'(?:[^'\\]|''|\\.)*'"#, with: "'•••'", options: .regularExpression)
     }
 }
 
@@ -235,7 +331,7 @@ enum DataEdits {
         for k in edits.keys.sorted() {
             guard let e = edits[k], !e.changes.isEmpty, deleted[k] == nil else { continue }
             let set = e.changes.keys.sorted().map { "\(LiveDatabaseService.quote($0, kind)) = \(value(e.changes[$0] ?? nil, kind))" }.joined(separator: ", ")
-            out.append("UPDATE \(t) SET \(set) WHERE \(whereKey(e.key, kind));")
+            out.append("UPDATE \(t) SET \(set) WHERE \(whereKey(match(e), kind));")
         }
         for row in inserted where !row.isEmpty {
             let cols = row.keys.sorted()
@@ -263,10 +359,38 @@ enum DataEdits {
         return self.sql(object: o, kind: kind, edits: edits, inserted: inserted, deleted: deleted).flatMap { sql -> [(String, Int?)] in
             if sql.hasPrefix("INSERT") { return [(sql, nil)] }
             // The key is the WHERE of the statement; find it from the staged data, not by parsing.
-            let key = sql.hasPrefix("UPDATE") ? edits.values.first { sql.hasSuffix("WHERE \(whereKey($0.key, kind));") }?.key
+            let key = sql.hasPrefix("UPDATE") ? edits.values.first { sql.hasSuffix("WHERE \(whereKey(match($0), kind));") }.map(match)
                                               : deleted.values.first { sql.hasSuffix("WHERE \(whereKey($0, kind));") }
             return key.map { checked(sql, $0) } ?? [(sql, nil)]
         }
+    }
+
+    /// What an UPDATE matches: the key, and each changed column's loaded value where it can be matched.
+    static func match(_ e: DWRowEdit) -> [String: String?] {
+        var m = e.key
+        for c in e.changes.keys where e.matchable.contains(c) { m[c] = e.original[c] ?? nil }
+        return m
+    }
+
+    /// Whether a loaded value can be matched back exactly in a WHERE (no rounding, no
+    /// stand-in, a type with `=`), so a write can check the row is still as loaded.
+    static func matchable(_ v: String?, _ c: DBColumn) -> Bool {
+        plainKey(c) && !placeholder(v, c) && !["xml", "geometry", "point", "bit"].contains(where: c.type.lowercased().contains)
+    }
+
+    /// A row's identity for a DELETE: its key, plus every value that can be matched,
+    /// so a row someone changed since it was loaded isn't deleted unseen.
+    static func deleteKey(_ row: [String?], columns: [DBColumn], key: [String: String?]) -> [String: String?] {
+        var m = key
+        for (i, c) in columns.enumerated() where i < row.count && matchable(row[i], c) { m[c.name] = row[i] }
+        return m
+    }
+
+    /// A cell shown as a stand-in for its value ("<12 bytes>", "<interval value>"): never written back or matched.
+    static func placeholder(_ v: String?, _ c: DBColumn) -> Bool {
+        let t = c.type.lowercased()
+        if ["bytea", "blob", "binary"].contains(where: t.contains) { return true }
+        return v?.range(of: #"^<(\d+ bytes|[^<>]+ value)>$"#, options: .regularExpression) != nil && !["char", "text", "json", "xml"].contains(where: t.contains)
     }
 
     /// Key types whose text form can't be matched back exactly (rounding, time zones, bytes).

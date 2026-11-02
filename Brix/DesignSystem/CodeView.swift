@@ -107,6 +107,7 @@ struct CodeView: NSViewRepresentable {
             if tv.string != text || force {
                 let selected = tv.selectedRanges
                 tv.textStorage?.setAttributedString(styled(text))
+                ruler.invalidateLines()
                 if editable { tv.selectedRanges = selected.filter { $0.rangeValue.upperBound <= (text as NSString).length } }
             }
         }
@@ -140,15 +141,25 @@ struct CodeView: NSViewRepresentable {
             let s = tv.string
             parent.onChange?(s)
             ruler?.needsDisplay = true
-            // Live highlighting, debounced so typing stays smooth.
+            // Big files keep the colours from load: re-highlighting them on
+            // every pause would stall typing.
+            guard (s as NSString).length <= 200_000 else { rehighlight?.cancel(); return }
+            scheduleHighlight()
+        }
+
+        /// Live highlighting, debounced so typing stays smooth. Only attributes
+        /// change, so the text, selection and undo stay as they are.
+        private func scheduleHighlight() {
             rehighlight?.cancel()
             let work = DispatchWorkItem { [weak self] in
-                guard let self, let tv = self.textView, tv.string == s else { return }
-                let sel = tv.selectedRanges
-                tv.textStorage?.beginEditing()
-                tv.textStorage?.setAttributedString(self.parent.styled(s))
-                tv.textStorage?.endEditing()
-                tv.selectedRanges = sel
+                guard let self, let tv = self.textView, let ts = tv.textStorage else { return }
+                // An input method composing text owns its attributes; try again after.
+                if tv.hasMarkedText() { self.scheduleHighlight(); return }
+                let styled = self.parent.styled(tv.string)
+                guard styled.length == ts.length else { return }
+                ts.beginEditing()
+                styled.enumerateAttributes(in: NSRange(location: 0, length: styled.length)) { attrs, r, _ in ts.setAttributes(attrs, range: r) }
+                ts.endEditing()
             }
             rehighlight = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
@@ -228,7 +239,7 @@ final class LineNumberRuler: NSRulerView {
         // the breadcrumb above the scroll view).
         clipsToBounds = true
         NotificationCenter.default.addObserver(self, selector: #selector(redraw), name: NSView.boundsDidChangeNotification, object: textView.enclosingScrollView?.contentView)
-        NotificationCenter.default.addObserver(self, selector: #selector(redraw), name: NSText.didChangeNotification, object: textView)
+        NotificationCenter.default.addObserver(self, selector: #selector(textChanged), name: NSText.didChangeNotification, object: textView)
     }
 
     @available(*, unavailable)
@@ -237,6 +248,29 @@ final class LineNumberRuler: NSRulerView {
     deinit { NotificationCenter.default.removeObserver(self) }
 
     @objc private func redraw() { needsDisplay = true }
+    @objc private func textChanged() { invalidateLines(); needsDisplay = true }
+
+    /// Where each line starts (UTF-16 offsets), built once per edit instead of
+    /// counting from the top on every scroll.
+    /// Kept with the text length it was built for, as a guard against edits
+    /// that post no notification.
+    private var lineStarts: (length: Int, starts: [Int])?
+    func invalidateLines() { lineStarts = nil }
+
+    /// The 1-based line holding `loc`.
+    private func lineNumber(at loc: Int, in ns: NSString) -> Int {
+        if lineStarts?.length != ns.length {
+            var s = [0]
+            ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: [.byLines, .substringNotRequired]) { _, _, r, _ in
+                if NSMaxRange(r) < ns.length { s.append(NSMaxRange(r)) }
+            }
+            lineStarts = (ns.length, s)
+        }
+        let starts = lineStarts?.starts ?? [0]
+        var lo = 0, hi = starts.count
+        while lo < hi { let mid = (lo + hi) / 2; if starts[mid] <= loc { lo = mid + 1 } else { hi = mid } }
+        return max(lo, 1)
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         drawHashMarksAndLabels(in: dirtyRect)
@@ -261,9 +295,7 @@ final class LineNumberRuler: NSRulerView {
         let glyphRange = lm.glyphRange(forBoundingRect: visible, in: tc)
         let charRange = lm.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
         // Line number of the first visible character.
-        var line = 1
-        ns.enumerateSubstrings(in: NSRange(location: 0, length: charRange.location), options: [.byLines, .substringNotRequired]) { _, _, _, _ in line += 1 }
-        if charRange.location == 0 { line = 1 }
+        var line = lineNumber(at: charRange.location, in: ns)
         let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular), .foregroundColor: NSColor(Theme.lineNumber)]
         let inset = tv.textContainerInset.height
         let relativeY = convert(NSPoint.zero, from: tv).y

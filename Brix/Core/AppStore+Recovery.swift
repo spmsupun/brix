@@ -41,13 +41,22 @@ extension AppStore {
 
     /// After launch: offer back what an earlier unreadable library held.
     func offerRecovery() {
+        Self.pruneRestored(in: persistence.directory)
         guard let (found, files) = recoverableLibrary() else { return }
-        let have = Set(library.projects.map(\.id)), haveHosts = Set(library.hosts.map(\.id)), haveDBs = Set(library.databases.map(\.id))
-        let p = found.projects.filter { !have.contains($0.id) && !$0.isSample }.count
-        let h = found.hosts.filter { !haveHosts.contains($0.id) && !$0.isSample }.count
-        let d = found.databases.filter { !haveDBs.contains($0.id) && !$0.isSample }.count
-        guard p + h + d > 0 else { Self.retire(files, as: "library.restored-"); return }
-        let what = [p > 0 ? "\(p) project\(p == 1 ? "" : "s")" : nil, h > 0 ? "\(h) server\(h == 1 ? "" : "s")" : nil, d > 0 ? "\(d) database\(d == 1 ? "" : "s")" : nil]
+        func new<T: Identifiable>(_ mine: [T], _ theirs: [T], sample: (T) -> Bool = { _ in false }) -> Int where T.ID: Hashable {
+            let have = Set(mine.map(\.id))
+            return theirs.filter { !have.contains($0.id) && !sample($0) }.count
+        }
+        let p = new(library.projects, found.projects, sample: \.isSample)
+        let h = new(library.hosts, found.hosts, sample: \.isSample)
+        let d = new(library.databases, found.databases, sample: \.isSample)
+        // Links, containers, stacks and layouts count too: a copy is only retired
+        // unasked when it holds nothing Brix doesn't have now.
+        let other = new(library.docker, found.docker, sample: \.isSample) + new(library.stacks, found.stacks, sample: \.isSample)
+            + new(library.customPresets, found.customPresets) + found.links.pairs.subtracting(library.links.pairs).count
+        guard p + h + d + other > 0 else { Self.retire(files, as: "library.restored-"); return }
+        let what = [p > 0 ? "\(p) project\(p == 1 ? "" : "s")" : nil, h > 0 ? "\(h) server\(h == 1 ? "" : "s")" : nil, d > 0 ? "\(d) database\(d == 1 ? "" : "s")" : nil,
+                    other > 0 ? "\(other) other item\(other == 1 ? "" : "s") (links, containers, stacks, layouts)" : nil]
             .compactMap { $0 }.joined(separator: ", ")
         confirm("Restore your earlier library?",
                 "Brix couldn't read your saved library \(files.count == 1 ? "once" : "\(files.count) times") and kept the copies. They load now and hold \(what) that aren't in Brix. Restore them? Nothing in Brix now is removed.",
@@ -66,6 +75,16 @@ extension AppStore {
         for f in files {
             let to = f.deletingLastPathComponent().appendingPathComponent(f.lastPathComponent.replacingOccurrences(of: "library.unreadable-", with: prefix))
             try? FileManager.default.moveItem(at: f, to: to)
+        }
+    }
+
+    /// Restored or retired copies (library.restored-<time>.json) go after 30 days.
+    nonisolated static func pruneRestored(in dir: URL, now: Date = Date()) {
+        let fm = FileManager.default
+        for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] where name.hasPrefix("library.restored-") && name.hasSuffix(".json") {
+            let stamp = name.dropFirst("library.restored-".count).dropLast(".json".count)
+            guard let t = TimeInterval(stamp), now.timeIntervalSince1970 - t > 30 * 86_400 else { continue }
+            try? fm.removeItem(at: dir.appendingPathComponent(name))
         }
     }
 

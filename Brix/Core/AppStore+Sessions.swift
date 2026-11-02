@@ -15,7 +15,7 @@ extension AppStore {
         let dir = cwd ?? (h != nil ? "~" : (p?.path ?? "~"))
         var s = TerminalSession(id: "s-\(UUID().uuidString.prefix(8))", projectID: project, hostID: hostID,
                                 title: title ?? (h.map { "\($0.user)@\($0.name.components(separatedBy: " ").first?.lowercased() ?? $0.host)" } ?? "Terminal"),
-                                kind: kind, cwd: dir, state: .idle, process: command ?? (h != nil ? "ssh" : "zsh"), startedAt: Date())
+                                kind: kind, cwd: dir, state: .idle, process: command ?? (h != nil ? "ssh" : Self.loginShellName), startedAt: Date())
         if sample {
             s.isSampleSession = true
             if let h {
@@ -35,9 +35,10 @@ extension AppStore {
             if let h {
                 argv = SSHCommand.interactive(h, remoteCommand: command)
             } else if let command {
+                // Commands Brix builds use zsh syntax, so they keep zsh.
                 argv = ["/bin/zsh", "-lic", command]
             } else {
-                argv = ["/bin/zsh", "-l"]
+                argv = [Self.loginShell, "-l"]
             }
             var env: [String: String] = extraEnv
             if let h, h.auth == .password, let pw = hostPassword(h), let ask = try? SSHCommand.askpassEnv(password: pw) {
@@ -57,6 +58,16 @@ extension AppStore {
         focusedSessionID = s.id
         return s
     }
+
+    /// The user's login shell (bash, fish), for plain terminals.
+    static let loginShell: String = {
+        if let pw = getpwuid(getuid()), let sh = pw.pointee.pw_shell {
+            let path = String(cString: sh)
+            if FileManager.default.isExecutableFile(atPath: path) { return path }
+        }
+        return "/bin/zsh"
+    }()
+    static var loginShellName: String { (loginShell as NSString).lastPathComponent }
 
     func remotePrompt(_ h: SSHHost, cwd: String) -> TermLine {
         TermLine([MockData.span("\(h.user)@\(h.host.components(separatedBy: ".").first ?? h.host)", Theme.green), MockData.span(":", Theme.text3),
@@ -128,10 +139,15 @@ extension AppStore {
 
     func openDockerShell(_ id: ResourceID, project: ProjectID? = nil) {
         guard let c = dockerTarget(id) else { return }
+        guard c.state == .running else { toast(.info, "\(c.name) isn't running", detail: "Start it to open a shell."); return }
         let host = c.hostID.flatMap(self.host)
-        let cmd = (c.isSample ? services.mock.docker : services.live.docker).shellCommand(c, host: host)
-        let s = newTerminal(project: project ?? currentProjectID, title: "\(c.name) shell", kind: .shell, command: cmd, attach: (project ?? currentProjectID) != nil)
-        if project ?? currentProjectID == nil { route = .terminals; focusedSessionID = s.id }
+        // A shell in a container on a Production server is a shell on that server.
+        guardProduction(host?.tag ?? .dev, name: host.map { "\(c.name) on \($0.name)" } ?? c.name, verb: "Open Shell in") { [weak self] in
+            guard let self else { return }
+            let cmd = (c.isSample ? services.mock.docker : services.live.docker).shellCommand(c, host: host)
+            let s = newTerminal(project: project ?? currentProjectID, title: "\(c.name) shell", kind: .shell, command: cmd, attach: (project ?? currentProjectID) != nil)
+            if project ?? currentProjectID == nil { route = .terminals; focusedSessionID = s.id }
+        }
     }
 
     func openDockerLogs(_ id: ResourceID, project: ProjectID? = nil) {
@@ -168,6 +184,7 @@ extension AppStore {
             ClaudeChatRegistry.shared.stop(id)
             if s.state == .running { trackAgentTime(s, from: .running, to: .finished) }
             runningTasks[id] = nil
+            AgentDBGateway.shared.revoke(session: id)
             sessions.removeAll { $0.id == id }
             for ws in workspaces.values { ws.detach(session: id) }
             if focusedSessionID == id { focusedSessionID = nil }
@@ -413,9 +430,12 @@ extension AppStore {
     /// Called by the live terminal when output arrives or the process exits.
     func liveActivity(_ id: String, lastLines: [String], exited: Int32?) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        // A process Brix stopped (closing, switching views) didn't finish by itself.
+        if exited != nil, sessions[i].isLive, TerminalRegistry.shared.view(id) == nil, ClaudeChatRegistry.shared.chat(id) == nil { return }
         let text = lastLines.suffix(3).joined(separator: "\n")
         if !text.isEmpty { sessions[i].lastOutput = text }
-        if sessions[i].kind == .agent {
+        // A chat's lines are Claude's prose, not its screen: its edits arrive through chatEdited.
+        if sessions[i].kind == .agent, !sessions[i].isChat {
             let before = Set(sessions[i].touched.map(\.path))
             AgentActivityParser.apply(lines: lastLines, to: &sessions[i])
             let s = sessions[i]
@@ -467,8 +487,10 @@ extension AppStore {
         guard let s = session(id), let chat = ClaudeChatRegistry.shared.chat(id) else { return }
         let title = "Fork of " + displayTitle(s)
         guard chat.canCut(item), let fork = chat.forkCommand(at: item) else { return }
-        let env = s.projectID.map { AgentDBGateway.shared.environment(project: $0, session: "s-fork-\(UUID().uuidString.prefix(6))") } ?? [:]
+        let token = "s-fork-\(UUID().uuidString.prefix(6))"
+        let env = s.projectID.map { AgentDBGateway.shared.environment(project: $0, session: token) } ?? [:]
         let f = newTerminal(project: s.projectID, title: title, kind: .agent, command: fork.command, cwd: s.cwd, env: env, attach: false, chat: true)
+        gatewaySessions[token] = f.id
         if let i = sessions.firstIndex(where: { $0.id == f.id }) {
             sessions[i].agentID = s.agentID
             sessions[i].process = "claude"
@@ -489,19 +511,28 @@ extension AppStore {
             let group = tree.group(of: id)
             let index = group?.tabs.firstIndex(of: id)
             // Stop this one first: one conversation never runs in two processes.
+            let old = TerminalRegistry.shared.pid(id) ?? ClaudeChatRegistry.shared.chat(id)?.pid
             TerminalRegistry.shared.stop(id)
             ClaudeChatRegistry.shared.stop(id)
             if let i = self.sessions.firstIndex(where: { $0.id == id }) { self.sessions[i].externalID = nil }
-            let n = s.projectID.flatMap { self.newAgentSession(project: $0, agent: a, resume: ext, attach: false, chat: asChat) }
-                ?? self.startLocalAgent(a, resume: ext, chat: asChat, focus: false)
-            if let ws { ws.state.panes.add(n.id, to: group?.id, at: index) } else { self.terminalTree.add(n.id, to: group?.id, at: index) }
-            self.closeSession(id, confirmRunning: false)
-            self.renameSession(n.id, to: s.title)
-            if let i = self.sessions.firstIndex(where: { $0.id == n.id }) {
-                self.sessions[i].sessionName = s.sessionName
-                self.sessions[i].task = s.task
+            Task {
+                // Wait (up to 3 s) for it to exit: Claude can't resume a conversation
+                // another process still has open.
+                let deadline = Date().addingTimeInterval(3)
+                while let old, old > 0, kill(old, 0) == 0, Date() < deadline { try? await Task.sleep(nanoseconds: 100_000_000) }
+                // Closed meanwhile: nothing to switch.
+                guard self.session(id) != nil else { return }
+                let n = s.projectID.flatMap { self.newAgentSession(project: $0, agent: a, resume: ext, attach: false, chat: asChat) }
+                    ?? self.startLocalAgent(a, resume: ext, chat: asChat, focus: false)
+                if let ws { ws.state.panes.add(n.id, to: group?.id, at: index) } else { self.terminalTree.add(n.id, to: group?.id, at: index) }
+                self.closeSession(id, confirmRunning: false)
+                self.renameSession(n.id, to: s.title)
+                if let i = self.sessions.firstIndex(where: { $0.id == n.id }) {
+                    self.sessions[i].sessionName = s.sessionName
+                    self.sessions[i].task = s.task
+                }
+                self.reveal(session: n.id)
             }
-            self.reveal(session: n.id)
         }
         let queued = ClaudeChatRegistry.shared.chat(id)?.queued.count ?? 0
         if s.state == .running || queued > 0 {
@@ -523,7 +554,17 @@ extension AppStore {
         guard let i = sessions.firstIndex(where: { $0.id == id }), sessions[i].isLive,
               sessions[i].state != .finished, sessions[i].state != .failed else { return }
         sessions[i].state = busy ? .running : .idle
-        sessions[i].process = command ?? "zsh"
+        sessions[i].process = command ?? Self.loginShellName
+    }
+
+    /// A terminal took the keyboard: it's the focused session, in the focused pane.
+    func terminalFocused(_ id: String) {
+        if focusedSessionID != id { focusedSessionID = id }
+        if let ws = session(id)?.projectID.flatMap({ workspaces[$0] }), let g = ws.state.panes.group(of: id)?.id {
+            if ws.state.panes.focusedGroup != g { ws.state.panes.focusedGroup = g }
+        } else if let g = terminalTree.group(of: id)?.id, terminalTree.focusedGroup != g {
+            terminalTree.focusedGroup = g
+        }
     }
 
     func liveIdle(_ id: String, idle: Bool) {
@@ -566,19 +607,29 @@ extension AppStore {
     /// may call more than once).
     func restoreSessionsAtLaunch() {
         guard !globalRestored, !restoreDisabled else { return }
+        // Restarting doesn't move the focus to whichever session came back last.
+        let focused = focusedSessionID
+        defer { focusedSessionID = focused }
         for id in library.openProjects where project(id)?.isSample == false {
             workspace(for: id).restoreLiveSessions()
         }
         var remap: [String: String] = [:]
-        for d in library.globalSessions where !(d.hostID.flatMap(host)?.tag.isProduction ?? false) {
-            // Production SSH shells are not reopened without the user asking.
+        // Production SSH shells are not reopened without the user asking; they stay saved.
+        heldGlobalSessions = library.globalSessions.filter { $0.restorable && ($0.hostID.flatMap(host)?.tag.isProduction ?? false) }
+        if !heldGlobalSessions.isEmpty {
+            let n = heldGlobalSessions.count
+            toast(.info, "\(n) production session\(n == 1 ? " was" : "s were") not reopened on the Terminals screen",
+                  detail: "Brix doesn't reconnect to Production servers unasked. Open \(n == 1 ? "it" : "them") again from the server when you need \(n == 1 ? "it" : "them").")
+        }
+        for d in library.globalSessions where d.restorable && !(d.hostID.flatMap(host)?.tag.isProduction ?? false) {
             // An agent on This Mac resumes its conversation (it came back as a bare shell before).
             // An agent whose CLI was removed from Brix comes back as a shell rather than under another agent.
             let s: TerminalSession
             if d.kind == .agent, d.hostID == nil, let a = agent(d.agentID) {
                 s = startLocalAgent(a, resume: d.externalID, chat: d.isChat, focus: false)
             } else {
-                s = newTerminal(project: nil, host: d.hostID, title: d.title, kind: d.kind == .agent ? .shell : d.kind, cwd: d.cwd, attach: false)
+                s = newTerminal(project: nil, host: d.hostID, title: d.title, kind: d.kind == .agent ? .shell : d.kind,
+                                command: d.kind == .agent ? nil : d.command, cwd: d.cwd, attach: false)
             }
             remap[d.id] = s.id
             if d.kind == .agent { renameSession(s.id, to: d.title) }

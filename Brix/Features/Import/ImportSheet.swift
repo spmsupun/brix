@@ -126,7 +126,7 @@ extension AppStore {
     func importConnections(_ items: [ImportCandidate], tags: [String: EnvTag], all: [ImportCandidate] = []) {
         var hostByRef: [String: ResourceID] = [:]
         var hosts = 0, dbs = 0
-        var failed: [String] = []
+        var failed: [String] = [], untunnelled: [String] = []
         for c in items {
             guard case .host(var h) = c.item else { continue }
             h.tag = tags[c.id] ?? h.tag
@@ -143,8 +143,13 @@ extension AppStore {
         for c in items {
             guard case .database(var d, let password, let tunnel) = c.item else { continue }
             d.tag = tags[c.id] ?? d.tag
-            // Tunnel through the JetBrains SSH config it named, if that host came along.
-            d.tunnelHostID = tunnel.flatMap { hostByRef[$0] }
+            // Tunnel through the JetBrains SSH config it named. Without that host it
+            // would quietly connect straight to its address (often localhost) under
+            // the server's name, so it's left out instead.
+            if let tunnel {
+                guard let id = hostByRef[tunnel] else { untunnelled.append(d.name); continue }
+                d.tunnelHostID = id
+            }
             if let password {
                 do { try keychain.set(password, for: Keychain.dbAccount(d.id)) } catch { failed.append(d.name) }
             }
@@ -153,7 +158,13 @@ extension AppStore {
             dbs += 1
         }
         let parts = [hosts > 0 ? "\(hosts) host\(hosts == 1 ? "" : "s")" : nil, dbs > 0 ? "\(dbs) database\(dbs == 1 ? "" : "s")" : nil].compactMap { $0 }
-        toast(.success, "Imported \(parts.joined(separator: " and "))", detail: "Link them to projects in Project Settings → Resources.")
+        if !parts.isEmpty {
+            toast(.success, "Imported \(parts.joined(separator: " and "))", detail: "Link them to projects in Project Settings → Resources.")
+        }
+        if !untunnelled.isEmpty {
+            toast(.error, "Skipped \(untunnelled.count) database\(untunnelled.count == 1 ? "" : "s") without their SSH tunnel",
+                  detail: untunnelled.joined(separator: ", ") + ". Import the SSH host they go through too, or add them by hand.")
+        }
         if !failed.isEmpty {
             toast(.error, "Couldn't store passwords in the Keychain", detail: failed.joined(separator: ", ") + ". Enter them when you connect.")
         }

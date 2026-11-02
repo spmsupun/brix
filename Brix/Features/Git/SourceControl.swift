@@ -264,6 +264,11 @@ struct ChangeRow: View {
             Text(change.name).font(Typo.row).foregroundStyle(Theme.text).lineLimit(1).layoutPriority(1)
             Text(change.dir).font(Typo.ui(11)).foregroundStyle(Theme.meta).lineLimit(1).truncationMode(.head)
             Spacer(minLength: 0)
+            if change.conflict {
+                Text("Conflict").font(Typo.ui(10, .semibold)).foregroundStyle(Theme.red)
+                    .padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Theme.red.opacity(0.12)))
+                    .help("Merge conflict: fix the conflict markers, then stage to mark it resolved")
+            }
             if hovering && !showCheckbox {
                 IconButton(symbol: "arrow.uturn.backward", label: "Discard changes", size: 20, iconSize: 10) { store.requestDiscard(ws.projectID, [change.path]) }
                     .opacity(change.staged ? 0 : 1)

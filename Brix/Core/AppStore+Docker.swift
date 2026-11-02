@@ -36,7 +36,9 @@ extension AppStore {
         var errors: [String] = []
         for e in engines {
             do {
-                dockerInventory[e.key] = try await e.svc.inventory(host: e.host)
+                let inv = try await e.svc.inventory(host: e.host)
+                dockerInventory[e.key] = inv
+                if let why = inv.stacksError { errors.append("\(e.host?.name ?? "Local") stacks: \(why)") }
             } catch {
                 dockerInventory[e.key] = nil
                 errors.append("\(e.host?.name ?? "Local"): \(error.localizedDescription)")

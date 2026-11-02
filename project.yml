@@ -45,12 +45,18 @@ targets:
         CFBundleName: "$(BRIX_APP_NAME)"
         BrixDataFolder: "$(BRIX_APP_NAME)"
         BrixKeychainService: "$(BRIX_KEYCHAIN_SERVICE)"
-        CFBundleShortVersionString: "0.1.0-beta.9"
-        CFBundleVersion: "9"
+        CFBundleShortVersionString: "0.1.0-beta.15"
+        CFBundleVersion: "151"
         LSApplicationCategoryType: public.app-category.developer-tools
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "© 2026 Supun Praneeth. MIT License."
         NSPrincipalClass: NSApplication
+        # The hardened runtime blocks these unless a reason is given; commands
+        # run in Brix's terminals and agents may need them.
+        NSAppleEventsUsageDescription: "Brix runs your terminals and agents; commands you run in them may ask to control other apps."
+        NSMicrophoneUsageDescription: "Brix runs your terminals and agents; commands you run in them may ask to use the microphone."
+        NSCameraUsageDescription: "Brix runs your terminals and agents; commands you run in them may ask to use the camera."
+        NSLocalNetworkUsageDescription: "Brix runs your terminals and agents; commands you run in them may ask to reach devices on your local network."
         # Sparkle: the feed is an asset of the newest GitHub release; every update
         # must be signed with the key whose public half is here.
         SUFeedURL: https://github.com/spmsupun/brix/releases/latest/download/appcast.xml
@@ -61,6 +67,7 @@ targets:
       path: Brix/Resources/Brix.entitlements
       properties:
         com.apple.security.app-sandbox: false
+        com.apple.security.automation.apple-events: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.spmsupun.brix

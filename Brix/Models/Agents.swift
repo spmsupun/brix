@@ -14,8 +14,10 @@ struct AgentConfig: Codable, Hashable, Identifiable {
     var iconPath: String = ""
 
     var isBuiltin: Bool { Self.builtins.contains { $0.id == id } }
-    /// The executable to look for on PATH.
-    var binary: String { command.split(separator: " ").first.map(String.init) ?? command }
+    /// The executable to look for on PATH, or its full path.
+    var executable: String { command.split(separator: " ").first.map(String.init) ?? command }
+    /// Its name, which Brix knows an agent by: "claude" for /opt/homebrew/bin/claude too.
+    var binary: String { (executable as NSString).lastPathComponent }
     /// Only Claude Code accepts the linked-resources note as a system prompt.
     var acceptsSystemPrompt: Bool { binary == "claude" }
 
@@ -51,7 +53,7 @@ struct AgentConfig: Codable, Hashable, Identifiable {
             out += " --session-id " + id
         }
         guard acceptsSystemPrompt, !resourceNames.isEmpty else { return out }
-        var note = "This project is managed in Brix. Linked resources (names only, no credentials): " + resourceNames.joined(separator: ", ") + "."
+        var note = "This project is managed in Brix. Linked resources (names only, no credentials): " + resourceNames.map(Self.promptSafe).joined(separator: ", ") + "."
         if databases {
             note += " To use its databases run `brix-db list`, `brix-db schema <name>` and `brix-db query <name> \"<sql>\"`; Brix applies each database's access rules and never gives you its password."
         }
@@ -61,6 +63,29 @@ struct AgentConfig: Codable, Hashable, Identifiable {
     /// Session ids go into a shell command line, so only UUID-like ids are used.
     static func isSafeID(_ id: String) -> Bool {
         !id.isEmpty && id.count <= 64 && id.allSatisfy { $0.isHexDigit || $0 == "-" }
+    }
+
+    /// A resource name as it goes into the system prompt: names can come from a
+    /// cloned repo's brix.json, so line breaks and control characters become
+    /// spaces and a long one is cut, leaving no room to smuggle in instructions.
+    static func promptSafe(_ name: String) -> String {
+        let flat = String(String.UnicodeScalarView(name.unicodeScalars.map { CharacterSet.controlCharacters.contains($0) || CharacterSet.newlines.contains($0) ? " " : $0 }))
+        let trimmed = flat.trimmingCharacters(in: .whitespaces)
+        return trimmed.count > 64 ? String(trimmed.prefix(64)) + "…" : trimmed
+    }
+}
+
+extension AgentConfig {
+    /// One agent saved with fewer fields still loads, with defaults for the rest.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? id
+        command = (try? c.decodeIfPresent(String.self, forKey: .command)) ?? id
+        installCommand = (try? c.decodeIfPresent(String.self, forKey: .installCommand)) ?? ""
+        enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? true
+        showUsage = (try? c.decodeIfPresent(Bool.self, forKey: .showUsage)) ?? false
+        iconPath = (try? c.decodeIfPresent(String.self, forKey: .iconPath)) ?? ""
     }
 }
 

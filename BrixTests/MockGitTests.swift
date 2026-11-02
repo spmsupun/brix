@@ -102,6 +102,40 @@ final class MockGitTests: XCTestCase {
         }
     }
 
+    /// A project that is a folder inside a bigger repository sees only its own
+    /// files, relative to itself, and Discard touches the right one.
+    func testLiveGitInSubfolderProject() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("brix-git-\(UUID().uuidString)")
+        let sub = root.appendingPathComponent("sub")
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        func git(_ args: String...) async throws { _ = try await ProcessRunner.check("git", ["-C", root.path] + args) }
+        try await git("init", "-q")
+        try await git("config", "user.email", "t@example.com")
+        try await git("config", "user.name", "t")
+        for f in ["a.txt", "sub/a.txt", "sub/old.txt"] { try "one\n".write(to: root.appendingPathComponent(f), atomically: true, encoding: .utf8) }
+        try await git("add", "-A")
+        try await git("commit", "-qm", "init")
+        for f in ["a.txt", "sub/a.txt"] { try "two\n".write(to: root.appendingPathComponent(f), atomically: true, encoding: .utf8) }
+        try await git("mv", "sub/old.txt", "sub/new.txt")
+        try "x\n".write(to: sub.appendingPathComponent("n.txt"), atomically: true, encoding: .utf8)
+
+        let p = Project(id: "sub", name: "sub", path: sub.path, language: "", framework: "", hue: .violet, isPinned: false, lastOpened: Date())
+        let g = LiveGitService()
+        var s = try await g.status(p)
+        XCTAssertEqual(Set(s.changes.map(\.path)), ["a.txt", "new.txt", "n.txt"], "The parent's a.txt isn't the project's")
+        XCTAssertEqual(s.staged.first { $0.path == "new.txt" }?.origPath, "old.txt")
+        XCTAssertGreaterThan(s.ahead, 0, "No upstream: local commits count as unpushed")
+        XCTAssertFalse(s.commits[0].isPushed)
+
+        s = try await g.discard(p, paths: ["a.txt"])
+        XCTAssertEqual(try String(contentsOf: sub.appendingPathComponent("a.txt"), encoding: .utf8), "one\n")
+        XCTAssertEqual(try String(contentsOf: root.appendingPathComponent("a.txt"), encoding: .utf8), "two\n", "The parent's file is untouched")
+
+        s = try await g.unstage(p, paths: ["new.txt", "old.txt"])
+        XCTAssertTrue(s.staged.isEmpty, "Unstaging a rename with its source leaves nothing staged")
+    }
+
     func testMockRowsPageLazily() async throws {
         let db = MockDatabaseService()
         db.delay = 0

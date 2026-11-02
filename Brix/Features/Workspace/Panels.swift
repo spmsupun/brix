@@ -38,15 +38,23 @@ struct TerminalPanel: View {
     let panel: PanelInstance
     @State private var hoveredTab: String?
 
+    /// This project's sessions that aren't open in the centre panes or in another
+    /// kind of panel (Server Shell, Agent, Logs). A session in both places showed
+    /// as a duplicate tab, and the panel could show the same chat twice.
     private var sessions: [TerminalSession] {
-        ws.projectSessions.filter { $0.hostID == nil || ws.state.panelSession.values.contains($0.id) }
+        // Keys are a panel's id, or its id + ":split".
+        let kinds = Dictionary(ws.layout.allPanels.map { ($0.id, $0.kind) }, uniquingKeysWith: { a, _ in a })
+        let elsewhere = Set(ws.state.panelSession.filter { e in kinds[String(e.key.prefix { $0 != ":" })].map { $0 != .terminal } ?? false }.values)
+        let bound = Set(ws.state.panelSession.values).subtracting(elsewhere), inPanes = Set(ws.state.panes.allTabs)
+        return ws.projectSessions.filter { !inPanes.contains($0.id) && !elsewhere.contains($0.id) && ($0.hostID == nil || bound.contains($0.id)) }
     }
     private var selected: String? {
+        let list = sessions
         let id = ws.state.panelSession[panel.id]
-        return id.flatMap { store.session($0) != nil ? $0 : nil } ?? sessions.first?.id
+        return id.flatMap { id in list.contains { $0.id == id } ? id : nil } ?? list.first?.id
     }
     private var splitID: String? {
-        ws.state.panelSession[panel.id + ":split"].flatMap { store.session($0) != nil ? $0 : nil }
+        ws.state.panelSession[panel.id + ":split"].flatMap { id in sessions.contains { $0.id == id } ? id : nil }
     }
 
     var body: some View {
@@ -83,7 +91,7 @@ struct TerminalPanel: View {
                 }
                 .contextMenu { sessionMenu(sel) }
             } else {
-                EmptyState(symbol: "terminal", message: "No terminals in this project.", actionTitle: "New Terminal") {
+                EmptyState(symbol: "terminal", message: ws.projectSessions.isEmpty ? "No terminals in this project." : "All terminals are open in the panes.", actionTitle: "New Terminal") {
                     let s = store.newTerminal(project: ws.projectID, attach: false)
                     ws.state.panelSession[panel.id] = s.id
                 }
@@ -444,13 +452,17 @@ struct LogsPanel: View {
     }
 
     private func autoStart() {
+        // The tail saved last run comes back first (this can appear before the workspace does).
+        ws.restoreLiveSessions()
         guard sessionID == nil, let res = panel.resourceID else { return }
         if res.hasPrefix("docker:") {
             let id = String(res.dropFirst("docker:".count))
             guard let c = store.dockerTarget(id) else { return }
             let host = c.hostID.flatMap(store.host)
             let cmd = (c.isSample ? store.services.mock.docker : store.services.live.docker).followLogsCommand(c, host: host)
-            let s = store.newTerminal(project: c.isSample ? ws.projectID : nil, title: "\(c.name) logs", kind: .logs, command: cmd, attach: false)
+            // In the project, so it's saved and restored with the panel (globally it
+            // came back as a stray shell on the Terminals screen every launch).
+            let s = store.newTerminal(project: ws.projectID, title: "\(c.name) logs", kind: .logs, command: cmd, attach: false)
             ws.state.panelSession[panel.id] = s.id
             if c.isSample {
                 Task {

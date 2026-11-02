@@ -26,7 +26,10 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-brix-notary}"
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
 cd "$(dirname "$0")/.."
-command -v xcodegen >/dev/null && xcodegen generate --quiet
+# The release is built from what's committed, so the commit says what shipped.
+# brix.json and PROMPT.md are local files and don't count.
+DIRTY="$(git status --porcelain -- . ':!brix.json' ':!PROMPT.md')"
+[ -z "$DIRTY" ] || { echo "Commit or remove these changes first:" >&2; echo "$DIRTY" >&2; exit 1; }
 
 APP=build/release/Build/Products/Release/Brix.app
 # Sparkle installs an update only when its build number is higher, so it must
@@ -36,10 +39,14 @@ SPARKLE_BIN=build/spm/artifacts/sparkle/Sparkle/bin
 FEED=https://github.com/spmsupun/brix/releases/latest/download/appcast.xml
 # Installed copies compare against the feed that's live now; a lower or equal
 # build number (another branch, a rewritten history) would offer them nothing.
-PREV="$(curl -fsL "$FEED" 2>/dev/null | sed -n 's:.*<sparkle\:version>\([0-9]*\)</sparkle\:version>.*:\1:p' | head -1)"
-if [ -n "$PREV" ] && [ "$BUILD" -le "$PREV" ]; then
+# No feed means no check, so that stops the release too.
+FEED_XML="$(curl -fsL "$FEED")" || { echo "Couldn't fetch the live feed $FEED, so the build number can't be checked." >&2; exit 1; }
+PREV="$(printf '%s\n' "$FEED_XML" | sed -n 's:.*<sparkle\:version>\([0-9]*\)</sparkle\:version>.*:\1:p' | head -1)"
+[ -n "$PREV" ] || { echo "The live feed $FEED has no build number." >&2; exit 1; }
+if [ "$BUILD" -le "$PREV" ]; then
   echo "Build number $BUILD is not above the published $PREV: release from the branch that made it." >&2; exit 1
 fi
+command -v xcodegen >/dev/null && xcodegen generate --quiet
 ZIP="build/dist/Brix-$VERSION-macOS.zip"
 rm -rf build/release
 mkdir -p build/dist
@@ -74,6 +81,12 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 echo "Writing the update feed..."
 SIGNATURE="$("$SPARKLE_BIN/sign_update" "$ZIP")"
 case "$SIGNATURE" in *edSignature=*) ;; *) echo "sign_update gave no signature: $SIGNATURE" >&2; exit 1 ;; esac
+# Installed copies accept the zip only if this signature checks out against the
+# public key built into the app.
+ED_SIG="$(printf '%s\n' "$SIGNATURE" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p')"
+"$SPARKLE_BIN/sign_update" --verify "$ZIP" "$ED_SIG" || { echo "The zip's signature doesn't verify." >&2; exit 1; }
+[ "$("$SPARKLE_BIN/generate_keys" -p)" = "$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")" ] \
+  || { echo "The signing key doesn't match SUPublicEDKey in the app: installed copies would refuse this update." >&2; exit 1; }
 HTML=""
 if [ -n "$NOTES" ]; then
   # Blank lines dropped, "- x" a list item, any other line a heading or paragraph.
@@ -114,6 +127,13 @@ xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
 xcrun stapler staple "$DMG"
 rm -rf build/dmg
 
+# Everything built and checked: the source now says which version it is, so a
+# build from it later matches this release.
+sed -i '' -e "s/^\( *CFBundleShortVersionString: \).*/\1\"$VERSION\"/" -e "s/^\( *CFBundleVersion: \).*/\1\"$BUILD\"/" project.yml
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD" Brix/Resources/Info.plist
+grep -q "CFBundleShortVersionString: \"$VERSION\"" project.yml && grep -q "CFBundleVersion: \"$BUILD\"" project.yml \
+  || { echo "Couldn't write the version into project.yml; set it to $VERSION / $BUILD by hand." >&2; exit 1; }
+
 (cd build/dist && for f in "$(basename "$DMG")" "$(basename "$ZIP")"; do shasum -a 256 "$f" > "$f.sha256"; done)
 echo "Ready: $DMG (for people), $ZIP (for Homebrew and updates) and build/dist/appcast.xml"
 cat build/dist/*.sha256
@@ -124,3 +144,5 @@ echo
 echo "After publishing the GitHub release, update the Homebrew cask (spmsupun/homebrew-tap, Casks/brix.rb):"
 echo "  version \"$VERSION\""
 echo "  sha256 \"$(cut -d' ' -f1 "$ZIP.sha256")\""
+echo
+echo "Commit the version ($VERSION, build $BUILD) now set in project.yml and Brix/Resources/Info.plist."

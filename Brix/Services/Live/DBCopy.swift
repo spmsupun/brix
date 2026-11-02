@@ -302,6 +302,7 @@ enum DBCopy {
     /// Why this plan can't run, if it can't. Checked again here, whoever calls `run`.
     static func refusal(_ plan: Plan, sourceSchema: String) -> String? {
         if plan.target.readOnly { return "\(plan.target.name) is read-only." }
+        if plan.target.effectiveReadOnly, !plan.target.writeUnlocked { return "\(plan.target.name) is Production: type its name to copy into it." }
         if sameDatabase(plan.source, plan.target), plan.target.kind == .sqlite || plan.targetSchema == sourceSchema {
             return "That's the database the tables come from. Pick another connection, or another schema."
         }
@@ -341,6 +342,13 @@ enum DBCopy {
             do { _ = try await service.execute(dst, sql: sql, password: targetPassword) }
             catch { return plan.tables.map { Outcome(table: $0.source.name, rows: 0, state: "Not started", error: "Couldn't create \(schema): " + LiveDatabaseService.describe(error)) } }
         }
+        // SQLite's foreign keys are written with each table and checked on every insert, so a
+        // table that points at itself (or a cycle) couldn't be filled: off until the copy is done.
+        var fkNote: String?
+        if kind == .sqlite {
+            do { _ = try await service.execute(dst, sql: "PRAGMA foreign_keys = OFF", password: targetPassword) }
+            catch { fkNote = "Foreign key checks stayed on: \(LiveDatabaseService.describe(error))" }
+        }
         var built: [Table] = []
         let order = ordered(plan.tables)
         for t in order {
@@ -353,11 +361,12 @@ enum DBCopy {
             // it's complete, so a failed or stopped copy leaves the old table as it was.
             let swap = t.exists && t.clash == .replace
             let into = swap ? real + "__brix_copy" : real
-            var rows = 0
+            var rows = 0, swapped = false
             var notes: [String] = []
             do {
                 if !t.exists || swap {
-                    if swap { _ = try? await service.execute(dst, sql: "DROP TABLE IF EXISTS \(name(schema, into, kind))", password: targetPassword) }
+                    // A copy left by an earlier run goes first; if it can't, that's the reason this one fails.
+                    if swap { _ = try await service.execute(dst, sql: "DROP TABLE IF EXISTS \(name(schema, into, kind))", password: targetPassword) }
                     _ = try await service.execute(dst, sql: createTable(t, schema: schema, kind: kind, copiedTables: copied, as: into), password: targetPassword)
                 }
                 if plan.mode.data {
@@ -375,10 +384,20 @@ enum DBCopy {
                     }
                 }
                 if swap {
-                    _ = try await service.execute(dst, sql: "DROP TABLE \(name(schema, real, kind))", password: targetPassword)
-                    let rename = kind == .mysql ? "RENAME TABLE \(name(schema, into, kind)) TO \(name(schema, real, kind))"
-                        : "ALTER TABLE \(name(schema, into, kind)) RENAME TO \(LiveDatabaseService.quote(real, kind))"
-                    _ = try await service.execute(dst, sql: rename, password: targetPassword)
+                    // In one step, so a failure leaves the old table where it was: one transaction
+                    // (Postgres, SQLite), or MySQL's two-way RENAME and then the old one dropped.
+                    if kind == .mysql {
+                        let old = real + "__brix_old"
+                        _ = try await service.execute(dst, sql: "RENAME TABLE \(name(schema, real, kind)) TO \(name(schema, old, kind)), \(name(schema, into, kind)) TO \(name(schema, real, kind))", password: targetPassword)
+                        swapped = true
+                        do { _ = try await service.execute(dst, sql: "DROP TABLE \(name(schema, old, kind))", password: targetPassword) }
+                        catch { notes.append("The table it replaced is still there as \(old): \(LiveDatabaseService.describe(error))") }
+                    } else {
+                        _ = try await service.executeBatch(dst, sqls: ["DROP TABLE \(name(schema, real, kind))",
+                                                                       "ALTER TABLE \(name(schema, into, kind)) RENAME TO \(LiveDatabaseService.quote(real, kind))"],
+                                                           expect: [nil, nil], password: targetPassword)
+                        swapped = true
+                    }
                 }
                 if !t.exists || swap { built.append(t) }
                 if kind == .postgres, plan.mode.data {
@@ -393,11 +412,16 @@ enum DBCopy {
                 }
                 out.append(Outcome(table: real, rows: rows, state: "Done", error: notes.isEmpty ? nil : notes.joined(separator: "\n")))
             } catch {
-                if swap { _ = try? await service.execute(dst, sql: "DROP TABLE IF EXISTS \(name(schema, into, kind))", password: targetPassword) }
+                // The half-built copy goes; never once it has become the table.
+                var leftover = ""
+                if swap, !swapped {
+                    do { _ = try await service.execute(dst, sql: "DROP TABLE IF EXISTS \(name(schema, into, kind))", password: targetPassword) }
+                    catch { leftover = " The partial copy is still there as \(into) (\(LiveDatabaseService.describe(error)))." }
+                }
                 let stopped = error is CancellationError || Task.isCancelled
                 let what = stopped ? "Stopped" : "Failed"
-                let kept = swap ? " The table that was there is unchanged." : (rows > 0 ? " \(rows) rows were copied before that." : "")
-                out.append(Outcome(table: real, rows: swap ? 0 : rows, state: what, error: (stopped ? "Stopped." : LiveDatabaseService.describe(error)) + kept))
+                let kept = swap && !swapped ? " The table that was there is unchanged." : (rows > 0 ? " \(rows) rows were copied before that." : "")
+                out.append(Outcome(table: real, rows: swap ? 0 : rows, state: what, error: (stopped ? "Stopped." : LiveDatabaseService.describe(error)) + kept + leftover))
             }
         }
         // Indexes and keys after the rows: faster, and rows needn't arrive in key order.
@@ -411,6 +435,15 @@ enum DBCopy {
                 }
             }
         }
+        if kind == .sqlite, fkNote == nil {
+            do {
+                _ = try await service.execute(dst, sql: "PRAGMA foreign_keys = ON", password: targetPassword)
+                // Rows were written unchecked: say if any point at nothing.
+                let bad = try await service.execute(dst, sql: "PRAGMA foreign_key_check", password: targetPassword).rows.count
+                if bad > 0 { fkNote = "\(bad) row\(bad == 1 ? "" : "s") in \(plan.target.name) point at rows that aren't there (PRAGMA foreign_key_check lists them)." }
+            } catch { fkNote = "Foreign key checks couldn't be turned back on: \(LiveDatabaseService.describe(error))" }
+        }
+        if let fkNote, !out.isEmpty { out[0].error = (out[0].error.map { $0 + "\n" } ?? "") + fkNote }
         // In the order the tables were listed.
         return plan.tables.compactMap { t in out.first { $0.table == t.source.name } }
     }

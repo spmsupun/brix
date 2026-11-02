@@ -23,6 +23,34 @@ final class DataWorkspaceTests: XCTestCase {
         XCTAssertEqual(SQLText.limited("select * from t;", limit: 500), "select * from t\nLIMIT 500")
         XCTAssertEqual(SQLText.limited("select * from t limit 5", limit: 500), "select * from t limit 5")
         XCTAssertEqual(SQLText.limited("update t set a = 1", limit: 500), "update t set a = 1")
+        // A LIMIT inside a subquery (or a string) isn't the query's own.
+        XCTAssertEqual(SQLText.limited("select * from (select * from t limit 5) s", limit: 500), "select * from (select * from t limit 5) s\nLIMIT 500")
+        XCTAssertEqual(SQLText.limited("select 'limit 5' from t", limit: 500), "select 'limit 5' from t\nLIMIT 500")
+        XCTAssertEqual(SQLText.limited("select * from t order by a fetch first 3 rows only", limit: 500), "select * from t order by a fetch first 3 rows only")
+    }
+
+    func testSQLCodeDropsCommentsAndStrings() {
+        XCTAssertEqual(SQLText.code("SELECT 'a;b' /* x; */ -- y\n, \"Name\" FROM t", mysql: false), "select ''    \n, name from t")
+        XCTAssertEqual(SQLText.code(#"select 'it\'s; here' x"#, mysql: true), "select '' x", "MySQL's backslash escape")
+        XCTAssertEqual(SQLText.code("select $tag$ ; delete $tag$ x", mysql: false), "select '' x")
+        XCTAssertEqual(SQLText.code("select 1 /*!50000 ; delete */", mysql: true), "select 1   ; delete  ")
+        // Secrets don't reach query history.
+        XCTAssertEqual(SQLText.redacted("ALTER USER bob WITH PASSWORD 'hunter2'"), "ALTER USER bob WITH PASSWORD '•••'")
+        XCTAssertEqual(SQLText.redacted("CREATE USER 'bob'@'%' IDENTIFIED BY 's3cret'"), "CREATE USER 'bob'@'%' IDENTIFIED BY '•••'")
+        XCTAssertEqual(SQLText.redacted("select 'x' from t"), "select 'x' from t")
+    }
+
+    func testUpdatesMatchWhatWasLoaded() {
+        let o = DBObject(schema: "s", name: "t", kind: .table, rowEstimate: nil)
+        var e = DWRowEdit(key: ["id": "3"], original: ["id": "3", "a": "0", "b": nil, "blob": "<4 bytes>"], changes: ["a": "1", "b": "x", "blob": "y"])
+        e.matchable = ["id", "a", "b"]
+        let sql = DataEdits.sql(object: o, kind: .postgres, edits: ["3": e], inserted: [], deleted: [:])
+        XCTAssertEqual(sql, [#"UPDATE "s"."t" SET "a" = '1', "b" = 'x', "blob" = 'y' WHERE "a" = '0' AND "b" IS NULL AND "id" = '3';"#])
+        let my = DataEdits.plan(object: o, kind: .mysql, edits: ["3": e], inserted: [], deleted: [:])
+        XCTAssertEqual(my.first?.sql, #"SELECT COUNT(*) AS brix_affected FROM `s`.`t` WHERE `a` = '0' AND `b` IS NULL AND `id` = '3' FOR UPDATE"#)
+        XCTAssertTrue(DataEdits.placeholder("<4 bytes>", DBColumn(name: "blob", type: "bytea")))
+        XCTAssertTrue(DataEdits.placeholder("<INTERVAL value>", DBColumn(name: "i", type: "interval")))
+        XCTAssertFalse(DataEdits.placeholder("<INTERVAL value>", DBColumn(name: "note", type: "text")), "text that only looks like one")
     }
 
     func testStagedEditsBecomeSQL() {

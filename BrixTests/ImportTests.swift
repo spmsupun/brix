@@ -25,6 +25,8 @@ final class ImportTests: XCTestCase {
         XCTAssertEqual(hosts[0].auth, .key)
         XCTAssertEqual(hosts[0].tag, .prod)
         XCTAssertEqual(hosts[1].auth, .agent)
+        XCTAssertEqual(hosts[0].alias, "web-prod", "ssh connects through the alias, keeping ProxyJump")
+        XCTAssertEqual(hosts[0].destination, "deploy@web-prod")
     }
 
     func testJetBrainsSSHConfigs() {
@@ -122,8 +124,12 @@ final class ImportTests: XCTestCase {
 
         // First Mac: project with a host, a tunnelled database and an agent choice.
         let a = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root.appendingPathComponent("a")), keychain: kc, loadFromDisk: false)
+        a.writesProjectFiles = true
         let p = a.addProject(AppStore.detect(url: folder), pinned: false, preset: .agent, hosts: [], databases: [], docker: [])
-        let host = SSHHost(id: "h1", name: "Shop Prod", host: "10.0.0.9", user: "deploy", port: 2200, tag: .prod)
+        XCTAssertEqual(a.project(p.id)?.syncsSettingsFile, false, "a folder without brix.json doesn't get one unasked")
+        var host = SSHHost(id: "h1", name: "Shop Prod", host: "10.0.0.9", user: "deploy", port: 2200, tag: .prod)
+        host.keyPath = "~/.ssh/secret_key"
+        host.notes = "private note"
         a.library.hosts.append(host)
         var db = DatabaseConnection(id: "d1", name: "shop_db", kind: .postgres, tag: .prod)
         db.host = "127.0.0.1"; db.database = "shop"; db.user = "app"; db.tunnelHostID = "h1"
@@ -132,6 +138,8 @@ final class ImportTests: XCTestCase {
         a.library.links.link(p.id, "d1", kind: .database)
         var updated = a.project(p.id)!
         updated.agentID = "codex"
+        updated.notes = "project note"
+        updated.syncsSettingsFile = true
         a.updateProject(updated)
         a.writeProjectFiles()
 
@@ -142,6 +150,7 @@ final class ImportTests: XCTestCase {
         XCTAssertEqual(file.composeFiles, ["compose.yaml"])
         let raw = try String(contentsOf: ProjectFile.url(for: a.project(p.id)!), encoding: .utf8)
         XCTAssertFalse(raw.lowercased().contains("password\""), "no password field is ever written")
+        XCTAssertFalse(raw.contains("secret_key") || raw.contains("private note") || raw.contains("project note"), "key paths and notes stay on this Mac")
 
         // Writing again without changes leaves the file alone.
         let before = try FileManager.default.attributesOfItem(atPath: ProjectFile.url(for: p).path)[.modificationDate] as? Date
@@ -152,6 +161,15 @@ final class ImportTests: XCTestCase {
         // Second Mac: adding the folder recreates the connections and links.
         let b = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root.appendingPathComponent("b")), keychain: kc, loadFromDisk: false)
         let q = b.addProject(AppStore.detect(url: folder), pinned: false, preset: .code, hosts: [], databases: [], docker: [])
+        XCTAssertEqual(b.project(q.id)?.syncsSettingsFile, true, "a folder that has brix.json keeps it up to date")
+        // Connections and the agent choice from the file wait for the user's yes.
+        XCTAssertNil(b.project(q.id)?.agentID)
+        XCTAssertTrue(b.linkedHosts(q.id).isEmpty)
+        XCTAssertTrue(b.library.hosts.isEmpty)
+        let ask = try XCTUnwrap(b.confirmations.first)
+        XCTAssertTrue(ask.message.contains("Shop Prod") && ask.message.contains("PROD"))
+        XCTAssertTrue(ask.message.contains("Codex"), ask.message)
+        b.answerConfirmation(ask.id, confirmed: true)
         XCTAssertEqual(b.project(q.id)?.agentID, "codex")
         XCTAssertEqual(b.linkedHosts(q.id).map(\.host), ["10.0.0.9"])
         let bdb = try XCTUnwrap(b.linkedDatabases(q.id).first)
@@ -159,8 +177,9 @@ final class ImportTests: XCTestCase {
         XCTAssertEqual(bdb.tunnelHostID, b.linkedHosts(q.id).first?.id)
         XCTAssertEqual(bdb.tag, .prod)
 
-        // Loading twice doesn't duplicate anything.
+        // Loading twice doesn't duplicate anything, or ask again.
         b.loadProjectFile(q.id, announce: false)
+        XCTAssertTrue(b.confirmations.isEmpty)
         XCTAssertEqual(b.library.hosts.count, 1)
         XCTAssertEqual(b.library.databases.count, 1)
     }
@@ -185,6 +204,7 @@ extension ImportTests {
         try "{ <<<<<<< HEAD".write(to: url, atomically: true, encoding: .utf8)
         let s = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root.appendingPathComponent("s")),
                          keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        s.writesProjectFiles = true
         let p = s.addProject(AppStore.detect(url: folder), pinned: false, preset: .code, hosts: [], databases: [], docker: [])
         s.writeProjectFiles()
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "{ <<<<<<< HEAD")
@@ -213,12 +233,15 @@ extension ImportTests {
         try #"{"agent":"codex","notes":"kept"}"#.write(to: folder.appendingPathComponent(ProjectFile.legacyPath), atomically: true, encoding: .utf8)
         let s = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root.appendingPathComponent("s")),
                          keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        s.writesProjectFiles = true
         let p = s.addProject(AppStore.detect(url: folder), pinned: false, preset: .code, hosts: [], databases: [], docker: [])
+        s.answerConfirmation(try XCTUnwrap(s.confirmations.first).id, confirmed: true)
         XCTAssertEqual(s.project(p.id)?.agentID, "codex")
+        XCTAssertEqual(s.project(p.id)?.notes, "kept", "notes in an existing file are still read")
         s.writeProjectFiles()
         XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("brix.json").path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent(".brix").path), "old folder removed once migrated")
-        XCTAssertEqual(try ProjectFile.read(s.project(p.id)!)?.notes, "kept")
+        XCTAssertEqual(try ProjectFile.read(s.project(p.id)!)?.agent, "codex")
     }
 
     func testDockerParsers() {
@@ -282,6 +305,16 @@ extension ImportTests {
         XCTAssertFalse(BrixTerminalView.screenShowsWork("❯ Try \"edit ModelTests.swift\"\n⏵⏵ auto mode on (shift+tab to cycle)"))
         XCTAssertTrue(BrixTerminalView.screenShowsWork("✶ Cogitating… (4s)"))
         XCTAssertFalse(BrixTerminalView.screenShowsWork("* Cogitated for 4s · done 4:24 PM"))
+        XCTAssertTrue(BrixTerminalView.screenShowsWork("✱ Waiting for 1 background agent to finish"))
+        XCTAssertTrue(BrixTerminalView.screenShowsWork("✱ Waiting for 3 background agents to finish"))
+        XCTAssertTrue(BrixTerminalView.screenShowsWork("❯ \n⏵⏵ auto mode on (shift+tab to cycle) · ← 4 agents\n● main\n○ general-purpose  Running final Brix test suite"))
+        XCTAssertFalse(BrixTerminalView.screenShowsWork("❯ \n● main"))
+        XCTAssertTrue(AppStore.clientConnected("psql (16.2)\nType \"help\" for help.\n\natlas=> "))
+        XCTAssertTrue(AppStore.clientConnected("mysql> "))
+        XCTAssertTrue(AppStore.clientConnected("Password for user atlas: "))
+        XCTAssertFalse(AppStore.clientConnected("Last login: Mon Nov 2\n~ % psql -h db"))
+        XCTAssertTrue(LiveDockerService.composeMissing("docker: 'compose' is not a docker command."))
+        XCTAssertFalse(LiveDockerService.composeMissing("permission denied while trying to connect to the Docker daemon socket"))
         XCTAssertTrue(BrixTerminalView.screenAsksInput("Do you want to make this edit to Sidebar.swift?\n❯ 1. Yes\n  2. No\nEsc to cancel"))
         XCTAssertFalse(BrixTerminalView.screenAsksInput("● Hi. What need doing?\n❯ \n⏵⏵ auto mode on (shift+tab to cycle)"))
         // Text in the chat doesn't count: only a spinner row or a choice list does.
@@ -556,5 +589,131 @@ extension DBPasteTests {
         XCTAssertEqual([root.user, root.password, root.database], ["root", "r", "gac"])
         let app = DBDiscovery.applyContainerEnv("MYSQL_ROOT_PASSWORD=r\nMYSQL_USER=app\nMYSQL_PASSWORD=a\n", to: my)
         XCTAssertEqual([app.user, app.password], ["app", "a"])
+    }
+}
+
+extension ImportTests {
+    /// A cloned repo's brix.json links or adds nothing until the user agrees, never
+    /// changes a resource already in Brix, and skips entries it can't trust.
+    @MainActor func testProjectFileAsksBeforeLinkingAndKeepsExistingResources() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("pf-\(UUID().uuidString)")
+        let folder = root.appendingPathComponent("cloned")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let s = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root.appendingPathComponent("s")),
+                         keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        var prodDB = DatabaseConnection(id: "d-prod", name: "orders", kind: .postgres, tag: .prod)
+        prodDB.host = "db.internal"; prodDB.database = "orders"; prodDB.user = "admin"; prodDB.agentAccess = .write
+        s.library.databases.append(prodDB)
+        try #"""
+        {"hosts": [{"name": "box", "host": "10.1.1.1", "user": "-oProxyCommand=evil"},
+                   {"name": "jump", "host": "10.2.2.2", "user": "ops", "tag": "dev"}],
+         "databases": [{"name": "orders", "kind": "postgres", "host": "db.internal", "port": 5432, "database": "orders", "user": "admin", "tag": "dev", "agentAccess": "write"},
+                       {"name": "other", "kind": "postgres", "host": "db.internal", "database": "orders", "user": "reader"},
+                       {"name": "tunnelled", "kind": "postgres", "host": "127.0.0.1", "database": "x", "user": "u", "tunnelHost": "nowhere"}],
+         "docker": [{"name": "web"}, {"name": "-rm"}]}
+        """#.write(to: folder.appendingPathComponent("brix.json"), atomically: true, encoding: .utf8)
+
+        let p = s.addProject(AppStore.detect(url: folder), pinned: false, preset: .code, hosts: [], databases: [], docker: [])
+        XCTAssertTrue(s.library.links.pairs.filter { $0.project == p.id }.isEmpty, "nothing linked before the user agrees")
+        var ask = try XCTUnwrap(s.confirmations.first)
+        XCTAssertTrue(ask.message.contains("Link database orders"), ask.message)
+        XCTAssertFalse(ask.message.contains("box") || ask.message.contains("tunnelled") || ask.message.contains("-rm"), "unsafe entries are skipped")
+
+        // Declining links and adds nothing.
+        s.answerConfirmation(ask.id, confirmed: false)
+        XCTAssertTrue(s.library.links.pairs.filter { $0.project == p.id }.isEmpty)
+        XCTAssertEqual(s.library.hosts.count, 0)
+        XCTAssertEqual(s.library.databases.count, 1)
+
+        // Agreeing links the existing database as it is and adds the rest.
+        s.loadProjectFile(p.id, announce: false)
+        ask = try XCTUnwrap(s.confirmations.first)
+        s.answerConfirmation(ask.id, confirmed: true)
+        XCTAssertEqual(s.database("d-prod")?.tag, .prod, "the file's dev tag doesn't touch a database already in Brix")
+        XCTAssertEqual(s.database("d-prod")?.agentAccess, .write)
+        let linkedDBs = s.linkedDatabases(p.id)
+        XCTAssertEqual(Set(linkedDBs.map(\.name)), ["orders", "other"], "a different user is a different database")
+        XCTAssertEqual(linkedDBs.first { $0.name == "other" }?.agentAccess, .schema)
+        XCTAssertEqual(s.linkedHosts(p.id).map(\.name), ["jump"])
+        XCTAssertEqual(s.linkedDocker(p.id).map(\.name), ["web"])
+    }
+
+    /// brix.json isn't written while its connections are being asked about, and a
+    /// no leaves them in the file instead of saving Brix's view (without them) over it.
+    @MainActor func testDeclinedProjectFileKeepsItsConnections() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("pf-\(UUID().uuidString)")
+        let folder = root.appendingPathComponent("repo")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = folder.appendingPathComponent("brix.json")
+        let raw = #"{"agent":"codex","github":"acme/repo","hosts":[{"name":"jump","host":"10.2.2.2","user":"ops","tag":"dev"}],"stacks":[{"name":"shop","configFiles":["deploy/compose.yaml"]}]}"#
+        try raw.write(to: url, atomically: true, encoding: .utf8)
+        let s = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root.appendingPathComponent("s")),
+                         keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        s.writesProjectFiles = true
+        let p = s.addProject(AppStore.detect(url: folder), pinned: false, preset: .code, hosts: [], databases: [], docker: [])
+        let ask = try XCTUnwrap(s.confirmations.first)
+        XCTAssertTrue(ask.message.contains("deploy/compose.yaml"), "stack config paths are shown: \(ask.message)")
+        XCTAssertTrue(ask.message.contains("acme/repo"), ask.message)
+        XCTAssertNil(s.project(p.id)?.githubRepo, "the repository waits for the user's yes")
+
+        // While asking, the file isn't touched.
+        s.writeProjectFiles()
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), raw)
+
+        // After a no, a save keeps the file's connections, agent and repository.
+        s.answerConfirmation(ask.id, confirmed: false)
+        s.writeProjectFiles()
+        var file = try XCTUnwrap(try ProjectFile.read(s.project(p.id)!))
+        XCTAssertEqual(file.hosts?.map(\.host), ["10.2.2.2"])
+        XCTAssertEqual(file.stacks?.first?.configFiles, ["deploy/compose.yaml"])
+        XCTAssertEqual(file.agent, "codex")
+        XCTAssertEqual(file.github, "acme/repo")
+
+        // A plan worked out again compares equal (new ids aside); a change in Brix doesn't.
+        let a = s.projectFileImport(file, for: s.project(p.id)!), b = s.projectFileImport(file, for: s.project(p.id)!)
+        XCTAssertNotEqual(a.newHosts.first?.id, b.newHosts.first?.id)
+        XCTAssertEqual(a, b)
+        s.library.hosts.append(SSHHost(id: "h-mine", name: "mine", host: "10.2.2.2", user: "ops", tag: .dev))
+        XCTAssertNotEqual(a, s.projectFileImport(file, for: s.project(p.id)!))
+
+        // Once accepted, the file follows Brix again.
+        s.loadProjectFile(p.id, announce: false)
+        s.answerConfirmation(try XCTUnwrap(s.confirmations.first).id, confirmed: true)
+        XCTAssertNil(s.project(p.id)?.holdsFileConnections)
+        XCTAssertEqual(s.project(p.id)?.githubRepo, "acme/repo")
+        XCTAssertEqual(s.linkedHosts(p.id).map(\.id), ["h-mine"])
+        s.writeProjectFiles()
+        file = try XCTUnwrap(try ProjectFile.read(s.project(p.id)!))
+        XCTAssertEqual(file.hosts?.map(\.name), ["mine"])
+    }
+
+    @MainActor func testBrixDevNeverWritesProjectFiles() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("pf-\(UUID().uuidString)")
+        let folder = root.appendingPathComponent("repo")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let s = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root.appendingPathComponent("s")),
+                         keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        XCTAssertTrue(Persistence.isDevBuild, "tests run in Brix Dev")
+        XCTAssertFalse(s.writesProjectFiles)
+        let p = s.addProject(AppStore.detect(url: folder), pinned: false, preset: .code, hosts: [], databases: [], docker: [])
+        var q = s.project(p.id)!
+        q.syncsSettingsFile = true
+        s.updateProject(q)
+        s.writeProjectFiles()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent("brix.json").path))
+    }
+
+    /// A JetBrains database that tunnels through a host that wasn't imported is
+    /// left out, not turned into a direct connection to its address.
+    @MainActor func testImportSkipsDatabaseWhoseTunnelIsMissing() {
+        let s = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                         keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        var d = DatabaseConnection(id: "db-x", name: "prod", kind: .postgres, tag: .prod)
+        d.host = "localhost"
+        s.importConnections([ImportCandidate(id: "1", item: .database(d, password: nil, tunnelRef: "ssh-1"), source: "JetBrains")], tags: [:])
+        XCTAssertNil(s.database("db-x"))
     }
 }

@@ -69,6 +69,30 @@ enum GitHubState: Equatable {
     case ready(repo: String, prs: [GitHubPR], runs: [GitHubRun])
 }
 
+/// gh's signed-in accounts and their tokens, read once and shared by every
+/// repo in one polling round instead of twice per repo. Held in memory for
+/// that round only.
+actor GitHubAuth {
+    private var list: Result<[String], Error>?
+    private var envs: [String: [String: String]] = [:]
+
+    func accounts() async throws -> [String] {
+        if let list { return try list.get() }
+        let r: Result<[String], Error>
+        do { r = .success(try await GitHub.accounts()) } catch is CancellationError { throw CancellationError() } catch { r = .failure(error) }
+        // A cancelled read isn't kept: the next caller in the round asks again.
+        list = r
+        return try r.get()
+    }
+
+    func env(for account: String) async throws -> [String: String] {
+        if let e = envs[account] { return e }
+        let e = try await GitHub.env(for: account)
+        envs[account] = e
+        return e
+    }
+}
+
 /// GitHub through the user's own `gh` CLI and its sign-in. Read-only.
 enum GitHub {
     /// "owner/repo" from a GitHub remote URL: https, ssh, and ssh host aliases
@@ -87,14 +111,28 @@ enum GitHub {
     }
 
     /// The project's GitHub repo: its own setting, else origin (or any GitHub remote).
-    static func detectRepo(_ p: Project) async -> String? {
+    /// nil means git has no GitHub remote; git failing (or a cancel) throws.
+    static func detectRepo(_ p: Project) async throws -> String? {
         if let r = p.githubRepo?.trimmingCharacters(in: .whitespaces), !r.isEmpty { return r }
-        guard let out = try? await ProcessRunner.run("git", ["-C", p.expandedPath, "remote", "-v"], timeout: 8), out.ok else { return nil }
+        let out = try await ProcessRunner.run("git", ["-C", p.expandedPath, "remote", "-v"], timeout: 8)
+        guard out.ok else { throw ServiceError("Couldn't read the git remotes: \(Self.message(out.stderr))") }
         let urls = out.stdout.split(separator: "\n").compactMap { line -> (String, String)? in
             let f = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
             return f.count >= 2 ? (String(f[0]), String(f[1])) : nil
         }
         return (urls.first { $0.0 == "origin" }.flatMap { repo(fromRemote: $0.1) }) ?? urls.lazy.compactMap { repo(fromRemote: $0.1) }.first
+    }
+
+    private static let repoLock = NSLock()
+    nonisolated(unsafe) private static var repoCache: [String: (repo: String, at: Date)] = [:]
+
+    /// detectRepo for polling: a project's remote is read at most every 10 minutes.
+    static func cachedRepo(_ p: Project) async throws -> String? {
+        if let r = p.githubRepo?.trimmingCharacters(in: .whitespaces), !r.isEmpty { return r }
+        if let c = repoLock.withLock({ repoCache[p.expandedPath] }), Date().timeIntervalSince(c.at) < 600 { return c.repo }
+        guard let r = try await detectRepo(p) else { return nil }
+        repoLock.withLock { repoCache[p.expandedPath] = (r, Date()) }
+        return r
     }
 
     static var installed: Bool { ProcessRunner.which("gh") != nil }
@@ -142,12 +180,14 @@ enum GitHub {
     /// Pull requests and runs for the project, read with the account that can
     /// see the repo: the one chosen for the project, else each signed-in account
     /// in turn. `account` is the one that worked.
-    static func load(_ p: Project, prefer: String? = nil) async -> (GitHubState, account: String?) {
+    static func load(_ p: Project, prefer: String? = nil, auth: GitHubAuth = GitHubAuth()) async -> (GitHubState, account: String?) {
         guard installed else { return (.notInstalled, nil) }
-        guard let repo = await detectRepo(p) else { return (.noRepo, nil) }
+        let found: String?
+        do { found = try await cachedRepo(p) } catch { return (.failed(error.localizedDescription), nil) }
+        guard let repo = found else { return (.noRepo, nil) }
         let all: [String]
         do {
-            all = try await accounts()
+            all = try await auth.accounts()
         } catch {
             // A failed call (offline, timeout) is an error; only no accounts means signed out.
             return (.failed(error.localizedDescription), nil)
@@ -164,7 +204,7 @@ enum GitHub {
         for account in order {
             let env: [String: String]
             do {
-                env = try await self.env(for: account)
+                env = try await auth.env(for: account)
             } catch {
                 // A chosen account must work; when trying in turn, move on but say why.
                 if p.githubAccount != nil { return (.failed(error.localizedDescription), nil) }

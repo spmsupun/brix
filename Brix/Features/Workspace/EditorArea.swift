@@ -265,7 +265,18 @@ struct MarkdownView: View {
         case heading(Int, String), paragraph(String), bullet(String, String), code(String), table([[String]]), quote(String), rule
     }
 
+    /// Parsed once per text: a chat renders every reply again on each change.
+    private static let parsed: NSCache<NSString, Parsed> = { let c = NSCache<NSString, Parsed>(); c.countLimit = 500; return c }()
+    private final class Parsed { let blocks: [Block]; init(_ b: [Block]) { blocks = b } }
+
     private var blocks: [Block] {
+        if let hit = Self.parsed.object(forKey: text as NSString) { return hit.blocks }
+        let b = parse()
+        Self.parsed.setObject(Parsed(b), forKey: text as NSString)
+        return b
+    }
+
+    private func parse() -> [Block] {
         var out: [Block] = []
         var lines = text.components(separatedBy: "\n")[...]
         var para: [String] = []
@@ -384,6 +395,8 @@ extension WorkspaceStore {
             diffs[c.id] = d
             marks += Self.marks(from: d, status: c.status)
         }
+        // A cancelled load leaves the marks alone rather than set a partial list.
+        guard !Task.isCancelled else { return }
         gutter[path] = marks
     }
 

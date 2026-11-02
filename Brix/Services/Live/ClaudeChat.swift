@@ -38,6 +38,19 @@ final class ClaudeChat {
         s.wholeMatch(of: /\[Image #\d+\]/) != nil
     }
 
+    /// Images brought back into the composer, numbered on from `next`, with their
+    /// tags in `text` changed to match; an untagged one gets a tag in front.
+    nonisolated static func renumbered(_ text: String, _ images: [Attachment], from next: Int) -> (text: String, images: [Attachment]) {
+        var map: [Int: Int] = [:], out = images, front = ""
+        for i in out.indices {
+            let n = next + i
+            if out[i].number > 0 { map[out[i].number] = n } else { front += "[Image #\(n)] " }
+            out[i].number = n
+        }
+        let t = text.replacing(/\[Image #(\d+)\]/) { m in map[Int(m.1) ?? 0].map { "[Image #\($0)]" } ?? String(m.0) }
+        return (front + t, out)
+    }
+
     struct Item: Identifiable, Sendable {
         enum Kind { case user, text, thinking, tool, error, notice, output }
         let id: String
@@ -50,8 +63,8 @@ final class ClaudeChat {
         var diff: Diff?
         var result: String?
         var failed = false
-        /// Images you sent with a message.
-        var images: [Data] = []
+        /// Images you sent with a message (kept with their tags, for Edit and Resend).
+        var images: [Attachment] = []
         /// Your message's id in Claude's transcript (for rewind), and the id of
         /// Claude's last message before it (where a rewind or fork cuts).
         var uuid: String? = nil
@@ -160,7 +173,7 @@ final class ClaudeChat {
     }
 
     /// The modes Claude Code cycles through with ⇧⇥, in its order.
-    static let modes: [(id: String, name: String, detail: String)] = [
+    nonisolated static let modes: [(id: String, name: String, detail: String)] = [
         ("default", "Ask before edits", "Asks before changing files or running commands"),
         ("acceptEdits", "Accept edits", "Edits files without asking; still asks for commands"),
         ("plan", "Plan", "Researches and proposes a plan without changing anything"),
@@ -200,6 +213,15 @@ final class ClaudeChat {
     private(set) var bashRunning = 0
     /// Why the MCP list couldn't be read, if it couldn't.
     private(set) var mcpError = ""
+    /// `!` commands running, by their card's id, with the command.
+    private var bashTasks: [String: (cmd: String, task: Task<Void, Never>)] = [:]
+    /// Streamed text not yet shown: it reaches the view at most every 60 ms.
+    @ObservationIgnored private var streamed = (text: "", thinking: "")
+    @ObservationIgnored private var flushQueued = false
+    /// Turn lines seen (stream, assistant, user): none after a result means the queue isn't draining.
+    @ObservationIgnored private var turnEvents = 0
+    /// Bumped when the conversation is swapped, so a history still loading is dropped.
+    @ObservationIgnored private var historyGeneration = 0
     /// Edits waiting for their result: counted for Agent Files only once they succeed.
     private var pendingEdits: [String: (path: String, added: Int, removed: Int)] = [:]
     private var replies: [String: CheckedContinuation<[String: Any]?, Never>] = [:]
@@ -219,8 +241,8 @@ final class ClaudeChat {
     private(set) var conversationID = ""
     /// Claude's latest message in the main conversation, where a rewind to the next message cuts.
     private var lastAssistant: String?
-    /// Put into the composer by Edit (a rewound message to change and send again).
-    var prefill: String?
+    /// Put into the composer by Edit (a rewound message to change and send again, with its images).
+    var prefill: (text: String, images: [Attachment])?
     /// Writes go out off the main thread: a long message into a full pipe would block the window.
     private let writer = DispatchQueue(label: "brix.claude-chat.write")
 
@@ -323,7 +345,7 @@ final class ClaudeChat {
         if working {
             queued.append(Queued(id: uuid, text: shown, images: images))
         } else {
-            items.append(Item(id: "u-\(uuid)", kind: .user, text: shown, images: images.map(\.data), uuid: uuid, before: lastAssistant, cutKnown: !loadingHistory))
+            items.append(Item(id: "u-\(uuid)", kind: .user, text: shown, images: images, uuid: uuid, before: lastAssistant, cutKnown: !loadingHistory))
         }
         if images.isEmpty {
             write(["type": "user", "uuid": uuid, "message": ["role": "user", "content": t]])
@@ -337,8 +359,10 @@ final class ClaudeChat {
     func interrupt() {
         guard working else { return }
         interrupting = true
-        // Whatever it was asking is moot once the turn stops.
+        // Whatever it was asking is moot once the turn stops, and so are messages queued behind it.
         asks = []
+        for q in queued { control(["subtype": "cancel_async_message", "message_uuid": q.id]) }
+        dropQueued()
         report()
         write(["type": "control_request", "request_id": "int-\(UUID().uuidString)", "request": ["subtype": "interrupt"]])
     }
@@ -439,19 +463,39 @@ final class ClaudeChat {
         items.append(Item(id: id, kind: .tool, text: cmd, tool: "Bash", detail: cmd))
         let dir = URL(fileURLWithPath: cwd.isEmpty ? NSHomeDirectory() : cwd)
         bashRunning += 1
-        Task {
+        let task = Task {
             let out: ProcessOutput
             do { out = try await ProcessRunner.run("/bin/zsh", ["-lc", cmd], cwd: dir, timeout: 120) }
-            catch { out = ProcessOutput(stdout: "", stderr: "Couldn't run it: " + error.localizedDescription, status: -1) }
-            bashRunning -= 1
-            if let i = items.firstIndex(where: { $0.id == id }) {
-                items[i].result = String((out.stdout + (out.stderr.isEmpty ? "" : "\n" + out.stderr)).trimmingCharacters(in: .whitespacesAndNewlines).suffix(20_000))
-                items[i].failed = !out.ok
-            }
-            // Output can't close the tags early and pass itself off as your words.
-            func safe(_ s: String, _ n: Int) -> String { String(s.suffix(n)).replacingOccurrences(of: "</bash-", with: "<\\/bash-") }
-            bashContext += (bashContext.isEmpty ? "" : "\n") + "<bash-input>\(safe(cmd, 4_000))</bash-input>\n<bash-stdout>\(safe(out.stdout, 20_000))</bash-stdout><bash-stderr>\(safe(out.stderr, 5_000))</bash-stderr>"
+            catch { out = ProcessOutput(stdout: "", stderr: Task.isCancelled ? "Stopped." : "Couldn't run it: " + error.localizedDescription, status: -1) }
+            bashDone(id, cmd, out)
         }
+        bashTasks[id] = (cmd, task)
+    }
+
+    func isRunningBash(_ id: String) -> Bool { bashTasks[id] != nil }
+
+    /// Stops a `!` command. Claude still gets the command, and its output if the
+    /// runner hands back what it printed before the grace period ends.
+    func stopBash(_ id: String) {
+        guard let b = bashTasks[id] else { return }
+        b.task.cancel()
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            bashDone(id, b.cmd, ProcessOutput(stdout: "", stderr: "Stopped before it finished.", status: -1))
+        }
+    }
+
+    /// Once per command: whichever of its result and a stop comes second is dropped.
+    private func bashDone(_ id: String, _ cmd: String, _ out: ProcessOutput) {
+        guard bashTasks.removeValue(forKey: id) != nil else { return }
+        bashRunning -= 1
+        if let i = items.firstIndex(where: { $0.id == id }) {
+            items[i].result = String((out.stdout + (out.stderr.isEmpty ? "" : "\n" + out.stderr)).trimmingCharacters(in: .whitespacesAndNewlines).suffix(20_000))
+            items[i].failed = !out.ok
+        }
+        // Output can't close the tags early and pass itself off as your words.
+        func safe(_ s: String, _ n: Int) -> String { String(s.suffix(n)).replacingOccurrences(of: "</bash-", with: "<\\/bash-") }
+        bashContext += (bashContext.isEmpty ? "" : "\n") + "<bash-input>\(safe(cmd, 4_000))</bash-input>\n<bash-stdout>\(safe(out.stdout, 20_000))</bash-stdout><bash-stderr>\(safe(out.stderr, 5_000))</bash-stderr>"
     }
 
     /// `#note`: added to the project's CLAUDE.md, which Claude reads at the start of each conversation.
@@ -521,7 +565,7 @@ final class ClaudeChat {
         lastAssistant = item.before
         conversationID = command.id
         store?.chatConversation(sessionID, command.id)
-        if edit { prefill = item.text }
+        if edit { prefill = (item.text, item.images) }
     }
 
     /// A fresh conversation in the same place; the old one stays resumable.
@@ -558,18 +602,26 @@ final class ClaudeChat {
     @discardableResult
     private func restart(_ command: String) -> Bool {
         let old = process
+        let ended = exited != nil
         guard start(command: command, env: launchEnv, history: false, replacing: true) else { return false }
         for c in replies.values { c.resume(returning: nil) }
         replies = [:]
         asks = []
         queued = []
-        liveText = ""
-        liveThinking = ""
+        clearLive()
         working = false
         interrupting = false
         exited = nil
         context = nil
+        // The old process's background work and unfinished edits went with it.
+        for i in tasks.indices where tasks[i].running { tasks[i].status = "stopped" }
+        pendingEdits = [:]
+        // A history still being read belongs to the conversation left behind.
+        historyGeneration += 1
+        loadingHistory = false
         old?.terminate()
+        // An ended chat started again is live again: state, notifications and badges resume.
+        if ended { store?.setSessionState(sessionID, .idle) }
         report()
         return true
     }
@@ -676,6 +728,7 @@ final class ClaudeChat {
     }
 
     private func handle(_ o: [String: Any]) {
+        if ["stream_event", "assistant", "user"].contains(o["type"] as? String) || o["subtype"] as? String == "status" { turnEvents += 1 }
         switch o["type"] as? String {
         case "system":
             if o["subtype"] as? String == "init" {
@@ -714,8 +767,9 @@ final class ClaudeChat {
             guard o["parent_tool_use_id"] is NSNull || o["parent_tool_use_id"] == nil,
                   let e = o["event"] as? [String: Any] else { return }
             if e["type"] as? String == "content_block_delta", let d = e["delta"] as? [String: Any] {
-                if let t = d["text"] as? String { liveText += t }
-                if let t = d["thinking"] as? String { liveThinking += t }
+                if let t = d["text"] as? String { streamed.text += t }
+                if let t = d["thinking"] as? String { streamed.thinking += t }
+                flushSoon()
             }
         case "assistant":
             // A subagent's own steps go inside its Task card.
@@ -727,9 +781,10 @@ final class ClaudeChat {
                         let name = c["name"] as? String ?? "Tool"
                         let input = c["input"] as? [String: Any] ?? [:]
                         let s = Self.describe(name, input, cwd: cwd)
+                        let diff = name == "Write" ? (Self.writeDiff(input) ?? s.diff) : s.diff
                         let tid = c["id"] as? String ?? UUID().uuidString
-                        steps.append(Item(id: tid, kind: .tool, text: s.summary, tool: name, detail: s.detail, diff: s.diff))
-                        noteEdit(tid, name, input, s.diff)
+                        steps.append(Item(id: tid, kind: .tool, text: s.summary, tool: name, detail: s.detail, diff: diff))
+                        noteEdit(tid, name, input, diff)
                     } else if c["type"] as? String == "text", let t = c["text"] as? String, !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         steps.append(Item(id: UUID().uuidString, kind: .text, text: t))
                     }
@@ -739,8 +794,7 @@ final class ClaudeChat {
                 }
                 return
             }
-            liveText = ""
-            liveThinking = ""
+            clearLive()
             guard let m = o["message"] as? [String: Any], let parts = m["content"] as? [[String: Any]] else { return }
             let isError = o["is_api_error_message"] as? Bool == true
             if let u = o["uuid"] as? String { lastAssistant = u }
@@ -757,9 +811,10 @@ final class ClaudeChat {
                     let name = c["name"] as? String ?? "Tool"
                     let input = c["input"] as? [String: Any] ?? [:]
                     let s = Self.describe(name, input, cwd: cwd)
+                    let diff = name == "Write" ? (Self.writeDiff(input) ?? s.diff) : s.diff
                     let tid = c["id"] as? String ?? id
-                    items.append(Item(id: tid, kind: .tool, text: s.summary, tool: name, detail: s.detail, diff: s.diff))
-                    noteEdit(tid, name, input, s.diff)
+                    items.append(Item(id: tid, kind: .tool, text: s.summary, tool: name, detail: s.detail, diff: diff))
+                    noteEdit(tid, name, input, diff)
                 default: break
                 }
             }
@@ -768,7 +823,7 @@ final class ClaudeChat {
             // A queued message is echoed back when its turn starts: it moves into the chat then.
             if o["isReplay"] as? Bool == true, let u = o["uuid"] as? String, let i = queued.firstIndex(where: { $0.id == u }) {
                 let q = queued.remove(at: i)
-                items.append(Item(id: "u-\(q.id)", kind: .user, text: q.text, images: q.images.map(\.data), uuid: q.id, before: lastAssistant, cutKnown: !loadingHistory))
+                items.append(Item(id: "u-\(q.id)", kind: .user, text: q.text, images: q.images, uuid: q.id, before: lastAssistant, cutKnown: !loadingHistory))
                 setWorking(true)
                 return
             }
@@ -786,7 +841,7 @@ final class ClaudeChat {
                 for c in parts where c["type"] as? String == "tool_result" {
                     guard let id = c["tool_use_id"] as? String else { continue }
                     let failed = c["is_error"] as? Bool == true
-                    _ = updateStep(id) { $0.result = Self.text(of: c["content"]); $0.failed = failed }
+                    _ = updateStep(id) { $0.result = Self.capped(Self.text(of: c["content"])); $0.failed = failed }
                     editDone(id, failed: failed)
                 }
                 return
@@ -794,17 +849,17 @@ final class ClaudeChat {
             for c in parts {
                 if c["type"] as? String == "tool_result", let id = c["tool_use_id"] as? String,
                    let i = items.lastIndex(where: { $0.id == id }) {
-                    items[i].result = Self.text(of: c["content"])
+                    items[i].result = Self.capped(Self.text(of: c["content"]))
                     items[i].failed = c["is_error"] as? Bool == true
                     items[i].resultImages = Self.images(of: c["content"])
+                    if !items[i].resultImages.isEmpty { trimResultImages() }
                     editDone(id, failed: items[i].failed)
                 } else if c["type"] as? String == "text", let t = c["text"] as? String, t.hasPrefix("[Request interrupted") {
                     items.append(Item(id: "n-\(UUID().uuidString)", kind: .notice, text: "Interrupted"))
                 }
             }
         case "result":
-            liveText = ""
-            liveThinking = ""
+            clearLive()
             if interrupting {
                 // Stopped on purpose: not an error.
                 if items.last?.kind != .notice { items.append(Item(id: "n-\(UUID().uuidString)", kind: .notice, text: "Interrupted")) }
@@ -816,6 +871,7 @@ final class ClaudeChat {
             if let c = o["total_cost_usd"] as? Double { sessionCost = c }
             // Queued messages still waiting start the next turn (Claude may run several as one).
             setWorking(!queued.isEmpty)
+            if !queued.isEmpty { settleQueue() }
             Task { await refreshContext() }
         case "control_request":
             guard let id = o["request_id"] as? String, let r = o["request"] as? [String: Any] else { return }
@@ -869,18 +925,64 @@ final class ClaudeChat {
         interrupting = false
         asks = []
         for i in tasks.indices where tasks[i].running { tasks[i].status = "stopped" }
-        if !queued.isEmpty {
-            items.append(Item(id: "n-unsent", kind: .notice, text: "\(queued.count) queued message\(queued.count == 1 ? " wasn't" : "s weren't") sent: " + queued.map(\.text).joined(separator: " · ")))
-        }
-        queued = []
+        dropQueued()
         for c in replies.values { c.resume(returning: nil) }
         replies = [:]
         if code != 0 {
-            let why = stderrTail.trimmingCharacters(in: .whitespacesAndNewlines)
-            items.append(Item(id: "x-\(UUID().uuidString)", kind: .error,
-                              text: "Claude Code exited with code \(code)" + (why.isEmpty ? "." : ":\n" + String(why.suffix(600)))))
+            items.append(Item(id: "x-\(UUID().uuidString)", kind: .error, text: Self.exitMessage(code, stderr: stderrTail, command: launch)))
         }
         store?.liveActivity(sessionID, lastLines: lastLines, exited: code)
+    }
+
+    /// Queued messages that won't run: listed in the chat, so nothing typed vanishes.
+    private func dropQueued() {
+        guard !queued.isEmpty else { return }
+        items.append(Item(id: "n-unsent-\(UUID().uuidString)", kind: .notice, text: "\(queued.count) queued message\(queued.count == 1 ? " wasn't" : "s weren't") sent: " + queued.map(\.text).joined(separator: " · ")))
+        queued = []
+    }
+
+    /// Queued messages normally start their own turn right after a result, and their
+    /// echo moves them into the chat. Claude can also take them into the turn that
+    /// just ended, with no echo: after 10 s with no turn starting they're shown as
+    /// sent and Claude as idle, rather than "working" forever.
+    private func settleQueue() {
+        let mark = turnEvents
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self, self.turnEvents == mark, self.exited == nil, !self.queued.isEmpty else { return }
+            for q in self.queued {
+                self.items.append(Item(id: "u-\(q.id)", kind: .user, text: q.text, images: q.images, uuid: q.id, cutKnown: false))
+            }
+            self.queued = []
+            self.setWorking(false)
+        }
+    }
+
+    /// Streamed text reaches the view at most every 60 ms: each change re-renders the reply.
+    private func flushSoon() {
+        guard !flushQueued else { return }
+        flushQueued = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in MainActor.assumeIsolated {
+            guard let self else { return }
+            self.flushQueued = false
+            if !self.streamed.text.isEmpty { self.liveText += self.streamed.text }
+            if !self.streamed.thinking.isEmpty { self.liveThinking += self.streamed.thinking }
+            self.streamed = ("", "")
+        } }
+    }
+
+    private func clearLive() {
+        liveText = ""
+        liveThinking = ""
+        streamed = ("", "")
+    }
+
+    /// Only the last 20 images tools returned stay in memory; older cards drop theirs.
+    private func trimResultImages(keep: Int = 20) {
+        var kept = 0
+        for i in items.indices.reversed() where !items[i].resultImages.isEmpty {
+            if kept >= keep { items[i].resultImages = [] } else { kept += items[i].resultImages.count }
+        }
     }
 
     private func setWorking(_ on: Bool) {
@@ -945,6 +1047,48 @@ final class ClaudeChat {
     }
 
     // MARK: Parsing helpers
+
+    /// A tool's output as kept for its card: a whole file read can run to megabytes.
+    nonisolated static func capped(_ s: String, _ limit: Int = 20_000) -> String {
+        s.utf8.count <= limit ? s : String(s.prefix(limit)) + "\n… cut at \(limit / 1000)k characters"
+    }
+
+    /// Why the process ended, in words: a missing CLI names it and says how to get it.
+    nonisolated static func exitMessage(_ code: Int32, stderr: String, command: String) -> String {
+        let why = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = command.split(separator: " ").first.map(String.init) ?? "claude"
+        if code == 127 || why.contains("command not found: \(name)") {
+            let install = AgentConfig.builtins.first { $0.id == "claude" }?.installCommand ?? ""
+            return "Couldn't find \(name). Install Claude Code with `\(install)`, or set its full path in Customize → Agents."
+        }
+        return "Claude Code exited with code \(code)" + (why.isEmpty ? "." : ":\n" + String(why.suffix(600)))
+    }
+
+    /// Wrappers Claude Code puts around command echoes, hook output and notes it adds itself.
+    nonisolated static let systemTags = ["<command-name>", "<command-message>", "<command-args>", "<local-command-stdout>", "<local-command-stderr>",
+                                         "<local-command-caveat>", "<system-reminder>", "<bash-input>", "<bash-stdout>", "<bash-stderr>",
+                                         "<user-prompt-submit-hook>", "<task-notification>", "<user-memory-input>"]
+
+    /// A user message from a transcript as shown in the chat; nil for Claude's own
+    /// tagged echoes. Your own text can start with "<" (`<div>` is broken) and still shows.
+    nonisolated static func shownUserText(_ raw: String) -> String? {
+        var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // `!` output Brix sent ahead of your words: your words are the message.
+        if t.hasPrefix("<bash-input>"), let r = t.range(of: "</bash-stderr>", options: .backwards) {
+            t = t[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard !t.isEmpty, !systemTags.contains(where: { t.hasPrefix($0) }) else { return nil }
+        return t
+    }
+
+    /// A Write over a file that exists: the change against what's there now (read
+    /// before Claude writes it), so it isn't counted as all new lines. nil for a new file.
+    nonisolated static func writeDiff(_ input: [String: Any]) -> Diff? {
+        guard let path = input["file_path"] as? String, let new = input["content"] as? String,
+              let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber, size.intValue < 2 << 20,
+              let old = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        return Diff(old: old, new: new)
+    }
 
     /// The text between `<local-command-stdout>` tags, if this is a command's output.
     nonisolated static func commandOutput(_ text: String) -> String? {
@@ -1018,12 +1162,16 @@ final class ClaudeChat {
     /// `until`: a fork's cut point; nothing after it is shown.
     private func loadHistory(_ id: String, until: String? = nil) {
         loadingHistory = true
+        historyGeneration += 1
+        let gen = historyGeneration
         let cwd = cwd
         Task {
             let earlier = await Task.detached(priority: .userInitiated) { () -> [Item]? in
                 guard let url = AgentTranscripts.transcriptURL(sessionID: id, home: NSHomeDirectory()) else { return nil }
                 return Self.history(url, cwd: cwd, until: until)
             }.value
+            // A new conversation or a rewind came first: this history isn't this chat's any more.
+            guard gen == historyGeneration else { return }
             lastAssistant = lastAssistant ?? earlier?.last(where: { $0.kind != .user && $0.uuid != nil })?.uuid
             loadingHistory = false
             guard let earlier, !earlier.isEmpty else {
@@ -1062,26 +1210,28 @@ final class ClaudeChat {
             switch o["type"] as? String {
             case "user":
                 if let t = m["content"] as? String {
-                    let text = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Command echoes and system notes are wrapped in tags.
-                    if !text.isEmpty, !text.hasPrefix("<") { out.append(Item(id: "h-\(uuid)", kind: .user, text: text, uuid: uuid, before: lastAssistant, cutKnown: known || lastAssistant != nil)) }
+                    if let text = Self.shownUserText(t) { out.append(Item(id: "h-\(uuid)", kind: .user, text: text, uuid: uuid, before: lastAssistant, cutKnown: known || lastAssistant != nil)) }
                     continue
                 }
                 guard let parts = m["content"] as? [[String: Any]] else { continue }
-                var text = "", images: [Data] = []
+                var text = "", images: [Attachment] = [], label = 0
                 for c in parts {
                     switch c["type"] as? String {
                     case "tool_result":
                         if let id = c["tool_use_id"] as? String, let i = out.lastIndex(where: { $0.id == id }) {
-                            out[i].result = Self.text(of: c["content"])
+                            out[i].result = Self.capped(Self.text(of: c["content"]))
                             out[i].failed = c["is_error"] as? Bool == true
                         }
                     case "text":
                         let t = c["text"] as? String ?? ""
                         if t.hasPrefix("[Request interrupted") { out.append(Item(id: "h-\(uuid)-i", kind: .notice, text: "Interrupted")) }
-                        else if !t.hasPrefix("<"), !Self.isImageLabel(t) { text += (text.isEmpty ? "" : "\n") + t }
+                        else if Self.isImageLabel(t) { label = Int(t.filter(\.isNumber)) ?? 0 }
+                        else if let t = Self.shownUserText(t) { text += (text.isEmpty ? "" : "\n") + t }
                     case "image":
-                        if let b = (c["source"] as? [String: Any])?["data"] as? String, let d = Data(base64Encoded: b) { images.append(d) }
+                        if let src = c["source"] as? [String: Any], let b = src["data"] as? String, let d = Data(base64Encoded: b) {
+                            images.append(Attachment(data: d, mediaType: src["media_type"] as? String ?? "image/png", number: label))
+                        }
+                        label = 0
                     default: break
                     }
                 }

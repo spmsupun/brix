@@ -579,8 +579,10 @@ struct BXSwitchStyle: ToggleStyle {
                 .animation(.easeOut(duration: 0.15), value: configuration.isOn)
             }
             .buttonStyle(.hand)
-            .accessibilityLabel("Toggle")
-            .accessibilityValue(configuration.isOn ? "On" : "Off")
+        }
+        // VoiceOver gets a plain switch named by the label, not a button called "Toggle".
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch)
         }
     }
 }

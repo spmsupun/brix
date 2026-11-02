@@ -89,10 +89,12 @@ extension AppStore {
 
     @discardableResult
     func addProject(_ d: DetectedProject, pinned: Bool, preset: BuiltinPreset, hosts: Set<ResourceID>, databases: Set<ResourceID>, docker: Set<ResourceID>) -> Project {
-        var id = d.name.lowercased().replacingOccurrences(of: " ", with: "-")
-        while project(id) != nil { id += "-\(Int.random(in: 2...99))" }
-        let p = Project(id: id, name: d.name, path: d.path, language: d.language, framework: d.framework, hue: d.hue,
+        let id = Project.makeID(d.name) { self.project($0) != nil }
+        var p = Project(id: id, name: d.name, path: d.path, language: d.language, framework: d.framework, hue: d.hue,
                         isPinned: pinned, lastOpened: Date(), defaultPreset: preset.rawValue)
+        // Brix writes brix.json only into a folder that already has one; the user
+        // can turn it on in Project Settings.
+        p.syncsSettingsFile = [ProjectFile.relativePath, ProjectFile.legacyPath].contains { FileManager.default.fileExists(atPath: p.url.appendingPathComponent($0).path) }
         library.projects.append(p)
         hosts.forEach { library.links.link(id, $0, kind: .host) }
         databases.forEach { library.links.link(id, $0, kind: .database) }
@@ -120,8 +122,7 @@ extension AppStore {
         let hues = ProjectHue.allCases
         var added: [String] = []
         for (i, d) in found.enumerated() where !known.contains(((d.path as NSString).expandingTildeInPath as NSString).standardizingPath) {
-            var cid = "\(parent.id)-\(d.name.lowercased().replacingOccurrences(of: " ", with: "-"))"
-            while project(cid) != nil { cid += "-\(Int.random(in: 2...99))" }
+            let cid = Project.makeID(d.name, prefix: "\(parent.id)-") { self.project($0) != nil }
             var p = Project(id: cid, name: d.name, path: d.path, language: d.language, framework: d.framework,
                             hue: hues[(hues.firstIndex(of: parent.hue).map { $0 + i + 1 } ?? i) % hues.count],
                             isPinned: false, lastOpened: parent.lastOpened, defaultPreset: parent.defaultPreset)
@@ -163,11 +164,17 @@ extension AppStore {
         }
     }
 
-    func removeProject(_ id: ProjectID) {
+    func removeProject(_ id: ProjectID, withParent: Bool = false) {
         guard let p = project(id) else { return }
-        // Its nested repositories go with it; one removed on its own stays removed.
-        for c in library.projects where c.parentID == id { removeProject(c.id) }
-        if p.parentID != nil, project(p.parentID!) != nil { library.dismissedRepos.insert((p.expandedPath as NSString).standardizingPath) }
+        let path = (p.expandedPath as NSString).standardizingPath
+        // Its nested repositories go with it; one removed on its own stays removed
+        // (until the parent goes, so re-adding the folder finds them all again).
+        for c in library.projects where c.parentID == id { removeProject(c.id, withParent: true) }
+        if p.parentID == nil {
+            library.dismissedRepos = library.dismissedRepos.filter { !$0.hasPrefix(path + "/") }
+        } else if !withParent, p.parentID.flatMap(project) != nil {
+            library.dismissedRepos.insert(path)
+        }
         closeProject(id)
         for s in sessions where s.projectID == id { closeSession(s.id, confirmRunning: false) }
         library.projects.removeAll { $0.id == id }
@@ -250,11 +257,12 @@ extension AppStore {
         hostStatus[h.id] = .connecting
         Task {
             do {
-                if h.isSample {
-                    try await svc(h).ssh.connect(h)
-                } else {
-                    try await svc(h).ssh.connect(h)
+                // A real login first, so "connected" means it worked. A password
+                // host with nothing in the Keychain asks in its terminal instead.
+                if !h.isSample, h.auth != .password || hostPassword(h) != nil {
+                    _ = try await svc(h).ssh.test(h, password: hostPassword(h))
                 }
+                try await svc(h).ssh.connect(h)
                 hostStatus[h.id] = .connected
                 if let i = library.hosts.firstIndex(where: { $0.id == h.id }) { library.hosts[i].lastConnected = Date() }
                 if openShell { openServerShell(h.id, project: project) }
@@ -333,9 +341,21 @@ extension AppStore {
         }
     }
 
+    /// The saved password, or nil. A Keychain failure (access denied, locked) is shown
+    /// once per connection rather than passed off as "no password".
     func dbPassword(_ d: DatabaseConnection) -> String? {
-        (try? keychain.get(Keychain.dbAccount(d.id))) ?? nil
+        do {
+            let pw = try keychain.get(Keychain.dbAccount(d.id))
+            Self.keychainWarned.remove(d.id)
+            return pw
+        } catch {
+            if Self.keychainWarned.insert(d.id).inserted {
+                toast(.error, "Couldn't read the password for \(d.name) from the Keychain", detail: error.localizedDescription)
+            }
+            return nil
+        }
     }
+    private static var keychainWarned = Set<ResourceID>()
 
     func testDatabase(_ d: DatabaseConnection, password: String? = nil) async -> Result<DBTestResult, ServiceError> {
         dbStatus[d.id] = .connecting
@@ -377,11 +397,10 @@ extension AppStore {
         return tree.schemas.values.reduce(0) { $0 + $1.filter { $0.kind == .table }.count }
     }
 
-    /// SQL that changes data or schema.
-    nonisolated static func isWrite(_ sql: String) -> Bool {
-        let stripped = sql.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }.joined(separator: " ").lowercased()
+    /// SQL that changes data or schema, by its keywords outside comments and quoted text.
+    nonisolated static func isWrite(_ sql: String, kind: DBKind? = nil) -> Bool {
         let words = ["insert", "update", "delete", "drop", "alter", "truncate", "create", "grant", "revoke", "replace", "merge", "vacuum", "reindex"]
-        return words.contains { w in stripped.range(of: "\\b\(w)\\b", options: .regularExpression) != nil }
+        return SQLText.variants(sql, kind).contains { code in words.contains { w in code.range(of: "\\b\(w)\\b", options: .regularExpression) != nil } }
     }
 
     /// Runs a query. Writes against read-only or production databases need an
@@ -392,13 +411,13 @@ extension AppStore {
             Task {
                 do {
                     let r = try await self.svc(conn).db.execute(conn, sql: sql, password: self.dbPassword(conn))
-                    self.library.queryHistory.insert(QueryHistoryEntry(sql: sql, connectionID: conn.id, ranAt: Date(), rows: r.totalRows, ms: r.elapsedMs), at: 0)
+                    self.library.queryHistory.insert(QueryHistoryEntry(sql: SQLText.redacted(sql), connectionID: conn.id, ranAt: Date(), rows: r.totalRows, ms: r.elapsedMs), at: 0)
                     self.trimHistory()
                     self.dbStatus[conn.id] = .connected
                     completion(.success(r))
                 } catch {
                     let msg = (error as? ServiceError)?.message ?? error.localizedDescription
-                    self.library.queryHistory.insert(QueryHistoryEntry(sql: sql, connectionID: conn.id, ranAt: Date(), rows: 0, ms: 0, error: msg.components(separatedBy: "\n").first), at: 0)
+                    self.library.queryHistory.insert(QueryHistoryEntry(sql: SQLText.redacted(sql), connectionID: conn.id, ranAt: Date(), rows: 0, ms: 0, error: msg.components(separatedBy: "\n").first), at: 0)
                     self.trimHistory()
                     completion(.failure(ServiceError(msg)))
                 }
@@ -434,21 +453,33 @@ extension AppStore {
         let liveHosts = library.hosts.filter { !$0.isSample && hostStatus[$0.id] == .connected }
         var merged: [DockerTarget] = []
         if library.docker.contains(where: \.isSample) {
-            merged += (try? await services.mock.docker.list(hosts: [])) ?? []
+            merged += (try? await services.mock.docker.list(hosts: []))?.targets ?? []
         }
+        var failed: [String: String] = [:]
         do {
-            merged += try await services.live.docker.list(hosts: liveHosts)
-            dockerError = nil
+            let live = try await services.live.docker.list(hosts: liveHosts)
+            merged += live.targets
+            failed = live.errors
         } catch {
-            dockerError = error.localizedDescription
+            failed["local"] = error.localizedDescription
         }
+        // Without the docker CLI, local containers saved earlier can't be checked: unknown, not as they were.
+        if failed["local"] == nil, ProcessRunner.which("docker") == nil, library.docker.contains(where: { !$0.isSample && $0.hostID == nil }) {
+            failed["local"] = "Local: Docker isn't installed on this Mac"
+        }
+        // Each engine that didn't answer is named; one failing doesn't hide behind another that worked.
+        dockerError = failed.isEmpty ? nil : failed.values.sorted().joined(separator: "\n")
         discoveredDocker = merged
-        // Saved targets pick up the latest runtime state.
+        // Saved targets pick up the latest runtime state; those on an engine
+        // that didn't answer are unknown rather than kept as they were.
         for (i, t) in library.docker.enumerated() {
             if let fresh = merged.first(where: { $0.id == t.id }) {
                 library.docker[i].state = fresh.state
                 library.docker[i].startedAt = fresh.startedAt
                 library.docker[i].statusText = fresh.statusText
+            } else if !t.isSample, failed[t.hostID ?? "local"] != nil {
+                library.docker[i].state = .unknown
+                library.docker[i].statusText = "Unknown (Docker didn't answer)"
             }
         }
     }
@@ -519,7 +550,7 @@ extension AppStore {
             guard let h = host(id) else { continue }
             pinging.insert(id)
             Task {
-                let r = h.isSample ? PingResult(ms: Double.random(in: 18...140), at: Date()) : await HostPing.ping(host: h.host, port: h.port)
+                let r = h.isSample ? PingResult(ms: Double.random(in: 18...140), at: Date()) : await HostPing.ping(h)
                 hostPing[id] = r
                 pinging.remove(id)
             }

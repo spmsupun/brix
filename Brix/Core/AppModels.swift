@@ -58,6 +58,10 @@ enum Route: Hashable, Codable {
 
 /// Everything the user saves, minus secrets. Persisted as library.json.
 struct Library: Codable {
+    /// Format of library.json, saved with it; bumped when a change can't be read
+    /// by older builds. A file from a newer build isn't saved over unasked.
+    static let currentSchema = 1
+    var schemaVersion = Library.currentSchema
     var projects: [Project] = []
     var hosts: [SSHHost] = []
     var databases: [DatabaseConnection] = []
@@ -91,34 +95,49 @@ struct Library: Codable {
     var lastHomeVisit: Date?
     /// Nested repositories the user removed; not added back on the next scan.
     var dismissedRepos: Set<String> = []
+    /// Projects, servers, databases and the like this build couldn't read and
+    /// left out when loading. Not saved.
+    var skippedOnLoad = 0
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, projects, hosts, databases, docker, links, recentFiles, customPresets, defaultLayout, queryHistory, hasOnboarded,
+             openProjects, notificationsAsked, guideSeen, notices, globalSessions, stacks, globalTree, manualProjectOrder, activity, builds,
+             daily, lastHomeVisit, dismissedRepos
+    }
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // User data: a missing key defaults, but corrupt data throws so the caller
-        // can keep the file instead of silently saving an empty library over it.
-        projects = try c.decodeIfPresent([Project].self, forKey: .projects) ?? []
-        hosts = try c.decodeIfPresent([SSHHost].self, forKey: .hosts) ?? []
-        databases = try c.decodeIfPresent([DatabaseConnection].self, forKey: .databases) ?? []
-        docker = try c.decodeIfPresent([DockerTarget].self, forKey: .docker) ?? []
+        schemaVersion = (try? c.decode(Int.self, forKey: .schemaVersion)) ?? Library.currentSchema
+        // User data: a missing key defaults and an entry this build can't read is
+        // left out (and counted), but a value that isn't a list at all throws so
+        // the caller keeps the file instead of saving an empty library over it.
+        var skipped = 0
+        projects = try c.decodeEach(Project.self, forKey: .projects, skipped: &skipped)
+        hosts = try c.decodeEach(SSHHost.self, forKey: .hosts, skipped: &skipped)
+        databases = try c.decodeEach(DatabaseConnection.self, forKey: .databases, skipped: &skipped)
+        docker = try c.decodeEach(DockerTarget.self, forKey: .docker, skipped: &skipped)
         links = try c.decodeIfPresent(ProjectLinks.self, forKey: .links) ?? ProjectLinks()
-        customPresets = try c.decodeIfPresent([CustomPreset].self, forKey: .customPresets) ?? []
+        skipped += links.skippedOnLoad
+        customPresets = try c.decodeEach(CustomPreset.self, forKey: .customPresets, skipped: &skipped)
+        stacks = try c.decodeEach(ComposeStack.self, forKey: .stacks, skipped: &skipped)
+        skippedOnLoad = skipped
         // Convenience state: fall back to defaults.
-        recentFiles = (try? c.decode([RecentFile].self, forKey: .recentFiles)) ?? []
+        var ignored = 0
+        recentFiles = (try? c.decodeEach(RecentFile.self, forKey: .recentFiles, skipped: &ignored)) ?? []
         defaultLayout = (try? c.decode(DockLayout.self, forKey: .defaultLayout)) ?? .preset(.code)
-        queryHistory = (try? c.decode([QueryHistoryEntry].self, forKey: .queryHistory)) ?? []
+        queryHistory = (try? c.decodeEach(QueryHistoryEntry.self, forKey: .queryHistory, skipped: &ignored)) ?? []
         hasOnboarded = (try? c.decode(Bool.self, forKey: .hasOnboarded)) ?? false
         openProjects = (try? c.decode([ProjectID].self, forKey: .openProjects)) ?? []
         notificationsAsked = (try? c.decode(Bool.self, forKey: .notificationsAsked)) ?? false
         guideSeen = (try? c.decode(Bool.self, forKey: .guideSeen)) ?? false
-        notices = (try? c.decode([AgentNotice].self, forKey: .notices)) ?? []
-        globalSessions = (try? c.decode([SessionDescriptor].self, forKey: .globalSessions)) ?? []
-        stacks = try c.decodeIfPresent([ComposeStack].self, forKey: .stacks) ?? []
+        notices = (try? c.decodeEach(AgentNotice.self, forKey: .notices, skipped: &ignored)) ?? []
+        globalSessions = (try? c.decodeEach(SessionDescriptor.self, forKey: .globalSessions, skipped: &ignored)) ?? []
         globalTree = (try? c.decode(PaneTree.self, forKey: .globalTree)) ?? PaneTree()
         manualProjectOrder = (try? c.decode(Bool.self, forKey: .manualProjectOrder)) ?? false
-        activity = (try? c.decode([ActivityEvent].self, forKey: .activity)) ?? []
-        builds = (try? c.decode([BuildRecord].self, forKey: .builds)) ?? []
+        activity = (try? c.decodeEach(ActivityEvent.self, forKey: .activity, skipped: &ignored)) ?? []
+        builds = (try? c.decodeEach(BuildRecord.self, forKey: .builds, skipped: &ignored)) ?? []
         daily = (try? c.decode([String: Double].self, forKey: .daily)) ?? [:]
         lastHomeVisit = try? c.decode(Date.self, forKey: .lastHomeVisit)
         dismissedRepos = (try? c.decode(Set<String>.self, forKey: .dismissedRepos)) ?? []
@@ -153,6 +172,32 @@ struct Library: Codable {
         l.openProjects = ["atlas-web"]
         return l
     }
+}
+
+extension KeyedDecodingContainer {
+    /// A list read entry by entry: one this build can't read (an unknown kind, a
+    /// missing field) is skipped, counted and logged instead of failing them all.
+    /// An absent key is an empty list; a value that isn't a list throws.
+    func decodeEach<T: Decodable>(_ type: T.Type, forKey key: Key, skipped: inout Int) throws -> [T] {
+        guard contains(key), try !decodeNil(forKey: key) else { return [] }
+        var list = try nestedUnkeyedContainer(forKey: key)
+        var out: [T] = []
+        while !list.isAtEnd {
+            do {
+                out.append(try list.decode(T.self))
+            } catch {
+                // Step past the bad entry; a failed decode doesn't move on by itself.
+                _ = try? list.decode(SkipEntry.self)
+                skipped += 1
+                PerfMonitor.shared.note("skipped a \(T.self) in \(key.stringValue): \(error)")
+            }
+        }
+        return out
+    }
+}
+
+private struct SkipEntry: Decodable {
+    init(from decoder: Decoder) {}
 }
 
 struct Toast: Identifiable, Equatable {
@@ -254,9 +299,25 @@ struct SessionDescriptor: Codable, Hashable {
 
 extension SessionDescriptor {
     init(_ s: TerminalSession) {
-        self.init(id: s.id, title: s.title, kind: s.kind, hostID: s.hostID, cwd: s.cwd, command: s.kind == .agent ? "agent" : nil,
+        self.init(id: s.id, title: s.title, kind: s.kind, hostID: s.hostID, cwd: s.cwd, command: Self.command(of: s),
                   agentID: s.agentID, externalID: s.externalID, task: s.task.isEmpty ? nil : s.task, isChat: s.kind == .agent ? s.isChat : nil)
     }
+
+    /// What a logs tail or server shell runs, so it comes back running it (a
+    /// logs session used to come back as a bare shell). Their `process` keeps
+    /// the command they were started with; a plain server shell's is "ssh".
+    private static func command(of s: TerminalSession) -> String? {
+        switch s.kind {
+        case .agent: "agent"
+        case .logs: s.process
+        case .server: s.process == "ssh" ? nil : s.process
+        case .shell: nil
+        }
+    }
+
+    /// A logs session saved without its command would come back as an empty
+    /// shell (and piled up as orphan "logs" shells): it isn't restored.
+    var restorable: Bool { kind != .logs || command != nil }
 }
 
 enum DiffMode: String, Codable { case unified, split }

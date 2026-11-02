@@ -20,6 +20,7 @@ struct BrixApp: App {
                 .frame(minWidth: Metrics.minWindow.width, minHeight: Metrics.minWindow.height)
                 .onAppear {
                     delegate.store = store
+                    AgentNotifier.shared.install(store: store)
                     store.applyAppearance()
                     store.restoreSessionsAtLaunch()
                     DebugSnapshot.run(store: store)
@@ -82,6 +83,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
         return true
+    }
+
+    /// ⌘Q, logging out, or Sparkle quitting Brix to install an update: quitting
+    /// stops every agent and terminal, so ask first while one is at work.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated {
+            // Timing and snapshot runs quit by themselves.
+            guard let store, ProcessInfo.processInfo.environment["BRIX_LAUNCH_MARK"] == nil, DebugSnapshot.directory == nil else { return .terminateNow }
+            // The library isn't being saved: this session's changes to it go with Brix.
+            if store.saveBlocked {
+                Self.bringToFront()
+                let alert = NSAlert()
+                alert.messageText = "Quit without saving your library?"
+                alert.informativeText = "\(store.saveBlockedReason) Projects, servers and databases changed this session are lost when Brix quits."
+                alert.addButton(withTitle: "Quit Without Saving")
+                alert.addButton(withTitle: "Cancel")
+                if store.canUnblockSave { alert.addButton(withTitle: "Save Over It and Quit") }
+                switch alert.runModal() {
+                case .alertFirstButtonReturn: break
+                case .alertThirdButtonReturn: store.unblockSave()   // saved by applicationWillTerminate
+                default: return .terminateCancel
+                }
+            }
+            let busy = store.sessions.filter { s in
+                !s.isSampleSession && s.isLive && (s.kind == .agent ? s.state == .running || s.state == .needsInput : AppStore.isBusy(s))
+            }
+            guard !busy.isEmpty else { return .terminateNow }
+            let agents = busy.filter { $0.kind == .agent }.count, others = busy.count - agents
+            let what = [agents > 0 ? "\(agents) agent\(agents == 1 ? " is" : "s are") working or waiting for you" : nil,
+                        others > 0 ? "\(others) terminal\(others == 1 ? " is" : "s are") running a command" : nil].compactMap { $0 }.joined(separator: " and ")
+            Self.bringToFront()
+            let alert = NSAlert()
+            alert.messageText = "Quit Brix?"
+            alert.informativeText = "\(what.prefix(1).uppercased() + what.dropFirst()). Quitting stops them; agent conversations can be resumed later."
+            alert.addButton(withTitle: "Quit")
+            alert.addButton(withTitle: "Cancel")
+            return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

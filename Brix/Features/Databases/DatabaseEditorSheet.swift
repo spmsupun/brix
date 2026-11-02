@@ -627,8 +627,9 @@ struct DatabaseEditorSheet: View {
         guard !Task.isCancelled else { live = .idle; return }
         switch result {
         case .success(let t):
-            async let tables = store.tableCount(d, password: pw)
-            async let dbs = store.listDatabases(d, password: pw)
+            let probe = d
+            async let tables = store.tableCount(probe, password: pw)
+            async let dbs = store.listDatabases(probe, password: pw)
             let (n, list) = await (tables, dbs)
             guard !Task.isCancelled else { return }
             databases = list
@@ -742,9 +743,12 @@ struct DatabaseEditorSheet: View {
 
     private func scan() async {
         scanning = true
-        found = await DBDiscovery.scan(projects: store.library.projects)
-        scannedAt = Date()
+        let results = await DBDiscovery.scan(projects: store.library.projects)
         scanning = false
+        // A cancelled scan didn't look, so it isn't "nothing found".
+        guard !Task.isCancelled else { return }
+        found = results
+        scannedAt = Date()
         if let pick = DebugSnapshot.directory.flatMap({ _ in ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_USE"] }),
            let c = found.first(where: { $0.dockerContainer == pick }) { await use(c) }
     }

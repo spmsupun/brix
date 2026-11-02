@@ -41,6 +41,60 @@ extension ProcessRunnerTests {
         }
         XCTAssertLessThan(Date().timeIntervalSince(started), 5)
     }
+
+    /// On the timeout the output so far comes back, and a child the tool started is stopped too.
+    func testTimeoutReturnsPartialOutputAndStopsChildren() async throws {
+        do {
+            _ = try await ProcessRunner.run("/bin/sh", ["-c", "sleep 30 & echo $!; sleep 30"], timeout: 1)
+            XCTFail("expected a timeout")
+        } catch let t as ProcessTimeout {
+            let child = try XCTUnwrap(pid_t(t.partial.stdout.trimmingCharacters(in: .whitespacesAndNewlines)), t.partial.stdout)
+            XCTAssertTrue(t.localizedDescription.contains("timed out"))
+            let gone = await Self.exits(child)
+            XCTAssertTrue(gone, "the background child outlived the timeout")
+        }
+    }
+
+    /// Cancelling the calling task stops the tool.
+    func testCancellationStopsTheTool() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("brix-pid-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let started = Date()
+        let task = Task { try await ProcessRunner.run("/bin/sh", ["-c", "echo $$ > '\(file.path)'; exec sleep 30"], timeout: 60) }
+        var pid: pid_t?
+        while pid == nil, Date().timeIntervalSince(started) < 5 {
+            pid = (try? String(contentsOf: file, encoding: .utf8)).flatMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "\(error)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 10)
+        let p = try XCTUnwrap(pid)
+        let gone = await Self.exits(p)
+        XCTAssertTrue(gone, "the tool kept running")
+    }
+
+    /// Output past the cap is dropped, not kept in memory.
+    func testOutputIsCapped() async throws {
+        let r = try await ProcessRunner.run("/bin/sh", ["-c", "head -c \(ProcessRunner.outputCap + 100_000) /dev/zero"], timeout: 20)
+        XCTAssertEqual(r.stdout.utf8.count, ProcessRunner.outputCap)
+        XCTAssertTrue(r.stderr.contains("dropped"), r.stderr)
+        XCTAssertTrue(r.ok)
+    }
+
+    /// Waits up to 3 s for a process to be gone.
+    private static func exits(_ pid: pid_t) async -> Bool {
+        for _ in 0..<30 {
+            if kill(pid, 0) != 0 { return true }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        return false
+    }
 }
 
 final class FolderWatcherTests: XCTestCase {

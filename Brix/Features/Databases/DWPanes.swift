@@ -239,9 +239,18 @@ struct DWTablePane: View {
             .fixedSize()
     }
 
+    /// Every row under the current filter and sort, not just the page shown (up to a million).
     private func export(_ t: DWTab) {
-        guard let r = t.result else { return }
-        DWExport.csv(columns: r.columns, rows: r.rows, name: t.title)
+        guard let o = t.object, let d = store.database(t.connectionID) else { return }
+        Task {
+            do {
+                let r = try await store.svc(d).db.page(d, object: o, where: t.appliedWhere, orderBy: t.appliedOrder, page: 0, pageSize: 1_000_000,
+                                                       columns: t.detail?.columns, password: store.dbPassword(d))
+                DWExport.csv(columns: r.columns, rows: r.rows, name: t.title)
+            } catch {
+                store.toast(.error, "Couldn't export \(t.title)", detail: (error as? ServiceError)?.message ?? error.localizedDescription)
+            }
+        }
     }
 }
 
@@ -390,7 +399,7 @@ struct DWConsolePane: View {
     private func prodBanner(_ d: DatabaseConnection) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "lock").font(.system(size: 10.5, weight: .bold)).foregroundStyle(Theme.red)
-            (Text("PROD").fontWeight(.bold).foregroundColor(Theme.red) + Text(" read-only session · INSERT, UPDATE, DELETE and DDL are blocked · agents get \(d.agentAccess == .none ? "nothing" : "schema only")"))
+            (Text("PROD").fontWeight(.bold).foregroundColor(Theme.red) + Text(" read-only session · INSERT, UPDATE, DELETE and DDL are blocked · agents get \(d.agentAccess == .none ? "nothing" : d.agentAccess == .schema ? "schema only" : "read-only data, secrets masked")"))
                 .lineLimit(1)
             Spacer(minLength: 0)
             if let q = d.queryTimeout { Text("Statement timeout \(q) s").foregroundStyle(Theme.text3) }
@@ -853,7 +862,7 @@ struct DWInspector: View {
 
     static func json(_ cols: [DBColumn], row: [String?]) -> String {
         let dict = Dictionary(zip(cols.map(\.name), row.map { $0 as Any? ?? NSNull() }), uniquingKeysWith: { a, _ in a })
-        guard let data = try? JSONSerialization.data(withJSONObject: dict.mapValues { $0 ?? NSNull() }, options: [.prettyPrinted, .sortedKeys]) else { return "{}" }
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) else { return "{}" }
         return String(decoding: data, as: UTF8.self)
     }
 }

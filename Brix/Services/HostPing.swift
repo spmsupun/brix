@@ -12,6 +12,20 @@ struct PingResult: Equatable {
 }
 
 enum HostPing {
+    /// Pings a saved server. One imported from ~/.ssh/config is looked up the
+    /// way ssh would (`ssh -G alias`), since its alias isn't a DNS name.
+    static func ping(_ h: SSHHost) async -> PingResult {
+        guard let alias = h.alias,
+              let out = try? await ProcessRunner.run("/usr/bin/ssh", ["-G", "--", alias], timeout: 5), out.ok else {
+            return await ping(host: h.host, port: h.port)
+        }
+        let kv = Dictionary(out.stdout.split(separator: "\n").compactMap { line -> (String, String)? in
+            let p = line.split(separator: " ", maxSplits: 1).map(String.init)
+            return p.count == 2 ? (p[0], p[1]) : nil
+        }, uniquingKeysWith: { a, _ in a })
+        return await ping(host: kv["hostname"] ?? h.host, port: kv["port"].flatMap(Int.init) ?? h.port)
+    }
+
     static func ping(host: String, port: Int, timeout: TimeInterval = 3) async -> PingResult {
         guard let p = NWEndpoint.Port(rawValue: UInt16(clamping: port)), !host.isEmpty else {
             return PingResult(error: "Invalid address", at: Date())
@@ -20,7 +34,7 @@ enum HostPing {
         return await withCheckedContinuation { cont in
             let conn = NWConnection(host: NWEndpoint.Host(host), port: p, using: .tcp)
             let once = OnceFlag()
-            func finish(_ r: PingResult) { if once.claim() { conn.cancel(); cont.resume(returning: r) } }
+            @Sendable func finish(_ r: PingResult) { if once.claim() { conn.cancel(); cont.resume(returning: r) } }
             conn.stateUpdateHandler = { state in
                 switch state {
                 case .ready: finish(PingResult(ms: Date().timeIntervalSince(start) * 1000, at: Date()))

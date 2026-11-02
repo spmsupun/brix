@@ -30,7 +30,14 @@ struct RemoteFilesView: View {
             }
             .modifier(TileOrIsland(fill: Theme.pane))
             .task(id: hostID) {
-                path = store.remoteFilesPath[hostID] ?? "~"
+                // Back from another tab: show the last listing at once, and only ask the
+                // server again when it is more than 30 s old.
+                if let c = store.remoteFilesListing[hostID] {
+                    path = c.path; typedPath = c.path; entries = c.entries; history = c.history
+                    if Date().timeIntervalSince(c.at) < 30 { return }
+                } else {
+                    path = store.remoteFilesPath[hostID] ?? "~"
+                }
                 await load(h, path)
             }
         } else {
@@ -97,6 +104,14 @@ struct RemoteFilesView: View {
                     }
                     .padding(.horizontal, 4).padding(.bottom, 8)
                 }
+                .contextMenu {
+                    Button("Open in Terminal") { store.openServerShell(hostID, project: store.currentProjectID, cwd: path) }
+                    Button("Copy Path") { store.copyToPasteboard(path, label: "path") }
+                    Divider()
+                    Button("New Folder…") { newFolder(h) }
+                    Button("Upload Files…") { chooseUpload(h) }
+                    Button("Refresh") { Task { await load(h, path) } }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -138,6 +153,9 @@ struct RemoteFilesView: View {
         .simultaneousGesture(TapGesture().onEnded { selected = e.name })
         .contextMenu {
             Button(e.isDirectory ? "Open" : "Edit in Brix") { open(h, e) }
+            if e.isDirectory {
+                Button("Open in Terminal") { store.openServerShell(hostID, project: store.currentProjectID, cwd: full) }
+            }
             Button("Download…") { download(h, e) }
             Button("Copy Path") { store.copyToPasteboard(full, label: "path") }
             Divider()
@@ -171,6 +189,14 @@ struct RemoteFilesView: View {
     // MARK: Actions
 
     private func load(_ h: SSHHost, _ p: String) async {
+        if h.isSample {
+            // Sample servers aren't real: a fixed listing instead of ssh.
+            path = p == "~" ? "/home/deploy" : p
+            typedPath = path
+            entries = MockData.remoteEntries(path)
+            error = nil
+            return
+        }
         loading = true
         do {
             let r = try await RemoteFiles.list(h, password: store.hostPassword(h), path: p)
@@ -179,6 +205,7 @@ struct RemoteFilesView: View {
             entries = r.entries
             error = nil
             store.remoteFilesPath[hostID] = r.path
+            store.remoteFilesListing[hostID] = (r.path, r.entries, history, Date())
             if store.hostStatus[h.id] != .connected { store.hostStatus[h.id] = .connected }
             if h.os.isEmpty, let m = try? await store.svc(h).metrics.metrics(h) { store.rememberOS(h.id, m.os) }
         } catch {

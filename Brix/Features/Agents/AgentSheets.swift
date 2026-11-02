@@ -551,7 +551,7 @@ struct AgentOverviewView: View {
 
     /// Adding needs the server's command and secrets, so it happens in a terminal with the CLI's own help.
     private func addMCP() {
-        let cmd = "\(agent.binary) mcp add --help; echo; echo 'Type the \(agent.binary) mcp add command above, then reload in Brix.'; exec \"$SHELL\" -l"
+        let cmd = "\(agent.executable) mcp add --help; echo; echo 'Type the \(agent.binary) mcp add command above, then reload in Brix.'; exec \"$SHELL\" -l"
         let s = store.newTerminal(project: nil, title: "Add MCP server", command: cmd, attach: false)
         store.route = .terminals
         store.focusedSessionID = s.id

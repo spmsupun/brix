@@ -81,7 +81,7 @@ struct AddDockerSheet: View {
     private func add() {
         let name = manualName.trimmingCharacters(in: .whitespaces)
         if !name.isEmpty {
-            guard name.range(of: #"^[A-Za-z0-9][A-Za-z0-9_.-]*$"#, options: .regularExpression) != nil else {
+            guard LiveDockerService.isValidName(name) else {
                 error = "Letters, digits, dot, dash and underscore only"
                 return
             }

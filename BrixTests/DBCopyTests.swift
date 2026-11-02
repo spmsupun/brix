@@ -66,6 +66,11 @@ final class DBCopyTests: XCTestCase {
         XCTAssertNil(DBCopy.refusal(plan, sourceSchema: "staging"), "another schema in the same database is fine")
         var ro = plan; ro.target.readOnly = true
         XCTAssertNotNil(DBCopy.refusal(ro, sourceSchema: "staging"))
+        // Production: only once the type-to-confirm step unlocked it.
+        var prod = plan; prod.target.tag = .prod
+        XCTAssertNotNil(DBCopy.refusal(prod, sourceSchema: "staging"))
+        prod.target.writeUnlocked = true
+        XCTAssertNil(DBCopy.refusal(prod, sourceSchema: "staging"))
     }
 
     func testTypeMapAcrossEngines() {
@@ -170,6 +175,52 @@ final class DBCopyServerTests: XCTestCase {
         _ = try await svc.execute(pg, sql: "insert into copytest.ct_items (name) values ('next')", password: pw)
         let next = try await svc.execute(pg, sql: "select max(id) from copytest.ct_items", password: pw).rows
         XCTAssertEqual(next.first?.first ?? nil, "1504")
+    }
+
+    /// What the drivers hand back: exact values, the columns of an empty result, changed-row counts,
+    /// and an agent's call on its own read-only, time-limited, capped session.
+    func testDriverResults() async throws {
+        let v = try await svc.execute(pg, sql: """
+            select 1.50::numeric(10,2) a, 'NaN'::numeric b, 123456789012345678901234567890.123456789::numeric c, -0.0001::numeric d,
+              '1 year 2 mons 3 days 04:05:06.5'::interval e, '13:14:15.25'::time f, '2024-01-02 03:04:05.123456+05'::timestamptz g,
+              '2024-01-02 03:04:05.5'::timestamp h, 16384::oid i, '{1,2}'::int[] j, '{a,"b c"}'::text[] k, '10.0.0.1/8'::inet l, '{"x": 1}'::jsonb m
+            """, password: pw).rows.first ?? []
+        XCTAssertEqual(Array(v.prefix(11)), ["1.50", "NaN", "123456789012345678901234567890.123456789", "-0.0001", "1 year 2 mons 3 days 04:05:06.5", "13:14:15.25",
+                                             "2024-01-01 22:04:05.123456+00", "2024-01-02 03:04:05.5", "16384", "{1,2}", #"{a,"b c"}"#])
+        XCTAssertEqual(v[safe: 11]??.hasPrefix("<"), true, "a type Brix can't read shows as a stand-in, not bytes")
+        XCTAssertEqual(v[safe: 12], #"{"x": 1}"#)
+
+        for (c, p) in [(pg, "postgres"), (my, "mysql")] {
+            let empty = try await svc.execute(c, sql: "select 1 as a, 'x' as b from (select 1 as z) q where 1 = 0", password: pw)
+            XCTAssertEqual(empty.columns.map(\.name), ["a", "b"], p)
+            _ = try await svc.execute(c, sql: "drop table if exists drv_t", password: pw)
+            _ = try await svc.execute(c, sql: "create table drv_t (id int primary key)", password: pw)
+            let ins = try await svc.execute(c, sql: "insert into drv_t values (1), (2)", password: pw)
+            XCTAssertEqual(ins.message, "2 rows affected", p)
+            let none = try await svc.page(c, object: DBObject(schema: c.kind == .postgres ? "public" : "brixcopy", name: "drv_t", kind: .table, rowEstimate: nil),
+                                          where: "id > 5", orderBy: "", page: 0, pageSize: 10, columns: nil, password: pw)
+            XCTAssertEqual(none.columns.map(\.name), ["id"], "an empty page still has its columns")
+            // A console's schema is switched under the same hold of the session.
+            let here = try await LiveDatabaseService.$schema.withValue(c.kind == .postgres ? "pg_catalog" : "mysql") {
+                try await svc.execute(c, sql: c.kind == .postgres ? "select current_schema()" : "select database()", password: pw).rows.first?.first ?? nil
+            }
+            XCTAssertEqual(here, c.kind == .postgres ? "pg_catalog" : "mysql")
+            // Agents: their own session, reads in a read-only transaction, at most rowCap rows.
+            var a = AgentDBGateway.agentConnection(c)
+            a.readOnly = true
+            let r = try await LiveDatabaseService.$agent.withValue(true) {
+                try await svc.execute(a, sql: c.kind == .postgres ? "select g from generate_series(1, 5000) g" : "select 1 from information_schema.columns a, information_schema.columns b limit 5000", password: pw)
+            }
+            XCTAssertEqual(r.rows.count, AgentDBPolicy.rowCap, p)
+            do {
+                _ = try await LiveDatabaseService.$agent.withValue(true) { try await svc.execute(a, sql: "insert into drv_t values (3)", password: pw) }
+                XCTFail("an agent's read can't write: \(p)")
+            } catch {}
+        }
+        let t = try await LiveDatabaseService.$agent.withValue(true) {
+            try await svc.execute(AgentDBGateway.agentConnection(pg), sql: "select current_setting('statement_timeout')", password: pw).rows.first?.first ?? nil
+        }
+        XCTAssertEqual(t, "30s")
     }
 
     /// Postgres-only types arrive in MySQL and SQLite without loss.

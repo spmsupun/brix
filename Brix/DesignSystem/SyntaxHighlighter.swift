@@ -111,18 +111,21 @@ enum SyntaxHighlighter {
             if bold { out.addAttribute(.font, value: NSFont.code(ofSize: theme.font.pointSize, weight: .medium), range: r) }
         }
 
-        // Pass 1: comments and strings, scanning left to right.
+        // Pass 1: comments and strings, scanning left to right. Tokens are
+        // turned into UTF-16 once, not at every position.
         var i = 0
         let chars = Array(text.utf16)
-        func starts(_ s: String, at idx: Int) -> Bool {
-            let u = Array(s.utf16)
+        let lineComments = sp.lineComment.map { Array($0.utf16) }
+        let blockOpen = sp.blockComment.map { Array($0.0.utf16) }
+        let quotes = sp.strings.map { Array($0.utf16) }
+        let hash = Array("#".utf16), phpAttribute = Array("#[".utf16)
+        func starts(_ u: [UInt16], at idx: Int) -> Bool {
             guard idx + u.count <= chars.count else { return false }
             for k in 0..<u.count where chars[idx + k] != u[k] { return false }
             return true
         }
         while i < chars.count {
-            if let lc = sp.lineComment.first(where: { starts($0, at: i) }), !(language == .php && lc == "#" && starts("#[", at: i)) {
-                _ = lc
+            if let lc = lineComments.first(where: { starts($0, at: i) }), !(language == .php && lc == hash && starts(phpAttribute, at: i)) {
                 var j = i
                 while j < chars.count, chars[j] != 10 { j += 1 }
                 let r = NSRange(location: i, length: j - i)
@@ -131,22 +134,21 @@ enum SyntaxHighlighter {
                 i = j
                 continue
             }
-            if let (open, close) = sp.blockComment, starts(open, at: i) {
-                let found = ns.range(of: close, range: NSRange(location: i + open.utf16.count, length: len - i - open.utf16.count))
+            if let open = blockOpen, let close = sp.blockComment?.1, starts(open, at: i) {
+                let found = ns.range(of: close, range: NSRange(location: i + open.count, length: len - i - open.count))
                 let end = found.location == NSNotFound ? len : found.location + found.length
                 color(NSRange(location: i, length: end - i), theme.comment, italic: true)
                 protected.insert(integersIn: i..<end)
                 i = end
                 continue
             }
-            if let q = sp.strings.first(where: { starts($0, at: i) }) {
-                let qu = Array(q.utf16)
+            if let qu = quotes.first(where: { starts($0, at: i) }) {
                 var j = i + qu.count
-                let multiline = qu.count == 3 || (q == "`")
+                let multiline = qu.count == 3 || qu == [96] // triple quotes or a backtick
                 while j < chars.count {
                     if chars[j] == 92 { j += 2; continue } // backslash
                     if !multiline, chars[j] == 10 { break }
-                    if starts(q, at: j) { j += qu.count; break }
+                    if starts(qu, at: j) { j += qu.count; break }
                     j += 1
                 }
                 j = min(j, chars.count)

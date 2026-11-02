@@ -247,7 +247,7 @@ struct AgentPane: View {
             } else {
                 HStack(spacing: 6) {
                     StatusDot(color: s.state.color, size: 6, ring: s.state == .running, pulse: s.state == .running)
-                    Text(s.state == .running ? "Working · \(Self.duration(since: s.startedAt))" : s.state.label).font(Typo.ui(11)).foregroundStyle(Theme.text2)
+                    Text(s.state == .running ? "Working · \(Self.duration(since: store.runningSince[s.id] ?? s.startedAt))" : s.state.label).font(Typo.ui(11)).foregroundStyle(Theme.text2)
                 }
             }
             if s.state == .running {

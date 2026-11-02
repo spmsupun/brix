@@ -70,6 +70,16 @@ final class DockModelTests: XCTestCase {
         XCTAssertEqual(l.bottom.map(\.id), [id])
     }
 
+    func testRenameAndBindReachFloatingPanels() {
+        var l = DockLayout.preset(.code)
+        let id = l.bottom[0].id
+        l.float(id)
+        l.rename(id, to: "api.log")
+        l.bind(id, resource: "host-1")
+        XCTAssertEqual(l.floating.first?.panel.title, "api.log")
+        XCTAssertEqual(l.floating.first?.panel.resourceID, "host-1")
+    }
+
     func testMultipleInstancesAllowedForTerminalsAndDatabases() {
         var l = DockLayout()
         l.add(.terminal, to: .bottom)
@@ -195,6 +205,51 @@ final class RenameTests: XCTestCase {
         // Reapplying a layout doesn't bring back a second tab for the file.
         ws.apply(.code)
         XCTAssertEqual(ws.state.panes.allTabs.filter { $0 == GridItemID.file("src/lib/pay/intent.ts") }.count, 1)
+    }
+}
+
+final class SessionDescriptorTests: XCTestCase {
+    /// A logs tail or server shell comes back running its command, not as a bare shell.
+    func testLogsAndServerSessionsKeepTheirCommand() {
+        var s = TerminalSession(id: "s1", projectID: "p", hostID: nil, title: "api logs", kind: .logs, cwd: "~", state: .running,
+                                process: "docker logs -f api", startedAt: Date())
+        XCTAssertEqual(SessionDescriptor(s).command, "docker logs -f api")
+        s.kind = .server; s.hostID = "h1"; s.process = "ssh"
+        XCTAssertNil(SessionDescriptor(s).command, "a plain server shell runs no command")
+        s.kind = .shell; s.hostID = nil; s.process = "vim"
+        XCTAssertNil(SessionDescriptor(s).command)
+        // Saved before commands were kept: it would come back as an empty shell.
+        XCTAssertFalse(SessionDescriptor(id: "x", title: "api logs", kind: .logs, hostID: nil, cwd: "~", command: nil).restorable)
+    }
+}
+
+@MainActor
+final class LiveTerminalTests: XCTestCase {
+    /// Output reaches Brix (SwiftTerm never called the old dataReceived hook),
+    /// and closing hangs up the shell's whole process group.
+    func testOutputArrivesAndCloseStopsTheProcessGroup() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        let id = "s-test-\(UUID().uuidString.prefix(6))"
+        TerminalRegistry.shared.start(sessionID: id, argv: ["/bin/sh", "-c", "sleep 30 & echo child=$!; echo hello-brix; wait"],
+                                      cwd: NSHomeDirectory(), env: [:], fontSize: 12, store: store)
+        let v = try XCTUnwrap(TerminalRegistry.shared.view(id))
+        let started = Date()
+        while v.lastData == .distantPast || !v.recentLines.contains(where: { $0.contains("hello-brix") }), Date().timeIntervalSince(started) < 5 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        XCTAssertNotEqual(v.lastData, .distantPast, "the output hook never fired")
+        let line = try XCTUnwrap(v.recentLines.first { $0.hasPrefix("child=") }, "\(v.recentLines)")
+        let child = try XCTUnwrap(pid_t(line.dropFirst(6).trimmingCharacters(in: .whitespaces)))
+        TerminalRegistry.shared.stop(id)
+        var gone = false
+        for _ in 0..<30 where !gone {
+            gone = kill(child, 0) != 0
+            if !gone { try await Task.sleep(nanoseconds: 100_000_000) }
+        }
+        XCTAssertTrue(gone, "a background job outlived its closed terminal")
     }
 }
 

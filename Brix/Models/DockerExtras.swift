@@ -14,6 +14,26 @@ struct ComposeStack: Codable, Identifiable, Hashable {
     var isRunning: Bool { status.hasPrefix("running") }
 }
 
+/// Containers from every engine asked, and why each one that failed did.
+struct DockerListing {
+    var targets: [DockerTarget] = []
+    /// Keyed by engine: "local" or the SSH host id.
+    var errors: [String: String] = [:]
+}
+
+extension ComposeStack {
+    /// Only the identity is required; a stack saved with fewer fields still loads.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(ResourceID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        hostID = try? c.decodeIfPresent(ResourceID.self, forKey: .hostID)
+        status = (try? c.decodeIfPresent(String.self, forKey: .status)) ?? ""
+        configFiles = (try? c.decodeIfPresent([String].self, forKey: .configFiles)) ?? []
+        isSample = (try? c.decodeIfPresent(Bool.self, forKey: .isSample)) ?? false
+    }
+}
+
 struct DockerNetwork: Identifiable, Hashable {
     var id: String
     var name: String
@@ -59,6 +79,8 @@ struct DockerInventory {
     var networks: [DockerNetwork] = []
     var volumes: [DockerVolume] = []
     var images: [DockerImage] = []
+    /// Why stacks couldn't be listed (no Compose v2, a failed call); the rest still are.
+    var stacksError: String?
 }
 
 enum DockerParse {

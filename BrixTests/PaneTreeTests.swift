@@ -186,3 +186,22 @@ final class PaneTreeTests: XCTestCase {
         XCTAssertEqual(PaneTree.minimum(t.root!, vertical: true, pane: 120, gap: 6), 246)
     }
 }
+
+@MainActor
+final class SavedTabRestoreTests: XCTestCase {
+    /// A relaunch keeps file, panel and data tabs in the tiled centre; only
+    /// sessions that weren't restarted (and data tabs whose connection is gone) drop out.
+    func testRemappedKeepsFileAndPanelTabs() {
+        func dataTab(_ conn: String) -> String {
+            let raw = Data([UUID().uuidString, conn].joined(separator: "\u{1F}").utf8).base64EncodedString()
+            return "panel:dataTab:" + raw.replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        }
+        let kept = dataTab("db-1"), gone = dataTab("db-deleted")
+        var t = PaneTree()
+        for id in ["s-old", "s-closed", "file:src/a.swift", GridItemID.panel(.plan), GridItemID.panel(.agentFiles), GridItemID.database("db-1"), kept, gone] { t.add(id) }
+        let out = WorkspaceStore.remapped(t, ["s-old": "s-new"]) { id in
+            WorkspaceStore.keepsSavedTab(id, session: { $0 == "s-new" }, connection: { $0 == "db-1" })
+        }
+        XCTAssertEqual(out.allTabs, ["s-new", "file:src/a.swift", "panel:plan", "panel:agentFiles", "panel:database:db-1", kept])
+    }
+}

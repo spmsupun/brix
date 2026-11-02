@@ -82,7 +82,8 @@ protocol ActivityService: Sendable {
     func events(_ p: Project) -> [ActivityEvent]
     func builds(_ p: Project) -> [BuildRecord]
     func runTasks(_ p: Project) -> [RunTask]
-    func dayStats(_ p: Project) async -> DayStats
+    /// Today's git totals; nil when git couldn't be read (or the caller was cancelled).
+    func dayStats(_ p: Project) async -> DayStats?
     func codebase(_ p: Project) async -> CodebaseStats
     /// Seven daily values (oldest first) for a sample metric; nil uses what Brix recorded.
     func series(_ metric: String, _ p: Project) -> [Double]?
@@ -94,9 +95,10 @@ struct LiveActivityService: ActivityService {
     func runTasks(_ p: Project) -> [RunTask] { RunTaskDetector.detect(p.url) }
     func series(_ metric: String, _ p: Project) -> [Double]? { nil }
 
-    func dayStats(_ p: Project) async -> DayStats {
+    func dayStats(_ p: Project) async -> DayStats? {
+        // A failed read is unknown, not "nothing today".
         guard let r = try? await ProcessRunner.run("git", ["-C", p.expandedPath, "log", "--since=midnight", "--numstat", "--format=%x1e%H"], timeout: 10),
-              r.ok else { return DayStats() }
+              r.ok else { return nil }
         return Self.parseDayLog(r.stdout)
     }
 
@@ -155,7 +157,7 @@ struct MockActivityService: ActivityService {
          RunTask(name: "Tests", command: "pnpm test", kind: .test)]
     }
 
-    func dayStats(_ p: Project) async -> DayStats {
+    func dayStats(_ p: Project) async -> DayStats? {
         p.id == "atlas-web" ? DayStats(commits: 3, files: ["a", "b", "c", "d", "e", "f", "g"], add: 412, del: 88) : DayStats()
     }
 

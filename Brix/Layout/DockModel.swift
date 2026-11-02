@@ -153,6 +153,17 @@ struct CustomPreset: Codable, Hashable, Identifiable {
     var panes: PaneTree? = nil
 }
 
+extension CustomPreset {
+    /// A preset whose layout or panes don't read falls back to empty ones.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? id
+        layout = (try? c.decodeIfPresent(DockLayout.self, forKey: .layout)) ?? DockLayout()
+        panes = try? c.decodeIfPresent(PaneTree.self, forKey: .panes)
+    }
+}
+
 /// The arrangement of a project workspace. A pure value type so it can be tested
 /// without any UI and persisted per project.
 struct DockLayout: Codable, Hashable {
@@ -351,23 +362,23 @@ struct DockLayout: Codable, Hashable {
     }
 
     mutating func rename(_ id: String, to title: String) {
-        for side in DockSide.allCases {
-            var list = panels(side)
-            if let i = list.firstIndex(where: { $0.id == id }) {
-                list[i].title = title.isEmpty ? nil : title
-                setPanels(side, list)
-            }
-        }
+        update(id) { $0.title = title.isEmpty ? nil : title }
     }
 
     mutating func bind(_ id: String, resource: String?) {
+        update(id) { $0.resourceID = resource }
+    }
+
+    /// Changes a panel wherever it is: in a dock or floating.
+    private mutating func update(_ id: String, _ change: (inout PanelInstance) -> Void) {
         for side in DockSide.allCases {
             var list = panels(side)
             if let i = list.firstIndex(where: { $0.id == id }) {
-                list[i].resourceID = resource
+                change(&list[i])
                 setPanels(side, list)
             }
         }
+        if let i = floating.firstIndex(where: { $0.panel.id == id }) { change(&floating[i].panel) }
     }
 
     /// Clamps a dock size against the available workspace size so the centre

@@ -23,6 +23,8 @@ struct ProjectHomeView: View {
     @State private var tasks: [RunTask] = []
     @State private var codebase: CodebaseStats?
     @State private var lastFetch: Date?
+    /// Names at the project root, read in load() so body never lists the folder.
+    @State private var rootNames: Set<String> = []
 
     private var project: Project? { store.project(projectID) }
     private var space: CGFloat { max(gap, 6) }
@@ -64,7 +66,7 @@ struct ProjectHomeView: View {
                 // Sessions run elsewhere too; check again while this screen is up.
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 15_000_000_000)
-                    await loadHistory(p)
+                    if store.windowVisible { await loadHistory(p) }
                 }
             }
         }
@@ -75,14 +77,16 @@ struct ProjectHomeView: View {
     private func load(_ p: Project, force: Bool = false) async {
         var cache = store.homeCache[p.id] ?? ProjectHomeData()
         scan = cache.scan; history = cache.history; stats = cache.stats; codebase = cache.codebase
-        tasks = cache.tasks.isEmpty ? store.svc(p).activity.runTasks(p) : cache.tasks
+        let activity = store.svc(p).activity
+        tasks = cache.tasks.isEmpty ? await Task.detached(priority: .userInitiated) { activity.runTasks(p) }.value : cache.tasks
+        let root = p.expandedPath
+        rootNames = p.isSample ? [] : await Task.detached(priority: .userInitiated) { Set((try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []) }.value
         let fetch = p.url.appendingPathComponent(".git/FETCH_HEAD").path
         lastFetch = (try? FileManager.default.attributesOfItem(atPath: fetch))?[.modificationDate] as? Date
         await loadHistory(p)
         if force || Date().timeIntervalSince(cache.scanned) > 60 {
             let url = p.url
-            scan = await Task.detached(priority: .userInitiated) { p.isSample ? ProjectScan() : ProjectScan.scan(url) }.value
-            tasks = store.svc(p).activity.runTasks(p)
+            (scan, tasks) = await Task.detached(priority: .userInitiated) { (p.isSample ? ProjectScan() : ProjectScan.scan(url), activity.runTasks(p)) }.value
             cache.scanned = Date()
         }
         if force || codebase == nil || Date().timeIntervalSince(cache.counted) > 600 {
@@ -134,10 +138,7 @@ struct ProjectHomeView: View {
         }
         add(p.language)
         add(p.framework)
-        if !p.isSample {
-            let names = Set((try? FileManager.default.contentsOfDirectory(atPath: p.expandedPath)) ?? [])
-            for (file, label) in ProjectScan.markers.sorted(by: { $0.key < $1.key }) where names.contains(file) { add(label) }
-        }
+        for (file, label) in ProjectScan.markers.sorted(by: { $0.key < $1.key }) where rootNames.contains(file) { add(label) }
         return Array(out.prefix(5))
     }
 }
@@ -163,6 +164,7 @@ private struct ProjectHeader: View {
                 }
                 .buttonStyle(.hand)
                 .help("Change the name and icon")
+                .accessibilityLabel("Project icon")
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 10) {
                         Text(p.name).font(Typo.ui(20, .semibold)).tracking(-0.2).foregroundStyle(Theme.text).lineLimit(1)
@@ -197,15 +199,13 @@ private struct ProjectHeader: View {
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white(0.05)))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.controlStroke))
                 Button { store.openProject(p.id) } label: {
-                    HStack(spacing: 8) {
-                        Text("Open Workspace").font(Typo.ui(12.5, .semibold))
-                        Text("↩").font(Typo.ui(10.5)).opacity(0.55)
-                    }
-                    .foregroundStyle(Theme.onAccent).padding(.horizontal, 14).frame(height: 32)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(accent))
+                    // No Return shortcut: it took Return from the ask box and search
+                    // fields, and ⌘↩ is the ask box's Start.
+                    Text("Open Workspace").font(Typo.ui(12.5, .semibold))
+                        .foregroundStyle(Theme.onAccent).padding(.horizontal, 14).frame(height: 32)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(accent))
                 }
                 .buttonStyle(.hand)
-                .keyboardShortcut(.return, modifiers: [])
             }
             .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
             askBox(p)
@@ -463,7 +463,8 @@ private struct SessionsCard: View {
         var used = Set<String>()
         for e in history ?? [] {
             let live = store.sessions.first { $0.externalID == e.id && $0.isLive && $0.state != .finished && $0.state != .failed }
-            if let live { used.insert(live.id) }
+            // Every Brix session behind this transcript, finished ones too, so none shows twice.
+            for s in store.sessions where s.externalID == e.id { used.insert(s.id) }
             let s = stats[e.id] ?? TranscriptStats()
             out.append(Row(id: e.id, agent: store.settings.agents.first { $0.binary == e.agent }, binary: e.agent,
                            title: live.map(store.displayTitle) ?? e.displayTitle, prompt: e.firstPrompt ?? "", date: e.lastActivity,
@@ -826,6 +827,7 @@ private struct CommitsCard: View {
             do {
                 out = try await ProcessRunner.run("git", ["-C", r.expandedPath, "log", "--skip", "\(have)", "-n", "50", "--format=%H%x1f%an%x1f%at%x1f%s%x1e"], timeout: 15)
             } catch {
+                guard !Task.isCancelled, !(error is CancellationError) else { return }
                 gitError = "Couldn't load older commits in \(r.name): \(error.localizedDescription)"
                 exhausted.insert(r.id)
                 continue
@@ -866,6 +868,8 @@ private struct CommitsCard: View {
                     hits += LiveGitService.parseLog(out.stdout).map { ($0, r) }
                 }
             } catch {
+                // A newer query cancelled this one: it reports nothing.
+                guard !Task.isCancelled, !(error is CancellationError) else { return }
                 gitError = "Search failed in \(r.name): \(error.localizedDescription)"
             }
         }

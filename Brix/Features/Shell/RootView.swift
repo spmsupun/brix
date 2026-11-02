@@ -64,17 +64,8 @@ struct RootView: View {
                 .environment(store)
                 .themed(store.settings)
         }
-        .alert(store.confirmation?.title ?? "", isPresented: Binding(get: { store.confirmation != nil && store.confirmation?.typeToConfirm == nil },
-                                                                      set: { if !$0, store.confirmation?.typeToConfirm == nil { store.confirmation = nil } }),
-               presenting: store.confirmation) { c in
-            Button(c.confirmTitle, role: c.destructive ? .destructive : nil) { c.action() }
-            Button("Cancel", role: .cancel) { c.onCancel?() }
-        } message: { c in
-            Text(c.message)
-        }
-        .sheet(item: Binding(get: { store.confirmation?.typeToConfirm == nil ? nil : store.confirmation }, set: { if $0 == nil { store.confirmation = nil } })) { c in
-            TypeToConfirmSheet(confirmation: c) { store.confirmation = nil }
-        }
+        // With a sheet open, the sheet shows confirmations instead (SheetRouter).
+        .modifier(ConfirmationHost(active: store.sheet == nil))
         .background(WindowChrome())
         .focusEffectDisabled()
         .themed(store.settings)
@@ -143,9 +134,39 @@ struct RootView: View {
     }
 }
 
+/// Shows the head of the confirmation queue. An alert can't present from a window
+/// behind a sheet, so the window and the sheet on it each carry one and only the
+/// topmost is active. One confirmation at a time, oldest first; closing answers the
+/// one that was shown (by id), never a newer one queued behind it, and only once.
+struct ConfirmationHost: ViewModifier {
+    @Environment(AppStore.self) private var store
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        let shown = active ? store.confirmation : nil
+        content
+            .alert(shown?.title ?? "", isPresented: Binding(get: { shown.map { $0.typeToConfirm == nil } ?? false },
+                                                            set: { if !$0, let shown { store.answerConfirmation(shown.id, confirmed: false) } }),
+                   presenting: shown) { c in
+                Button(c.confirmTitle, role: c.destructive ? .destructive : nil) { store.answerConfirmation(c.id, confirmed: true) }
+                Button("Cancel", role: .cancel) { store.answerConfirmation(c.id, confirmed: false) }
+            } message: { c in
+                Text(c.message)
+            }
+            .sheet(item: Binding(get: { shown?.typeToConfirm == nil ? nil : shown },
+                                 set: { if $0 == nil, let shown { store.answerConfirmation(shown.id, confirmed: false) } })) { c in
+                TypeToConfirmSheet(confirmation: c) { store.answerConfirmation(c.id, confirmed: $0) }
+            }
+    }
+}
+
 struct SheetRouter: View {
     let sheet: ActiveSheet
     var body: some View {
+        router.modifier(ConfirmationHost(active: true))
+    }
+
+    @ViewBuilder private var router: some View {
         switch sheet {
         case .addProject: AddProjectSheet()
         case .editHost(let h): HostEditorSheet(existing: h)
@@ -210,6 +231,14 @@ struct StatusBar: View {
 
     @ViewBuilder private var right: some View {
         let p = store.currentProject
+        // Stays until the user decides, so work done meanwhile isn't lost unnoticed.
+        if store.saveBlocked {
+            segment(help: "\(store.saveBlockedReason) Click to decide.", action: { store.reviewLibrarySave() }) {
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 9.5)).foregroundStyle(Theme.red)
+                Text("Not saving the library").foregroundStyle(Theme.red)
+            }
+            divider
+        }
         if let b = store.lastBuild(p?.id) {
             segment(help: "\(b.task) \(b.ok ? "passed" : "failed") \(RelativeTime.ago(b.date)), took \(AppStore.duration(b.duration))", action: { store.route = .projectHome(b.projectID) }) {
                 Image(systemName: b.ok ? "checkmark" : "xmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(b.ok ? Theme.green : Theme.red)
@@ -273,50 +302,32 @@ private struct StatusSegmentStyle: ButtonStyle {
     }
 }
 
-/// One agent session: working (pulsing dot), waiting (amber chip) or done.
+/// An agent session waiting for you: an amber chip.
 private struct AgentChip: View {
     @Environment(AppStore.self) private var store
     let session: TerminalSession
 
     var body: some View {
         let s = session
-        let waiting = s.state == .needsInput, working = s.state == .running, fresh = s.unseen && !waiting && !working
+        let ink = Color(hex: 0x09090B)
         Button { store.reveal(session: s.id) } label: {
             HStack(spacing: 6) {
-                if waiting {
-                    Text("!").font(.system(size: 9, weight: .black)).foregroundStyle(Theme.amber)
-                        .frame(width: 13, height: 13).background(Circle().fill(Color(hex: 0x09090B)))
-                } else if working {
-                    WorkingSpinner(size: 10)
-                } else if fresh {
-                    Image(systemName: "checkmark").font(.system(size: 8, weight: .black)).foregroundStyle(Theme.onAccent)
-                        .frame(width: 13, height: 13).background(Circle().fill(Theme.green))
-                } else {
-                    Circle().fill(Theme.disabled).frame(width: 6, height: 6)
-                }
-                Text(Self.clip(store.displayTitle(s), 22)).fontWeight(.semibold).foregroundStyle(waiting ? Color(hex: 0x09090B) : Theme.text)
-                Text(Self.clip(sub, 26)).foregroundStyle(waiting ? Color(hex: 0x09090B).opacity(0.7) : Theme.text3)
+                Text("!").font(.system(size: 9, weight: .black)).foregroundStyle(Theme.amber)
+                    .frame(width: 13, height: 13).background(Circle().fill(ink))
+                Text(Self.clip(store.displayTitle(s), 22)).fontWeight(.semibold).foregroundStyle(ink)
+                Text("Waiting for you").foregroundStyle(ink.opacity(0.7))
             }
             .fixedSize()
             .padding(.horizontal, 8).frame(height: 20)
-            .background(RoundedRectangle(cornerRadius: 6).fill(waiting ? Theme.amber : fresh ? Theme.green.opacity(0.18) : Color.white(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(fresh ? Theme.green.opacity(0.5) : .clear))
+            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.amber))
             .contentShape(Rectangle())
         }
         .buttonStyle(.hand)
-        .help("\(store.displayTitle(s)) in \(s.projectID.flatMap(store.project)?.name ?? "Terminals"): \(sub)")
-        .accessibilityLabel("\(store.displayTitle(s)), \(sub)")
+        .help("\(store.displayTitle(s)) in \(s.projectID.flatMap(store.project)?.name ?? "Terminals"): waiting for you")
+        .accessibilityLabel("\(store.displayTitle(s)), waiting for you")
     }
 
     static func clip(_ s: String, _ n: Int) -> String { s.count > n ? String(s.prefix(n - 1)) + "…" : s }
-
-    private var sub: String {
-        switch session.state {
-        case .needsInput: "Waiting for you"
-        case .running: session.touched.last.map { "Editing \(($0.path as NSString).lastPathComponent)" } ?? "Working"
-        default: session.unseen ? "Done · not opened yet" : "Done · ready to review"
-        }
-    }
 }
 
 /// One provider's plan usage: a mini bar per window, the percentage and the next reset.
@@ -327,6 +338,11 @@ private struct UsageSegment: View {
     let windows: [UsageWindow]
 
     var body: some View {
+        // Redrawn every 30 s so the reset countdowns keep counting.
+        TimelineView(.periodic(from: .now, by: 30)) { _ in usageButton }
+    }
+
+    private var usageButton: some View {
         Button { store.showAgentSettings() } label: {
             HStack(spacing: 8) {
                 AgentMark(agent: agent, size: 11)
@@ -418,7 +434,8 @@ struct ToastStack: View {
 /// A confirmation that needs a name typed exactly (writes to Production).
 struct TypeToConfirmSheet: View {
     let confirmation: Confirmation
-    let close: () -> Void
+    /// Closes the sheet and runs the action (true) or onCancel (false).
+    let answer: (Bool) -> Void
     @State private var typed = ""
 
     var body: some View {
@@ -428,11 +445,11 @@ struct TypeToConfirmSheet: View {
             Text(confirmation.message).font(Typo.ui(12.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
             Text("Type \(target) to confirm").font(Typo.ui(11.5, .medium)).foregroundStyle(Theme.text2)
             TextField(target, text: $typed).textFieldStyle(.roundedBorder).font(Typo.mono(13))
-                .onSubmit { if typed == target { close(); confirmation.action() } }
+                .onSubmit { if typed == target { answer(true) } }
             HStack {
                 Spacer()
-                Button("Cancel") { close(); confirmation.onCancel?() }.keyboardShortcut(.cancelAction)
-                Button(confirmation.confirmTitle, role: .destructive) { close(); confirmation.action() }
+                Button("Cancel") { answer(false) }.keyboardShortcut(.cancelAction)
+                Button(confirmation.confirmTitle, role: .destructive) { answer(true) }
                     .disabled(typed != target)
             }
         }
