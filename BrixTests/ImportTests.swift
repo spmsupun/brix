@@ -341,6 +341,18 @@ extension ImportTests {
         XCTAssertTrue(BrixTerminalView.screenAsksInput("Do you want to make this edit to Sidebar.swift?\n❯ 1. Yes\n  2. No\nEsc to cancel"))
         XCTAssertEqual(BrixTerminalView.askedQuestion(["│ Which DB should we use? │", "────────", "❯ 1. Postgres", "  2. MySQL", "──────", "  6. Chat about this"]), "Which DB should we use?")
         XCTAssertNil(BrixTerminalView.askedQuestion(["● Done.", "❯ "]))
+        XCTAssertEqual(BrixTerminalView.lastReply(["● Bash(go test ./...)", "  ⎿  ok", "● Done. All 12 partner API tests pass.",
+                                                   "──────────────────────── fix-tests ─", "❯ ", "────────────────────────", "  ⏵⏵ auto mode on (shift+tab to cycle)"]),
+                       "Done. All 12 partner API tests pass.")
+        XCTAssertEqual(BrixTerminalView.lastReply(["Codex says hi", "╭────────╮", "│ >      │", "╰────────╯"]), "Codex says hi")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-paths-\(UUID().uuidString)").resolvingSymlinksInPath()
+        try? FileManager.default.createDirectory(at: dir.appendingPathComponent("src"), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: dir.path + "/src/app.ts", contents: Data())
+        XCTAssertEqual(AppStore.resolvePath("src/app.ts:42:7", base: dir.path)?.path, dir.path + "/src/app.ts")
+        XCTAssertEqual(AppStore.resolvePath("(./src/app.ts)", base: dir.path)?.path, dir.path + "/src/app.ts")
+        XCTAssertEqual(AppStore.resolvePath(dir.path + "/src", base: "/")?.isDirectory, true)
+        XCTAssertNil(AppStore.resolvePath("src/missing.ts", base: dir.path))
+        try? FileManager.default.removeItem(at: dir)
         XCTAssertFalse(BrixTerminalView.screenAsksInput("● Hi. What need doing?\n❯ \n⏵⏵ auto mode on (shift+tab to cycle)"))
         // Text in the chat doesn't count: only a spinner row or a choice list does.
         XCTAssertFalse(BrixTerminalView.screenShowsWork("  ⎿ Loading… done\nBuilding… the app"))

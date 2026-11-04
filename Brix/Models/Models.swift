@@ -686,6 +686,7 @@ enum FileContent: Equatable {
     case text(String)
     case image(NSImage, size: CGSize)
     case binary(size: Int)
+    case pdf(URL, modified: Date?)
     case missing
 
     static func == (a: FileContent, b: FileContent) -> Bool {
@@ -693,6 +694,7 @@ enum FileContent: Equatable {
         case (.text(let x), .text(let y)): x == y
         case (.binary(let x), .binary(let y)): x == y
         case (.missing, .missing): true
+        case (.pdf(let x, let m), .pdf(let y, let n)): x == y && m == n
         case (.image(_, let x), .image(_, let y)): x == y
         default: false
         }

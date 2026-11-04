@@ -150,7 +150,7 @@ final class WorkspaceStore {
     func open(_ path: String, split: Bool = false) {
         if !state.openFiles.contains(path) { state.openFiles.append(path) }
         // A file is a tab in the tiled centre, next to other files when there are some.
-        placeFile(path)
+        placeFile(path, split: split)
         state.layout.centre = .agents
         if split {
             state.splitFile = path
@@ -166,13 +166,16 @@ final class WorkspaceStore {
         app.inspector = .file(projectID, path)
     }
 
-    private func placeFile(_ path: String) {
+    private func placeFile(_ path: String, split: Bool = false) {
         let id = GridItemID.file(path)
-        if state.panes.group(of: id) != nil {
-            state.panes.activate(id)
+        if state.panes.group(of: id) != nil { state.panes.activate(id); return }
+        if !split, let home = state.panes.groups.first(where: { $0.tabs.contains(where: GridItemID.isFile) })?.id {
+            state.panes.add(id, to: home)
+        } else if let beside = state.panes.focusedGroup ?? state.panes.groups.first?.id {
+            // The first file opens in a pane on the right, so the agent or terminal you're in stays on screen.
+            state.panes.splitNew(id, beside: beside, edge: .right)
         } else {
-            let home = state.panes.groups.first { $0.tabs.contains(where: GridItemID.isFile) }?.id
-            state.panes.add(id, to: home ?? state.panes.focusedGroup)
+            state.panes.add(id)
         }
     }
 

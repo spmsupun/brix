@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import PDFKit
 
 /// Centre "Editor" mode: file tabs plus a read-only preview (split-able).
 struct EditorArea: View {
@@ -183,6 +184,8 @@ struct EditorPane: View {
             EmptyState(symbol: "questionmark.folder", message: "This file no longer exists.", actionTitle: "Close") { ws.close(path) }
         case .binary(let size):
             EmptyState(symbol: "doc.zipper", message: "Binary file · \(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)). Brix shows text and images only.")
+        case .pdf(let url, _):
+            PDFFileView(url: url)
         case .image(let img, let size):
             VStack(spacing: 10) {
                 Image(nsImage: img).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
@@ -444,4 +447,16 @@ extension WorkspaceStore {
     func claudeBlock(in path: String) -> ClosedRange<Int>? {
         gutter[path]?.last?.lines
     }
+}
+
+/// A PDF in a file tab: macOS's own viewer (scroll, zoom, select and copy text, links).
+struct PDFFileView: NSViewRepresentable {
+    let url: URL
+    func makeNSView(context: Context) -> PDFView {
+        let v = PDFView()
+        v.autoScales = true
+        v.document = PDFDocument(url: url)
+        return v
+    }
+    func updateNSView(_ v: PDFView, context: Context) {}
 }

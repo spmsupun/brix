@@ -189,6 +189,9 @@ enum DebugSnapshot {
                 st.workspace(for: p.id).state.panelSession[st.workspace(for: p.id).layout.bottom.first?.id ?? ""] = s.id
                 st.workspace(for: p.id).open("README.md")
             })
+            s.append(Step(name: "LivePDF") { st in
+                if let p = st.library.projects.first(where: { !$0.isSample }) { st.workspace(for: p.id).open("sample.pdf") }
+            })
             s.append(Step(name: "LiveReview") { st in
                 if let p = st.library.projects.first(where: { !$0.isSample }) { st.workspace(for: p.id).apply(.review) }
             })

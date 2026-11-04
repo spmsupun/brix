@@ -435,13 +435,65 @@ extension AppStore {
         markSeen(id, opened: true)
     }
 
+    /// A path shown in a local terminal, as it exists on disk: relative ones are
+    /// read from the session's folder, and ":42:7" line numbers are dropped.
+    func resolvePath(_ raw: String, from id: String) -> (path: String, isDirectory: Bool)? {
+        guard let s = session(id), s.hostID == nil else { return nil }
+        let folder = s.cwd.isEmpty ? (s.projectID.flatMap(project)?.path ?? "~") : s.cwd
+        return Self.resolvePath(raw, base: (folder as NSString).expandingTildeInPath)
+    }
+
+    nonisolated static func resolvePath(_ raw: String, base: String) -> (path: String, isDirectory: Bool)? {
+        var t = raw.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("file://") { t = URL(string: t)?.path ?? String(t.dropFirst(7)) }
+        t = t.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`()[]<>,;"))
+        if let r = t.range(of: #"(:\d+)+$"#, options: .regularExpression) { t.removeSubrange(r) }
+        guard !t.isEmpty else { return nil }
+        let e = (t as NSString).expandingTildeInPath
+        let full = URL(fileURLWithPath: e.hasPrefix("/") ? e : base + "/" + e).standardizedFileURL.resolvingSymlinksInPath().path
+        var dir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: full, isDirectory: &dir) else { return nil }
+        return (full, dir.boolValue)
+    }
+
+    /// Opens a path from a terminal (⌘-click, or Open on a selection): a file in a
+    /// project opens in a tab, a folder shows opened in the Explorer, and anything
+    /// outside your projects shows in Finder. False when nothing on disk matches.
+    @discardableResult
+    func openPath(_ raw: String, from id: String) -> Bool {
+        guard let (full, isDir) = resolvePath(raw, from: id) else { return false }
+        let root = { (p: Project) in URL(fileURLWithPath: p.expandedPath).resolvingSymlinksInPath().path }
+        let inside = { (p: Project) in !p.isSample && (full == root(p) || full.hasPrefix(root(p) + "/")) }
+        let own = session(id)?.projectID.flatMap(project)
+        guard let p = own.flatMap({ inside($0) ? $0 : nil }) ?? library.projects.first(where: inside) else {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: full)])
+            return true
+        }
+        if p.id != own?.id { openProject(p.id) }
+        let ws = workspace(for: p.id)
+        let rel = String(full.dropFirst(root(p).count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if !isDir {
+            ws.open(rel)
+            return true
+        }
+        if !rel.isEmpty {
+            ws.expandParents(of: rel)
+            ws.state.expanded.insert(rel)
+            ws.state.selection = rel
+        }
+        if !ws.state.layout.allPanels.contains(where: { $0.kind == .explorer }), !ws.state.panes.allTabs.contains(GridItemID.panel(.explorer)) {
+            _ = ws.state.layout.add(.explorer)
+        }
+        return true
+    }
+
     /// Called by the live terminal when output arrives or the process exits.
     /// `asked`: the question on screen while the agent waits on a choice list.
     func liveActivity(_ id: String, lastLines: [String], exited: Int32?, asked: String? = nil) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         // A process Brix stopped (closing, switching views) didn't finish by itself.
         if exited != nil, sessions[i].isLive, TerminalRegistry.shared.view(id) == nil, ClaudeChatRegistry.shared.chat(id) == nil { return }
-        let text = asked ?? lastLines.suffix(3).joined(separator: "\n")
+        let text = asked ?? (sessions[i].kind == .agent ? BrixTerminalView.lastReply(lastLines) : nil) ?? lastLines.suffix(3).joined(separator: "\n")
         if !text.isEmpty { sessions[i].lastOutput = text }
         // A chat's lines are Claude's prose, not its screen: its edits arrive through chatEdited.
         if sessions[i].kind == .agent, !sessions[i].isChat {

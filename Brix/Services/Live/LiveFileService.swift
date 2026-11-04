@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import PDFKit
 import CoreServices
 
 /// Real file system access with FSEvents watching.
@@ -63,6 +64,9 @@ final class LiveFileService: FileService {
                 let rep = img.representations.first
                 let px = CGSize(width: rep?.pixelsWide ?? Int(img.size.width), height: rep?.pixelsHigh ?? Int(img.size.height))
                 return .image(img, size: px)
+            }
+            if (path as NSString).pathExtension.lowercased() == "pdf" {
+                return PDFDocument(url: url) != nil ? .pdf(url, modified: attrs[.modificationDate] as? Date) : .binary(size: size)
             }
             // ponytail: 8 MB cap for the read-only viewer; stream or page larger files if needed.
             guard size <= 8_000_000, let data = try? Data(contentsOf: url) else { return .binary(size: size) }

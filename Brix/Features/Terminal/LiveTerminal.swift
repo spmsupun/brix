@@ -53,6 +53,13 @@ final class BrixTerminalView: LocalProcessTerminalView {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let m = NSMenu()
+        // A selected path (any the ⌘-click detection misses, like a bare "README.md").
+        if let sel = getSelection()?.trimmingCharacters(in: .whitespacesAndNewlines), !sel.contains("\n"), sel.count < 1024,
+           let found = store?.resolvePath(sel, from: sessionID) {
+            let name = (found.path as NSString).lastPathComponent
+            m.addItem(item("Open “\(name)”", #selector(menuOpenSelection)))
+            m.addItem(.separator())
+        }
         // Copy and Paste go to SwiftTerm, which greys Copy out with nothing selected.
         m.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "c")
         m.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "v")
@@ -73,6 +80,18 @@ final class BrixTerminalView: LocalProcessTerminalView {
         let i = NSMenuItem(title: title, action: action, keyEquivalent: "")
         i.target = self
         return i
+    }
+
+    @objc private func menuOpenSelection() { if let sel = getSelection() { store?.openPath(sel.trimmingCharacters(in: .whitespacesAndNewlines), from: sessionID) } }
+
+    /// ⌘-click: a path opens in Brix (a file in a tab, a folder in the Explorer);
+    /// web links, mail and paths on a server go to SwiftTerm's default.
+    override func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        let scheme = link.range(of: #"^[A-Za-z][A-Za-z0-9+.-]*:(?!\d)"#, options: .regularExpression) != nil && !link.hasPrefix("file:")
+        guard !scheme, let store, store.session(sessionID)?.hostID == nil else { return super.requestOpenLink(source: source, link: link, params: params) }
+        if !store.openPath(link, from: sessionID) {
+            store.toast(.info, "Couldn't find \(link)", detail: "Not on disk from \(store.session(sessionID)?.cwd ?? "this terminal's folder").")
+        }
     }
 
     @objc private func menuClear() { store?.clearSession(sessionID) }
@@ -266,6 +285,25 @@ final class BrixTerminalView: LocalProcessTerminalView {
         let s = screen.lowercased()
         if s.contains("(y/n)") || s.contains("[y/n]") { return true }
         return screen.range(of: #"(?m)^\s*[❯›>]\s*1\.\s"#, options: .regularExpression) != nil
+    }
+
+    /// What the agent last said, for a notice: its last "●" reply, without the
+    /// input box, rules and status bar under it. Otherwise the last lines that
+    /// aren't drawing.
+    static func lastReply(_ lines: [String]) -> String? {
+        let rule = { (l: String) -> Bool in
+            let t = l.filter { !$0.isWhitespace }
+            return !t.isEmpty && t.filter { "─━═│┃╭╮╰╯┌┐└┘".contains($0) }.count * 2 >= t.count
+        }
+        let trimmed = { (l: String) in l.trimmingCharacters(in: .whitespaces) }
+        if let start = lines.lastIndex(where: { trimmed($0).hasPrefix("●") }) {
+            var body = lines[start...].prefix { !rule($0) }.map(trimmed).filter { !$0.isEmpty }
+            body[0] = trimmed(String(body[0].dropFirst()))
+            let text = body.prefix(3).joined(separator: "\n")
+            if !text.isEmpty { return text }
+        }
+        let text = lines.filter { !rule($0) }.map(trimmed).filter { !$0.isEmpty }.suffix(3).joined(separator: "\n")
+        return text.isEmpty ? nil : text
     }
 
     /// The question above a choice list ("Do you want to proceed?"), so a notice reads

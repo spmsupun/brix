@@ -106,6 +106,8 @@ struct ExplorerPanel: View {
         .frame(height: 24)
         .rowBackground(selected: selected, tint: hue, radius: 6)
         .clickable().onTapGesture { activate(n) }
+        // Drag out to Finder, Mail, Outlook, an upload box: hands over the real file.
+        .onDrag { ws.project?.isSample == false ? NSItemProvider(contentsOf: ws.project?.url.appendingPathComponent(n.path)) ?? NSItemProvider() : NSItemProvider() }
         .contextMenu { menu(n) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(n.name)\(n.gitStatus.map { ", \($0.name)" } ?? "")")

@@ -208,6 +208,8 @@ final class MockFileService: FileService {
             return FileInfo(kind: FileKinds.kind(for: path), size: s.utf8.count, lines: s.split(separator: "\n", omittingEmptySubsequences: false).count, encoding: "UTF-8", modified: Date().addingTimeInterval(-600))
         case .image(_, let size):
             return FileInfo(kind: "PNG image · \(Int(size.width))×\(Int(size.height))", size: 18_204, lines: 0, encoding: "binary", modified: Date().addingTimeInterval(-86400))
+        case .pdf:
+            return FileInfo(kind: "PDF document", size: 0, lines: 0, encoding: "binary", modified: nil)
         case .binary(let size):
             return FileInfo(kind: "Binary", size: size, lines: 0, encoding: "binary", modified: Date().addingTimeInterval(-86400 * 2))
         case .missing:
