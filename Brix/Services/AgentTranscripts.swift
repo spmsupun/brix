@@ -107,9 +107,9 @@ enum AgentTranscripts {
 
     /// Title for a running Claude Code conversation (custom name first, then its own).
     /// Asked every 15 s: an unchanged transcript comes from the cache.
-    static func claudeTitle(sessionID: String, home: String = NSHomeDirectory()) -> String? {
+    static func claudeEntry(sessionID: String, home: String = NSHomeDirectory()) -> AgentHistoryEntry? {
         guard let f = transcriptURL(sessionID: sessionID, home: home) else { return nil }
-        return entries.value(f) { claudeEntry(f) }?.title
+        return entries.value(f) { claudeEntry(f) }
     }
 
     // MARK: Plan

@@ -295,12 +295,15 @@ struct SessionDescriptor: Codable, Hashable {
     var task: String?
     /// Shown as a chat rather than a terminal (Claude Code); nil before this existed.
     var isChat: Bool?
+    /// Finished work you hadn't looked at when Brix quit (shown as Done again); nil when read.
+    var unread: Bool? = nil
 }
 
 extension SessionDescriptor {
     init(_ s: TerminalSession) {
         self.init(id: s.id, title: s.title, kind: s.kind, hostID: s.hostID, cwd: s.cwd, command: Self.command(of: s),
-                  agentID: s.agentID, externalID: s.externalID, task: s.task.isEmpty ? nil : s.task, isChat: s.kind == .agent ? s.isChat : nil)
+                  agentID: s.agentID, externalID: s.externalID, task: s.task.isEmpty ? nil : s.task, isChat: s.kind == .agent ? s.isChat : nil,
+                  unread: s.unseen ? true : nil)
     }
 
     /// What a logs tail or server shell runs, so it comes back running it (a

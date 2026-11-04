@@ -174,7 +174,8 @@ final class BrixTerminalView: LocalProcessTerminalView {
             let state: SessionState = working ? .running : Self.screenAsksInput(screen) ? .needsInput : .idle
             if state != agentState {
                 agentState = state
-                store?.liveActivity(sessionID, lastLines: recentLines, exited: nil)
+                let asked = state == .needsInput ? Self.askedQuestion(screen.components(separatedBy: "\n")) : nil
+                store?.liveActivity(sessionID, lastLines: recentLines, exited: nil, asked: asked)
                 store?.liveAgentState(sessionID, state)
             }
             return
@@ -265,6 +266,14 @@ final class BrixTerminalView: LocalProcessTerminalView {
         let s = screen.lowercased()
         if s.contains("(y/n)") || s.contains("[y/n]") { return true }
         return screen.range(of: #"(?m)^\s*[❯›>]\s*1\.\s"#, options: .regularExpression) != nil
+    }
+
+    /// The question above a choice list ("Do you want to proceed?"), so a notice reads
+    /// as the question instead of the list's last option.
+    static func askedQuestion(_ lines: [String]) -> String? {
+        guard let menu = lines.lastIndex(where: { $0.range(of: #"^\s*[❯›>]\s*1\.\s"#, options: .regularExpression) != nil }) else { return nil }
+        let frame = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "│┃╭╮╰╯┌┐└┘─━═"))
+        return lines[..<menu].reversed().lazy.map { $0.trimmingCharacters(in: frame) }.first { !$0.isEmpty }
     }
 
     // MARK: Process events (via DelegateRelay)

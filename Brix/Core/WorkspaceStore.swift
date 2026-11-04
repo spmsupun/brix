@@ -321,6 +321,7 @@ final class WorkspaceStore {
             if d.hostID.flatMap(app.host)?.tag.isProduction ?? false { heldSessions.append(d); continue }
             guard let s = restart(d) else { continue }
             remap[d.id] = s.id
+            app.restored(s.id, from: d)
             app.renameSession(s.id, to: d.title)
         }
         if !heldSessions.isEmpty {

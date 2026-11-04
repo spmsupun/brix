@@ -343,12 +343,20 @@ extension AppStore {
         let old = sessions[i].state
         sessions[i].state = state
         guard old != state, sessions[i].kind == .agent else { return }
+        if resuming.contains(id) {
+            // Reloading after a restart: it settles back where it was, nothing new to see.
+            if state != .running { resuming.remove(id) }
+            updateDockBadge()
+            return
+        }
         if state == .running, !sessions[i].markedUnread {
             sessions[i].unseen = false
         } else if (old == .running || state == .needsInput || state == .finished), !isWatching(id) {
             sessions[i].unseen = true
         }
         let s = sessions[i]
+        // The first turn started: its prompt is in the transcript now, so name the tab without waiting for the 15 s refresh.
+        if state == .running, s.task.isEmpty, s.sessionName == nil { Task { [weak self] in await self?.refreshSessionNames() } }
         trackAgentTime(s, from: old, to: state)
         if state == .needsInput {
             record(ActivityEvent(date: Date(), kind: .ask, projectID: s.projectID, actor: displayTitle(s), text: "asked you a question",
@@ -428,11 +436,12 @@ extension AppStore {
     }
 
     /// Called by the live terminal when output arrives or the process exits.
-    func liveActivity(_ id: String, lastLines: [String], exited: Int32?) {
+    /// `asked`: the question on screen while the agent waits on a choice list.
+    func liveActivity(_ id: String, lastLines: [String], exited: Int32?, asked: String? = nil) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         // A process Brix stopped (closing, switching views) didn't finish by itself.
         if exited != nil, sessions[i].isLive, TerminalRegistry.shared.view(id) == nil, ClaudeChatRegistry.shared.chat(id) == nil { return }
-        let text = lastLines.suffix(3).joined(separator: "\n")
+        let text = asked ?? lastLines.suffix(3).joined(separator: "\n")
         if !text.isEmpty { sessions[i].lastOutput = text }
         // A chat's lines are Claude's prose, not its screen: its edits arrive through chatEdited.
         if sessions[i].kind == .agent, !sessions[i].isChat {
@@ -605,6 +614,20 @@ extension AppStore {
     /// Terminals screen, so a relaunch (or a crash) picks up where it left off.
     /// Runs once, when the window first appears (never from init, which SwiftUI
     /// may call more than once).
+    /// A session restored at launch: quiet while its agent reloads, and unread only
+    /// if it was when Brix quit.
+    func restored(_ id: String, from d: SessionDescriptor) {
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        if d.unread == true { sessions[i].unseen = true }
+        guard d.kind == .agent else { return }
+        resuming.insert(id)
+        // A reload that never settles (no idle screen) stops being quiet after a minute.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 60_000_000_000)
+            self?.resuming.remove(id)
+        }
+    }
+
     func restoreSessionsAtLaunch() {
         guard !globalRestored, !restoreDisabled else { return }
         // Restarting doesn't move the focus to whichever session came back last.
@@ -632,6 +655,7 @@ extension AppStore {
                                 command: d.kind == .agent ? nil : d.command, cwd: d.cwd, attach: false)
             }
             remap[d.id] = s.id
+            restored(s.id, from: d)
             if d.kind == .agent { renameSession(s.id, to: d.title) }
         }
         terminalTree = WorkspaceStore.remapped(library.globalTree, remap) { _ in false }
@@ -669,10 +693,10 @@ extension AppStore {
         let found = await Task.detached(priority: .utility) {
             targets.map { id, ext, pid in
                 let now = pid.flatMap { AgentTranscripts.claudeLiveSessionID(pid: $0) } ?? ext
-                return (id, now, AgentTranscripts.claudeTitle(sessionID: now))
+                return (id, now, AgentTranscripts.claudeEntry(sessionID: now))
             }
         }.value
-        for (id, ext, name) in found {
+        for (id, ext, entry) in found {
             guard let i = sessions.firstIndex(where: { $0.id == id }),
                   let was = targets.first(where: { $0.0 == id })?.1, sessions[i].externalID == was else { continue }
             // (A rewind or clear may have moved it while this ran; that newer id wins.)
@@ -680,7 +704,10 @@ extension AppStore {
                 PerfMonitor.shared.note("session \(id) switched conversation to \(ext)")
                 sessions[i].externalID = ext
             }
-            if let name, sessions[i].sessionName != name { sessions[i].sessionName = name }
+            if let name = entry?.title, sessions[i].sessionName != name { sessions[i].sessionName = name }
+            // Typed straight into the terminal, the first prompt never passed through
+            // Brix: until Claude names the chat, the tab shows that prompt.
+            if sessions[i].task.isEmpty, let p = entry?.firstPrompt { sessions[i].task = String(p.prefix(120)) }
         }
     }
 }

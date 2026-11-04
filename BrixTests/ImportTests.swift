@@ -184,6 +184,29 @@ final class ImportTests: XCTestCase {
         XCTAssertEqual(b.library.databases.count, 1)
     }
 
+    @MainActor func testRestoredAgentReloadIsNotNewWork() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("rs-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let st = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root),
+                          keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        let s = st.newTerminal(project: nil, title: "Claude Code", kind: .agent, attach: false)
+        let d = SessionDescriptor(id: "old", title: "Claude Code", kind: .agent, hostID: nil, cwd: "~", command: "agent")
+        st.restored(s.id, from: d)
+        st.setSessionState(s.id, .running)
+        st.setSessionState(s.id, .idle)
+        XCTAssertEqual(st.session(s.id)?.unseen, false, "reloading after a restart isn't finished work")
+        // Once settled, real work counts again.
+        st.setSessionState(s.id, .running)
+        st.setSessionState(s.id, .idle)
+        XCTAssertEqual(st.session(s.id)?.unseen, true)
+        // Unread when Brix quit stays unread.
+        let u = st.newTerminal(project: nil, title: "Claude Code", kind: .agent, attach: false)
+        var du = d; du.unread = true
+        st.restored(u.id, from: du)
+        XCTAssertEqual(st.session(u.id)?.unseen, true)
+        XCTAssertEqual(SessionDescriptor(st.session(u.id)!).unread, true)
+    }
+
     func testSameArrangementIgnoresIdsAndSizes() {
         var a = DockLayout.preset(.code)
         let b = DockLayout.preset(.code)
@@ -316,6 +339,8 @@ extension ImportTests {
         XCTAssertTrue(LiveDockerService.composeMissing("docker: 'compose' is not a docker command."))
         XCTAssertFalse(LiveDockerService.composeMissing("permission denied while trying to connect to the Docker daemon socket"))
         XCTAssertTrue(BrixTerminalView.screenAsksInput("Do you want to make this edit to Sidebar.swift?\n❯ 1. Yes\n  2. No\nEsc to cancel"))
+        XCTAssertEqual(BrixTerminalView.askedQuestion(["│ Which DB should we use? │", "────────", "❯ 1. Postgres", "  2. MySQL", "──────", "  6. Chat about this"]), "Which DB should we use?")
+        XCTAssertNil(BrixTerminalView.askedQuestion(["● Done.", "❯ "]))
         XCTAssertFalse(BrixTerminalView.screenAsksInput("● Hi. What need doing?\n❯ \n⏵⏵ auto mode on (shift+tab to cycle)"))
         // Text in the chat doesn't count: only a spinner row or a choice list does.
         XCTAssertFalse(BrixTerminalView.screenShowsWork("  ⎿ Loading… done\nBuilding… the app"))

@@ -131,6 +131,9 @@ final class AppStore {
     var remoteFilesPath: [ResourceID: String] = [:]
     /// Each SSH host's last listing in the file browser, so switching away and back
     /// shows it straight away instead of loading again.
+    /// Agents restored at launch that are still reloading their conversation. A resumed
+    /// agent looks busy, then idle, which isn't new work: no Done badge or notice for it.
+    @ObservationIgnored var resuming: Set<String> = []
     @ObservationIgnored var remoteFilesListing: [ResourceID: (path: String, entries: [RemoteEntry], history: [String], at: Date)] = [:]
     /// Development aid: shows a tab drag frozen over a pane (snapshot checks).
     var tileDragPreview: (tab: String, target: PaneDropTarget, at: CGPoint)?
