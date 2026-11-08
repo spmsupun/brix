@@ -127,6 +127,8 @@ struct Library: Codable {
         var ignored = 0
         recentFiles = (try? c.decodeEach(RecentFile.self, forKey: .recentFiles, skipped: &ignored)) ?? []
         defaultLayout = (try? c.decode(DockLayout.self, forKey: .defaultLayout)) ?? .preset(.code)
+        // Still named after a built-in preset means unchanged, so it follows the preset's current panels.
+        if let p = BuiltinPreset(rawValue: defaultLayout.presetName ?? "") { defaultLayout = .preset(p) }
         queryHistory = (try? c.decodeEach(QueryHistoryEntry.self, forKey: .queryHistory, skipped: &ignored)) ?? []
         hasOnboarded = (try? c.decode(Bool.self, forKey: .hasOnboarded)) ?? false
         openProjects = (try? c.decode([ProjectID].self, forKey: .openProjects)) ?? []

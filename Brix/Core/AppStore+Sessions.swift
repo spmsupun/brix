@@ -84,7 +84,7 @@ extension AppStore {
             return nil
         }
         // Agents receive resource names only, never secrets.
-        let names = linkedHosts(id).map(\.name) + linkedDatabases(id).map(\.name) + linkedDocker(id).map(\.name)
+        let names = linkedHosts(id).map(\.name) + dataConnections(for: id).map(\.name) + linkedDocker(id).map(\.name)
         // Never run two copies of one conversation; the second would fail.
         if let resume, let live = sessions.first(where: { $0.externalID == resume && $0.isLive && $0.state != .finished && $0.state != .failed }) {
             return live
@@ -493,8 +493,12 @@ extension AppStore {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         // A process Brix stopped (closing, switching views) didn't finish by itself.
         if exited != nil, sessions[i].isLive, TerminalRegistry.shared.view(id) == nil, ClaudeChatRegistry.shared.chat(id) == nil { return }
-        let text = asked ?? (sessions[i].kind == .agent ? BrixTerminalView.lastReply(lastLines) : nil) ?? lastLines.suffix(3).joined(separator: "\n")
-        if !text.isEmpty { sessions[i].lastOutput = text }
+        if sessions[i].kind == .agent {
+            // No reply on screen: an empty text makes the notice say "Waiting for your next message", not the prompt line.
+            sessions[i].lastOutput = asked ?? BrixTerminalView.lastReply(lastLines) ?? ""
+        } else if !lastLines.isEmpty {
+            sessions[i].lastOutput = lastLines.suffix(3).joined(separator: "\n")
+        }
         // A chat's lines are Claude's prose, not its screen: its edits arrive through chatEdited.
         if sessions[i].kind == .agent, !sessions[i].isChat {
             let before = Set(sessions[i].touched.map(\.path))

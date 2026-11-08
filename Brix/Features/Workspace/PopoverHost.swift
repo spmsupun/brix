@@ -55,7 +55,7 @@ struct AddPanelMenu: View {
     private var items: [Item] {
         let p = ws.project
         let hosts = store.linkedHosts(ws.projectID)
-        let dbs = store.linkedDatabases(ws.projectID)
+        let dbs = store.dataConnections(for: ws.projectID)
         let docker = store.linkedDocker(ws.projectID)
         func has(_ k: PanelKind) -> Bool { ws.layout.contains(k) }
         func whereIs(_ k: PanelKind) -> String {

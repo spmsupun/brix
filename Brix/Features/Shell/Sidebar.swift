@@ -247,6 +247,8 @@ private struct FullSidebar: View {
                         }
                 }
             }
+            // Badges keep their width; the name and path are cut short instead.
+            .fixedSize()
         }
         .padding(.leading, 6).padding(.trailing, 10)
         .frame(height: sub == nil ? 36 : (open ? 46 : 44))

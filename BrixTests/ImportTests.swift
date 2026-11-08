@@ -184,6 +184,21 @@ final class ImportTests: XCTestCase {
         XCTAssertEqual(b.library.databases.count, 1)
     }
 
+    @MainActor func testRepoSeesItsProjectsDatabase() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("rd-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let st = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: root),
+                          keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        let parent = Project(id: "p", name: "gac", path: "~/p", language: "", framework: "", hue: .violet, isPinned: false, lastOpened: Date())
+        var repo = parent
+        repo.id = "r"; repo.parentID = parent.id
+        let db = DatabaseConnection(id: "d", name: "gac_dev", kind: .mysql, tag: .dev)
+        st.library.projects = [parent, repo]
+        st.library.databases = [db]
+        st.setLink(parent.id, db.id, kind: .database, linked: true)
+        XCTAssertTrue(st.dataConnections(for: repo.id).contains { $0.id == db.id }, "a database ticked on the project reaches its repos")
+    }
+
     @MainActor func testRestoredAgentReloadIsNotNewWork() {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("rs-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
@@ -345,6 +360,10 @@ extension ImportTests {
                                                    "──────────────────────── fix-tests ─", "❯ ", "────────────────────────", "  ⏵⏵ auto mode on (shift+tab to cycle)"]),
                        "Done. All 12 partner API tests pass.")
         XCTAssertEqual(BrixTerminalView.lastReply(["Codex says hi", "╭────────╮", "│ >      │", "╰────────╯"]), "Codex says hi")
+        // Claude Code 2.1 on macOS, as a real screen showed it.
+        XCTAssertEqual(BrixTerminalView.lastReply(["❯ Reply with exactly: probe ok", "⏺ probe ok", "", "✻ Cogitated for 5s · done 3:20 PM",
+                                                   "────────", "❯ Press up to edit queued messages", "────────", "● high · /effort"]), "probe ok")
+        XCTAssertNil(BrixTerminalView.lastReply(["────────", "❯ ", "────────", "  ⏵⏵ auto mode on", "⚠ Transcript saving is off"]))
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-paths-\(UUID().uuidString)").resolvingSymlinksInPath()
         try? FileManager.default.createDirectory(at: dir.appendingPathComponent("src"), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: dir.path + "/src/app.ts", contents: Data())

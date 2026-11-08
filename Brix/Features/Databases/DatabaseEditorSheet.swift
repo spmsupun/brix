@@ -73,7 +73,8 @@ struct DatabaseEditorSheet: View {
         .frame(width: 1010, height: min(836, (NSScreen.main?.visibleFrame.height ?? 900) - 60))
         .background(Color.dyn(0x161618, 0xFAFAFB))
         .onAppear(perform: load)
-        .task { await scan() }
+        // The snapshot harness picks a found container without a click.
+        .task { if DebugSnapshot.directory != nil, ProcessInfo.processInfo.environment["BRIX_SNAPSHOT_USE"] != nil { await scan() } }
         // Auto-test 600 ms after the last edit.
         .task(id: testKey) {
             try? await Task.sleep(nanoseconds: 600_000_000)
@@ -86,6 +87,8 @@ struct DatabaseEditorSheet: View {
             if new == .sqlite, tag == .dev { tag = .local }
             suggestName()
         }
+        // The container menu lists what a scan found.
+        .onChange(of: route) { _, r in if r == .docker, scannedAt == nil, !scanning { Task { await scan() } } }
         .onChange(of: tag) { _, t in
             if t.isProduction, access == .write { access = .read }
         }
@@ -134,13 +137,26 @@ struct DatabaseEditorSheet: View {
                 HStack(spacing: 8) {
                     SectionLabel("FOUND NEARBY")
                     Spacer()
-                    Button { Task { await scan() } } label: {
-                        Text(scanning ? "scanning…" : scannedAt.map { "scanned \(RelativeTime.short($0)) ↻" } ?? "scan ↻")
-                            .font(Typo.ui(11)).foregroundStyle(Theme.text3)
+                    if scanning || scannedAt != nil {
+                        Button { Task { await scan() } } label: {
+                            Text(scanning ? "scanning…" : scannedAt.map { "scanned \(RelativeTime.short($0)) ↻" } ?? "")
+                                .font(Typo.ui(11)).foregroundStyle(Theme.text3)
+                        }
+                        .buttonStyle(.hand).disabled(scanning)
+                        .accessibilityLabel("Scan again")
                     }
-                    .buttonStyle(.hand).disabled(scanning)
-                    .accessibilityLabel("Scan again")
                 }
+                // Looking reads every project's .env, Docker and local ports: only when asked.
+                if scannedAt == nil && !scanning {
+                    Button { Task { await scan() } } label: {
+                        Text("Look for databases nearby").font(Typo.ui(12, .semibold)).foregroundStyle(Theme.text)
+                            .frame(maxWidth: .infinity).frame(height: 32)
+                            .background(RoundedRectangle(cornerRadius: 9).fill(Color.white(0.05)))
+                            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.white(0.09)))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.hand)
+                } else {
                 ScrollView {
                     VStack(spacing: 6) {
                         if found.isEmpty && !scanning {
@@ -152,6 +168,7 @@ struct DatabaseEditorSheet: View {
                     }
                 }
                 .scrollIndicators(.never)
+                }
             }
             .frame(maxHeight: .infinity, alignment: .top)
         }
@@ -264,11 +281,14 @@ struct DatabaseEditorSheet: View {
                     ForEach(AgentDBAccess.allCases) { accessCard($0) }
                 }
             }
-            if !store.sortedProjects.isEmpty {
+            // Projects, not their repos: a project's database reaches its repos. A repo
+            // already chosen stays listed so it can be unticked.
+            let choices = store.sortedProjects.filter { $0.parentID == nil || projects.contains($0.id) }
+            if !choices.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("USE IN PROJECTS")
+                    SectionLabel("USE IN PROJECTS (OPTIONAL)")
                     FlowLayout(spacing: 6) {
-                        ForEach(store.sortedProjects) { projectChip($0) }
+                        ForEach(choices) { projectChip($0) }
                     }
                 }
             }
@@ -437,7 +457,7 @@ struct DatabaseEditorSheet: View {
     /// The database, with a menu of the ones found after connecting.
     private var databaseField: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(kind == .mysql ? "Database" : "Database (optional)").font(Typo.ui(11.5, .medium)).foregroundStyle(Theme.text2)
+            Text("Database (optional)").font(Typo.ui(11.5, .medium)).foregroundStyle(Theme.text2)
             HStack(spacing: 6) {
                 TextField("", text: $database).textFieldStyle(.plain).font(Typo.mono(12)).foregroundStyle(Theme.text)
                     .accessibilityLabel("Database")
@@ -823,7 +843,6 @@ struct DatabaseEditorSheet: View {
             if host.trimmingCharacters(in: .whitespaces).isEmpty { e["host"] = "Enter a host" }
             if let v = Int(port), (1...65535).contains(v) { p = v } else { e["port"] = "1 to 65535" }
             if user.trimmingCharacters(in: .whitespaces).isEmpty { e["user"] = "Enter a user" }
-            if kind == .mysql, database.trimmingCharacters(in: .whitespaces).isEmpty { e["database"] = "Enter a database" }
             if route == .ssh, tunnel == nil { e["host"] = "Pick a server for the SSH tunnel" }
         }
         let t = timeout.trimmingCharacters(in: .whitespaces), q = queryTimeout.trimmingCharacters(in: .whitespaces)

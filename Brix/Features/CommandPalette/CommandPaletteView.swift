@@ -55,7 +55,7 @@ enum CommandCatalog {
                 }
             }
             action("terminal", "New terminal in \(p.name)", p.path, "❯", key: "⌘T", boost: 1) { store.openProject(p.id); store.newTerminal(project: p.id) }
-            for d in store.linkedDatabases(p.id) {
+            for d in store.dataConnections(for: p.id) {
                 action("panel-db-\(d.id)", "Add panel: Database · \(d.name)", "Dock a query panel for \(d.name)", d.kind.badge, color: Theme.pgBlue, tint: Color(hex: 0x7DA7FF).opacity(0.14)) {
                     store.openProject(p.id); store.workspace(for: p.id).layout.add(.database, to: .bottom, resource: d.id)
                 }
@@ -106,7 +106,7 @@ enum CommandCatalog {
         }
 
         // Data: tables in linked (or all) databases
-        let dbs = pid.map { store.linkedDatabases($0) } ?? store.library.databases
+        let dbs = pid.map { store.dataConnections(for: $0) } ?? store.library.databases
         for d in dbs {
             let schemas = store.schemaCache[d.id]?.schemas ?? (d.isSample && d.id != "atlas_prod_replica" ? MockDatabaseService.tables(for: d) : [:])
             for o in schemas.values.flatMap({ $0 }) where o.kind != .function {

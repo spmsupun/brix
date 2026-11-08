@@ -5,8 +5,8 @@ import SwiftUI
 final class DockModelTests: XCTestCase {
     func testCodePresetPlacesPanels() {
         let l = DockLayout.preset(.code)
-        XCTAssertEqual(l.left.map(\.kind), [.explorer])
-        XCTAssertEqual(l.right.map(\.kind), [.sourceControl])
+        XCTAssertTrue(l.left.isEmpty)
+        XCTAssertEqual(l.right.map(\.kind), [.explorer, .sourceControl])
         XCTAssertEqual(l.bottom.map(\.kind), [.terminal])
         XCTAssertEqual(l.centre, .agents)
         XCTAssertEqual(l.presetName, "code")
@@ -18,19 +18,19 @@ final class DockModelTests: XCTestCase {
 
     func testMoveToAnotherDock() {
         var l = DockLayout.preset(.code)
-        let sc = l.right[0].id
+        let sc = l.right[1].id
         l.move(sc, to: .left)
-        XCTAssertEqual(l.left.map(\.kind), [.explorer, .sourceControl])
-        XCTAssertTrue(l.right.isEmpty)
+        XCTAssertEqual(l.left.map(\.kind), [.sourceControl])
+        XCTAssertEqual(l.right.map(\.kind), [.explorer])
         XCTAssertNil(l.presetName, "Changing a preset makes it custom")
         XCTAssertEqual(l.lastSide[.sourceControl], .left)
     }
 
     func testStackAboveAnotherPanel() {
         var l = DockLayout.preset(.code)
-        let sc = l.right[0].id
-        l.move(sc, to: .left, at: 0)
-        XCTAssertEqual(l.left.map(\.kind), [.sourceControl, .explorer])
+        let sc = l.right[1].id
+        l.move(sc, to: .right, at: 0)
+        XCTAssertEqual(l.right.map(\.kind), [.sourceControl, .explorer])
     }
 
     func testReorderWithinSameDock() {
@@ -44,11 +44,11 @@ final class DockModelTests: XCTestCase {
 
     func testHideAndToggleRestoresLastSide() {
         var l = DockLayout.preset(.code)
-        l.move(l.left[0].id, to: .right)
+        l.move(l.right[0].id, to: .left)
         l.toggle(.explorer)
         XCTAssertFalse(l.contains(.explorer))
         l.toggle(.explorer)
-        XCTAssertEqual(l.right.last?.kind, .explorer, "Re-adding uses the last side")
+        XCTAssertEqual(l.left.last?.kind, .explorer, "Re-adding uses the last side")
     }
 
     func testHiddenPanelKeepsItsIdWhenShownAgain() {
@@ -93,9 +93,9 @@ final class DockModelTests: XCTestCase {
 
     func testSingleInstanceKindMovesInsteadOfDuplicating() {
         var l = DockLayout.preset(.code)
-        l.add(.explorer, to: .right)
+        l.add(.explorer, to: .left)
         XCTAssertEqual(l.allPanels.filter { $0.kind == .explorer }.count, 1)
-        XCTAssertEqual(l.right.last?.kind, .explorer)
+        XCTAssertEqual(l.left.last?.kind, .explorer)
     }
 
     func testResizeClampsKeepCentreVisible() {

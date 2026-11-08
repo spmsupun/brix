@@ -207,7 +207,7 @@ struct LinkedResourcesList: View {
 
     var body: some View {
         let hosts = store.linkedHosts(projectID)
-        let dbs = store.linkedDatabases(projectID)
+        let dbs = store.dataConnections(for: projectID)
         let docker = store.linkedDocker(projectID)
         VStack(alignment: .leading, spacing: 8) {
             HStack {

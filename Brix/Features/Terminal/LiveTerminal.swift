@@ -287,22 +287,28 @@ final class BrixTerminalView: LocalProcessTerminalView {
         return screen.range(of: #"(?m)^\s*[❯›>]\s*1\.\s"#, options: .regularExpression) != nil
     }
 
-    /// What the agent last said, for a notice: its last "●" reply, without the
+    /// What the agent last said, for a notice: its last "⏺" or "●" reply, without the
     /// input box, rules and status bar under it. Otherwise the last lines that
     /// aren't drawing.
     static func lastReply(_ lines: [String]) -> String? {
-        let rule = { (l: String) -> Bool in
-            let t = l.filter { !$0.isWhitespace }
-            return !t.isEmpty && t.filter { "─━═│┃╭╮╰╯┌┐└┘".contains($0) }.count * 2 >= t.count
-        }
         let trimmed = { (l: String) in l.trimmingCharacters(in: .whitespaces) }
-        if let start = lines.lastIndex(where: { trimmed($0).hasPrefix("●") }) {
-            var body = lines[start...].prefix { !rule($0) }.map(trimmed).filter { !$0.isEmpty }
+        // Box rules, the prompt ("❯ ", "› Press up to edit queued messages"), the status
+        // bar ("⏵⏵ auto mode", "⚠") and the spinner's timing line ("✻ Cogitated for 5s").
+        let chrome = { (l: String) -> Bool in
+            let t = l.filter { !$0.isWhitespace }
+            return t.filter { "─━═│┃╭╮╰╯┌┐└┘".contains($0) }.count * 2 >= t.count
+                || t.first.map { "❯›>⏵⚠✻✶✳✢✽·".contains($0) } == true
+        }
+        // Claude Code marks a reply with "⏺" on macOS and "●" elsewhere; its status bar
+        // can show "● high" too, so "●" counts only on a screen without "⏺".
+        let marker = { (m: String) in lines.lastIndex { trimmed($0).hasPrefix(m) } }
+        if let start = marker("⏺") ?? marker("●") {
+            var body = lines[start...].prefix { !chrome($0) || trimmed($0).isEmpty }.map(trimmed).filter { !$0.isEmpty }
             body[0] = trimmed(String(body[0].dropFirst()))
             let text = body.prefix(3).joined(separator: "\n")
             if !text.isEmpty { return text }
         }
-        let text = lines.filter { !rule($0) }.map(trimmed).filter { !$0.isEmpty }.suffix(3).joined(separator: "\n")
+        let text = lines.filter { !chrome($0) }.map(trimmed).suffix(3).joined(separator: "\n")
         return text.isEmpty ? nil : text
     }
 

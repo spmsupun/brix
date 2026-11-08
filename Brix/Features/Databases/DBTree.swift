@@ -301,7 +301,7 @@ struct ProjectDBPanel: View {
     let panel: PanelInstance
 
     var body: some View {
-        let dbs = store.linkedDatabases(ws.projectID)
+        let dbs = store.dataConnections(for: ws.projectID)
         // Never stand in another connection for one that was removed or unlinked:
         // its tables would open against a database nobody picked.
         let d = panel.resourceID.map { id in dbs.first { $0.id == id } } ?? dbs.first

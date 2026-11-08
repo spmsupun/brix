@@ -245,7 +245,7 @@ struct ConnectionsPanel: View {
     let ws: WorkspaceStore
 
     var body: some View {
-        let dbs = store.linkedDatabases(ws.projectID)
+        let dbs = store.dataConnections(for: ws.projectID)
         let hosts = store.linkedHosts(ws.projectID)
         PanelChrome(title: "Connections", count: "\(dbs.count + hosts.count)") {
             Spacer(minLength: 0)

@@ -598,6 +598,13 @@ final class PersistenceSafetyTests: XCTestCase {
         XCTAssertFalse(lib.hasOnboarded)
     }
 
+    func testUnchangedPresetDefaultFollowsThePreset() throws {
+        let old = #"{"defaultLayout":{"left":[{"id":"explorer","kind":"explorer"}],"centre":"agents","presetName":"code"}}"#
+        XCTAssertEqual(try JSONDecoder().decode(Library.self, from: Data(old.utf8)).defaultLayout.right.first?.kind, .explorer)
+        let custom = #"{"defaultLayout":{"left":[{"id":"explorer","kind":"explorer"}],"centre":"agents"}}"#
+        XCTAssertEqual(try JSONDecoder().decode(Library.self, from: Data(custom.utf8)).defaultLayout.left.first?.kind, .explorer)
+    }
+
     @MainActor
     func testUnreadableLibraryIsBackedUp() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-corrupt-\(UUID().uuidString)")
