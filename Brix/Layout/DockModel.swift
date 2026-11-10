@@ -428,7 +428,6 @@ struct DockLayout: Codable, Hashable {
         switch p {
         case .code:
             l.right = [.make(.explorer), .make(.sourceControl)]
-            l.bottom = [.make(.terminal)]
             l.centre = .agents
         case .agent:
             // Everything lives in the centre grid (WorkspaceStore.arrangeAgentGrid).

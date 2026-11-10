@@ -121,6 +121,16 @@ final class LiveFileService: FileService {
         }
     }
 
+    func trash(_ project: Project, path: String) async throws {
+        let clean = path.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard !clean.isEmpty, !clean.contains("..") else { throw ServiceError("Pick a file or folder in the project") }
+        do {
+            try FileManager.default.trashItem(at: project.url.appendingPathComponent(clean), resultingItemURL: nil)
+        } catch {
+            throw ServiceError(error.localizedDescription)
+        }
+    }
+
     func watch(_ project: Project, onChange: @escaping (_ files: Bool) -> Void) -> AnyObject? {
         FolderWatcher(path: project.expandedPath, onChange: onChange)
     }

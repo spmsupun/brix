@@ -32,6 +32,8 @@ protocol FileService: AnyObject {
     func info(_ project: Project, path: String) async -> FileInfo
     func create(_ project: Project, path: String, isDirectory: Bool) async throws
     func rename(_ project: Project, from: String, to: String) async throws
+    /// Moves a file or folder to the Trash, where it can be put back from.
+    func trash(_ project: Project, path: String) async throws
     /// Starts watching the project folder. Returns a token; release it to stop.
     /// `onChange(files)`: files is false when only Git's own data changed.
     func watch(_ project: Project, onChange: @escaping (_ files: Bool) -> Void) -> AnyObject?

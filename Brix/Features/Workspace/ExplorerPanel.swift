@@ -6,6 +6,7 @@ struct ExplorerPanel: View {
     let ws: WorkspaceStore
     @State private var filter = ""
     @FocusState private var filterFocused: Bool
+    @FocusState private var listFocused: Bool
 
     private struct Row: Identifiable {
         var id: String { node.path }
@@ -61,6 +62,15 @@ struct ExplorerPanel: View {
                         }
                         .padding(.horizontal, 6).padding(.bottom, 8).padding(.top, 2)
                     }
+                    .focusable()
+                    .focusEffectDisabled()
+                    .focused($listFocused)
+                    // Delete or ⌘⌫ moves the selected file or folder to the Trash, after asking.
+                    .onKeyPress(keys: [.delete, .deleteForward], phases: .down) { _ in
+                        guard let sel = ws.state.selection else { return .ignored }
+                        trash(sel)
+                        return .handled
+                    }
                 }
             }
         }
@@ -86,7 +96,10 @@ struct ExplorerPanel: View {
             Image(systemName: n.isDirectory ? (open ? "chevron.down" : "chevron.right") : "chevron.right")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(Theme.meta)
-                .frame(width: 10)
+                .frame(width: 10, height: 24)
+                .contentShape(Rectangle())
+                .onTapGesture { ws.state.selection = n.path; toggle(n.path) }
+                .allowsHitTesting(n.isDirectory)
                 .opacity(n.isDirectory ? 1 : 0)
             Image(systemName: n.isDirectory ? "folder.fill" : (FileKinds.isImage(n.name) ? "photo" : "doc"))
                 .font(.system(size: 11.5))
@@ -105,7 +118,7 @@ struct ExplorerPanel: View {
         .padding(.leading, 4).padding(.trailing, 6)
         .frame(height: 24)
         .rowBackground(selected: selected, tint: hue, radius: 6)
-        .clickable().onTapGesture { activate(n) }
+        .clickable().onTapGesture { click(n) }
         // Drag out to Finder, Mail, Outlook, an upload box: hands over the real file.
         .onDrag { ws.project?.isSample == false ? NSItemProvider(contentsOf: ws.project?.url.appendingPathComponent(n.path)) ?? NSItemProvider() : NSItemProvider() }
         .contextMenu { menu(n) }
@@ -114,13 +127,17 @@ struct ExplorerPanel: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private func activate(_ n: FileNode) {
+    /// One click selects, a double click opens the file or folder. One gesture that
+    /// reads the click count: two tap gestures would hold a single click back.
+    private func click(_ n: FileNode) {
         ws.state.selection = n.path
-        if n.isDirectory {
-            if ws.state.expanded.contains(n.path) { ws.state.expanded.remove(n.path) } else { ws.state.expanded.insert(n.path) }
-        } else {
-            ws.open(n.path)
-        }
+        listFocused = true
+        guard (NSApp.currentEvent?.clickCount ?? 1) >= 2 else { return }
+        if n.isDirectory { toggle(n.path) } else { ws.open(n.path) }
+    }
+
+    private func toggle(_ path: String) {
+        if ws.state.expanded.contains(path) { ws.state.expanded.remove(path) } else { ws.state.expanded.insert(path) }
     }
 
     @ViewBuilder private func menu(_ n: FileNode) -> some View {
@@ -132,6 +149,7 @@ struct ExplorerPanel: View {
         Button("New File…") { store.sheet = .newFile(ws.projectID, isDirectory: false, parent: n.isDirectory ? n.path : (n.path as NSString).deletingLastPathComponent) }
         Button("New Folder…") { store.sheet = .newFile(ws.projectID, isDirectory: true, parent: n.isDirectory ? n.path : (n.path as NSString).deletingLastPathComponent) }
         Button("Rename…") { store.sheet = .renameFile(ws.projectID, path: n.path) }
+        Button("Move to Trash…", role: .destructive) { trash(n.path) }
         Divider()
         Button("Copy Path") { store.copyToPasteboard(abs, label: "path") }
         Button("Copy Relative Path") { store.copyToPasteboard(n.path, label: "relative path") }
@@ -145,6 +163,25 @@ struct ExplorerPanel: View {
         Divider()
         Button("Ask Agent About This File") { store.askAgent(about: n.path, in: ws.projectID) }
         Button("Show in Inspector") { store.inspector = .file(ws.projectID, n.path) }
+    }
+
+    private func trash(_ path: String) {
+        let name = (path as NSString).lastPathComponent
+        let unsaved = ws.drafts.keys.contains { $0 == path || $0.hasPrefix(path + "/") }
+        store.confirm("Move “\(name)” to the Trash?",
+                      (unsaved ? "Its unsaved edits are lost. " : "") + "You can put it back from the Trash.", confirm: "Move to Trash") {
+            guard let p = ws.project else { return }
+            Task {
+                do {
+                    try await store.svc(p).files.trash(p, path: path)
+                    ws.removed(path)
+                    ws.loadTree()
+                    store.refreshGit(ws.projectID)
+                } catch {
+                    store.toast(.error, "Couldn't move \(name) to the Trash", detail: error.localizedDescription)
+                }
+            }
+        }
     }
 }
 

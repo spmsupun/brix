@@ -242,7 +242,14 @@ final class LiveDatabaseService: DatabaseService {
         }
         return try await Self.timeout(c.connectTimeout ?? 10,
                                       MySQLConnection.connect(to: address, username: c.user, database: c.database, password: password,
-                                                              tlsConfiguration: tls, serverHostname: host, on: group.any())) { late in _ = late.close() }
+                                                              tlsConfiguration: tls, serverHostname: Self.tlsName(c.host), on: group.any())) { late in _ = late.close() }
+    }
+
+    /// The name TLS asks the server for: the server's own (through a tunnel the socket
+    /// is 127.0.0.1, but the certificate is for the real host), none for an IP, which
+    /// TLS refuses ("cannotUseIPAddressInSNI").
+    static func tlsName(_ host: String) -> String? {
+        (try? SocketAddress(ipAddress: host, port: 0)) == nil ? host : nil
     }
 
     /// SQLite databases with a statement running, for Stop.
@@ -581,12 +588,19 @@ final class SSHTunnel {
         return withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } } == 0
     }
 
+    /// Its own connection, not the host's shared one: through a shared connection
+    /// `ssh -N -L` hands the forward to the background master and exits 0 at once,
+    /// which read as "SSH tunnel failed: exit 0" and left a forward nothing closes.
+    static func args(_ host: SSHHost, local: Int, target: String, port: Int) -> [String] {
+        SSHCommand.args(host, batch: host.auth != .password,
+                        extra: ["-N", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveCountMax=3", "-L", "127.0.0.1:\(local):\(target):\(port)"], mux: false)
+    }
+
     static func open(via host: SSHHost, password: String?, to target: String, port: Int) async throws -> SSHTunnel {
         let local = freePort()
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        p.arguments = SSHCommand.args(host, batch: host.auth != .password,
-                                      extra: ["-N", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveCountMax=3", "-L", "127.0.0.1:\(local):\(target):\(port)"])
+        p.arguments = args(host, local: local, target: target, port: port)
         var env = ProcessRunner.environment()
         // The password goes in a file only this user can read, gone once ssh has signed in
         // (or given up), rather than in the environment of a process that lives for hours.

@@ -381,6 +381,16 @@ final class WorkspaceStore {
         for f in state.openFiles where tabs.values.contains(GridItemID.file(f)) { load(f) }
     }
 
+    /// Follows a file or folder going to the Trash: its tabs close without asking
+    /// to save (there is nothing left to save into) and its edits are dropped.
+    func removed(_ path: String) {
+        let gone = { (p: String) in p == path || p.hasPrefix(path + "/") }
+        for f in state.openFiles where gone(f) { drafts[f] = nil; close(f) }
+        for k in contents.keys where gone(k) { contents[k] = nil }
+        if state.selection.map(gone) == true { state.selection = nil }
+        state.expanded = state.expanded.filter { !gone($0) }
+    }
+
     static func remapped(_ tree: PaneTree, _ remap: [String: String], exists: (String) -> Bool) -> PaneTree {
         func map(_ n: PaneNode) -> PaneNode {
             switch n {

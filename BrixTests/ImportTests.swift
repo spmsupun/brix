@@ -411,6 +411,10 @@ extension ImportTests {
         let a = RemoteFiles.scpArgs(h, recursive: true)
         XCTAssertTrue(a.contains("-P") && a.contains("2222") && a.contains("-r") && a.contains("BatchMode=yes"))
         XCTAssertFalse(a.contains("-p"), "scp's port flag is -P")
+        // A database tunnel through the shared connection exits 0 at once (checked against a real sshd).
+        let t = SSHTunnel.args(h, local: 40000, target: "db.internal", port: 3306)
+        XCTAssertTrue(t.contains("ControlMaster=no") && !t.contains("ControlMaster=auto"))
+        XCTAssertEqual(Array(t.suffix(4)), ["-L", "127.0.0.1:40000:db.internal:3306", "--", "deploy@10.0.0.1"])
     }
 
     /// The listing script runs here against a real folder, with the system shell.

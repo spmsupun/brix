@@ -7,7 +7,7 @@ final class DockModelTests: XCTestCase {
         let l = DockLayout.preset(.code)
         XCTAssertTrue(l.left.isEmpty)
         XCTAssertEqual(l.right.map(\.kind), [.explorer, .sourceControl])
-        XCTAssertEqual(l.bottom.map(\.kind), [.terminal])
+        XCTAssertTrue(l.bottom.isEmpty, "no empty terminal under the agents")
         XCTAssertEqual(l.centre, .agents)
         XCTAssertEqual(l.presetName, "code")
     }
@@ -53,7 +53,7 @@ final class DockModelTests: XCTestCase {
 
     func testHiddenPanelKeepsItsIdWhenShownAgain() {
         var l = DockLayout.preset(.code)
-        let id = l.bottom[0].id
+        let id = l.add(.terminal, to: .bottom).id
         l.toggle(.terminal)
         l.toggle(.terminal)
         XCTAssertEqual(l.bottom.first?.id, id)
@@ -61,7 +61,7 @@ final class DockModelTests: XCTestCase {
 
     func testFloatAndRedock() {
         var l = DockLayout.preset(.code)
-        let id = l.bottom[0].id
+        let id = l.add(.terminal, to: .bottom).id
         l.float(id)
         XCTAssertTrue(l.isFloating(id))
         XCTAssertTrue(l.bottom.isEmpty)
@@ -72,7 +72,7 @@ final class DockModelTests: XCTestCase {
 
     func testRenameAndBindReachFloatingPanels() {
         var l = DockLayout.preset(.code)
-        let id = l.bottom[0].id
+        let id = l.add(.terminal, to: .bottom).id
         l.float(id)
         l.rename(id, to: "api.log")
         l.bind(id, resource: "host-1")
@@ -112,11 +112,11 @@ final class DockModelTests: XCTestCase {
     }
 
     func testApplyPresetKeepsExistingInstances() {
-        var l = DockLayout.preset(.code)
-        let terminal = l.bottom[0]
+        var l = DockLayout.preset(.review)
+        let inspector = l.right[0]
         l.apply(.preset(.agent))
-        l.apply(.preset(.code))
-        XCTAssertEqual(l.bottom.first?.id, terminal.id, "Terminal keeps its id so its session survives")
+        l.apply(.preset(.review))
+        XCTAssertEqual(l.right.first?.id, inspector.id, "A panel keeps its id, so a terminal keeps its session")
     }
 
     func testCustomPresetRoundTrip() throws {
@@ -205,6 +205,36 @@ final class RenameTests: XCTestCase {
         // Reapplying a layout doesn't bring back a second tab for the file.
         ws.apply(.code)
         XCTAssertEqual(ws.state.panes.allTabs.filter { $0 == GridItemID.file("src/lib/pay/intent.ts") }.count, 1)
+    }
+
+    @MainActor
+    func testTrashClosesTabsAndDropsDraftsInsideAFolder() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        store.loadSampleWorkspace()
+        let ws = store.workspace(for: "atlas-web")
+        ws.open("src/lib/stripe/intent.ts")
+        ws.open("src/lib/stripe-old.ts")
+        ws.drafts["src/lib/stripe/intent.ts"] = "edited"
+
+        ws.removed("src/lib/stripe")
+
+        // No "Save changes?" left waiting: the file is gone.
+        XCTAssertTrue(store.confirmations.isEmpty)
+        XCTAssertFalse(ws.state.openFiles.contains { $0.hasPrefix("src/lib/stripe/") })
+        XCTAssertTrue(ws.state.openFiles.contains("src/lib/stripe-old.ts"))
+        XCTAssertFalse(ws.state.panes.allTabs.contains(GridItemID.file("src/lib/stripe/intent.ts")))
+        XCTAssertNil(ws.drafts["src/lib/stripe/intent.ts"])
+        XCTAssertEqual(ws.state.activeFile, "src/lib/stripe-old.ts")
+    }
+
+    func testLiveTrashRefusesThePathOutsideAFile() async {
+        let p = Project(id: "p", name: "p", path: FileManager.default.temporaryDirectory.path, language: "", framework: "", hue: .violet, isPinned: false, lastOpened: Date())
+        for bad in ["", "/", "../x"] {
+            do { try await LiveFileService().trash(p, path: bad); XCTFail("trashed \(bad)") } catch {}
+        }
     }
 }
 

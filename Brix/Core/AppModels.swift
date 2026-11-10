@@ -365,6 +365,9 @@ struct WorkspaceState: Codable {
             panes = PaneTree(legacy: tabs, active: (try? old?.decode(String.self, forKey: .activePaneTab)) ?? nil)
         }
         panelSession = (try? c.decode([String: String].self, forKey: .panelSession)) ?? [:]
+        // Like the default layout: an unchanged preset follows the preset's current panels,
+        // unless a docked terminal holds a session it would lose.
+        if panelSession.isEmpty, let p = BuiltinPreset(rawValue: layout.presetName ?? "") { layout = .preset(p) }
         sessions = (try? c.decode([SessionDescriptor].self, forKey: .sessions)) ?? []
         diffMode = (try? c.decode(DiffMode.self, forKey: .diffMode)) ?? .unified
         reviewFile = try? c.decode(String.self, forKey: .reviewFile)

@@ -178,6 +178,7 @@ enum CommitMessageWriter {
 final class MockFileService: FileService {
     var created: [ProjectID: [String]] = [:]
     var renamed: [ProjectID: [String: String]] = [:]
+    var trashed: [ProjectID: [String]] = [:]
 
     func tree(_ project: Project) async throws -> [FileNode] {
         var tree = MockData.tree(for: project.id)
@@ -189,6 +190,10 @@ final class MockFileService: FileService {
         }
         if let map = renamed[project.id], !map.isEmpty {
             let paths = flatten(tree).filter { !$0.isDirectory }.map { map[$0.path] ?? $0.path }
+            tree = MockData.buildTree(paths: paths, status: [:])
+        }
+        if let gone = trashed[project.id], !gone.isEmpty {
+            let paths = flatten(tree).filter { n in !n.isDirectory && !gone.contains { n.path == $0 || n.path.hasPrefix($0 + "/") } }.map(\.path)
             tree = MockData.buildTree(paths: paths, status: [:])
         }
         return tree
@@ -226,6 +231,10 @@ final class MockFileService: FileService {
     func rename(_ project: Project, from: String, to: String) async throws {
         guard !to.isEmpty else { throw ServiceError("Enter a name") }
         renamed[project.id, default: [:]][from] = to
+    }
+
+    func trash(_ project: Project, path: String) async throws {
+        trashed[project.id, default: []].append(path)
     }
 
     func watch(_ project: Project, onChange: @escaping (_ files: Bool) -> Void) -> AnyObject? { nil }

@@ -28,6 +28,11 @@ enum AgentTranscripts {
         private var items: [String: (stamp: String, value: T?)] = [:]
         private let lock = NSLock()
         func value(_ url: URL, _ make: () -> T?) -> T? {
+            // A URL keeps the size and date it first read until its run loop turns, and
+            // these run on background threads that have none: a reused URL (a live
+            // session's transcript) would look unchanged forever and never get its title.
+            var url = url
+            url.removeAllCachedResourceValues()
             let v = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             let stamp = "\(v?.fileSize ?? -1)|\(v?.contentModificationDate?.timeIntervalSince1970 ?? 0)"
             lock.lock()

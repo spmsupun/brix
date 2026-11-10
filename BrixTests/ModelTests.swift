@@ -605,6 +605,17 @@ final class PersistenceSafetyTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(Library.self, from: Data(custom.utf8)).defaultLayout.left.first?.kind, .explorer)
     }
 
+    /// A project still on the old Code layout (Explorer left, empty terminal below) gets the
+    /// current one; a docked terminal with a session keeps the layout it's in.
+    func testUnchangedPresetWorkspaceFollowsThePreset() throws {
+        let old = #"{"layout":{"left":[{"id":"explorer","kind":"explorer"}],"bottom":[{"id":"t1","kind":"terminal"}],"centre":"agents","presetName":"code"}"#
+        let ws = try JSONDecoder().decode(WorkspaceState.self, from: Data((old + "}").utf8))
+        XCTAssertEqual(ws.layout.right.map(\.kind), [.explorer, .sourceControl])
+        XCTAssertTrue(ws.layout.bottom.isEmpty)
+        let busy = try JSONDecoder().decode(WorkspaceState.self, from: Data((old + #","panelSession":{"t1":"s-1"}}"#).utf8))
+        XCTAssertEqual(busy.layout.bottom.map(\.id), ["t1"])
+    }
+
     @MainActor
     func testUnreadableLibraryIsBackedUp() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-corrupt-\(UUID().uuidString)")
@@ -696,6 +707,30 @@ final class AgentHistoryFilterTests: XCTestCase {
         XCTAssertNotNil(AgentTranscripts.claudeEntry(try session("cli")))
         XCTAssertNotNil(AgentTranscripts.claudeEntry(try session("claude-desktop")))
         XCTAssertNil(AgentTranscripts.claudeEntry(try session("sdk-cli")))
+    }
+
+    /// A live session's transcript URL is reused every 15 s off the main thread: the
+    /// title Claude writes later must still be read.
+    func testReusedURLSeesTheTitleWrittenLater() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("s.jsonl")
+        try #"{"type":"user","entrypoint":"cli","cwd":"/p","message":{"role":"user","content":"<pasted>"}}"#.appending("\n").write(to: url, atomically: false, encoding: .utf8)
+        let cache = AgentTranscripts.Cache<AgentHistoryEntry>()
+        var titles: [String?] = []
+        let done = expectation(description: "read twice")
+        Thread.detachNewThread {
+            titles.append(cache.value(url) { AgentTranscripts.claudeEntry(url) }?.title)
+            let h = try! FileHandle(forWritingTo: url)
+            h.seekToEndOfFile()
+            h.write(Data(#"{"type":"ai-title","aiTitle":"Dragonpass scoping"}"#.utf8 + [0x0A]))
+            try? h.close()
+            titles.append(cache.value(url) { AgentTranscripts.claudeEntry(url) }?.title)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        XCTAssertEqual(titles, [nil, "Dragonpass scoping"])
     }
 }
 

@@ -247,3 +247,23 @@ final class DBCopyServerTests: XCTestCase {
         XCTAssertEqual(r.last?[8], "hi", "the default came along")
     }
 }
+
+/// MySQL over TLS. The live part runs only with TEST_RUNNER_BRIX_TLS_SERVER=1 and a
+/// throwaway MySQL 8 on 127.0.0.1:53307 with TLS on (user brix/brixtest, database brixtls).
+final class MySQLTLSTests: XCTestCase {
+    func testTLSNameIsNeverAnIP() {
+        XCTAssertNil(LiveDatabaseService.tlsName("127.0.0.1"))
+        XCTAssertNil(LiveDatabaseService.tlsName("::1"))
+        XCTAssertEqual(LiveDatabaseService.tlsName("db.eu-west-2.rds.amazonaws.com"), "db.eu-west-2.rds.amazonaws.com")
+    }
+
+    /// TLS refused an IP as the server name, so every MySQL reached through a
+    /// tunnel (or at an IP) with SSL on "prefer" failed before signing in.
+    func testConnectsOverTLSAtAnIP() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["BRIX_TLS_SERVER"] == "1", "needs the throwaway MySQL with TLS")
+        let c = DatabaseConnection(id: "tls-my", name: "my", kind: .mysql, host: "127.0.0.1", port: 53307, database: "brixtls", user: "brix", sslMode: .prefer, tag: .local)
+        let r = try await LiveDatabaseService().execute(c, sql: "show session status like 'Ssl_version'", password: "brixtest")
+        XCTAssertEqual(r.rows.first?.first ?? nil, "Ssl_version")
+        XCTAssertTrue((r.rows.first?.last ?? nil)?.hasPrefix("TLS") == true, "\(r.rows)")
+    }
+}
