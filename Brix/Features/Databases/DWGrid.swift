@@ -495,6 +495,21 @@ final class GridHeaderCell: NSTableHeaderCell {
     }
     required init(coder: NSCoder) { column = nil; super.init(coder: coder) }
 
+    /// AppKit copies header cells while it draws, and NSCell copies byte for byte:
+    /// the copy shared `column` and `accent` without retaining them, so whichever
+    /// cell went second released them again and crashed (a heap string like
+    /// "Grants for gac_mcp@%" from SHOW GRANTS). A new cell holds its own.
+    override func copy(with zone: NSZone? = nil) -> Any {
+        let c = GridHeaderCell(column: column)
+        c.sort = sort
+        c.accent = accent
+        c.font = font
+        c.alignment = alignment
+        c.state = state
+        c.isHighlighted = isHighlighted
+        return c
+    }
+
     override func draw(withFrame cellFrame: NSRect, in controlView: NSView) {
         GridInk.header.setFill()
         cellFrame.fill()

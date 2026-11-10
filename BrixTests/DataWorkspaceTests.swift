@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import Brix
 
 final class DataWorkspaceTests: XCTestCase {
@@ -112,5 +113,23 @@ final class ShortVersionTests: XCTestCase {
         XCTAssertEqual(DatabaseEditorSheet.shortVersion("MySQL 10.11.7-MariaDB-1:10.11.7+maria~ubu2204"), "MariaDB 10.11.7")
         XCTAssertEqual(DatabaseEditorSheet.shortVersion("PostgreSQL 17.6 (Debian 17.6-1.pgdg120+1) on x86_64-pc-linux-gnu"), "PostgreSQL 17.6")
         XCTAssertEqual(DatabaseEditorSheet.shortVersion("MySQL 8.0.36"), "MySQL 8.0.36")
+    }
+}
+
+final class GridHeaderCellTests: XCTestCase {
+    /// AppKit copies header cells while it draws; a copy that shared the column
+    /// unretained released it twice and crashed (SHOW GRANTS' long column name).
+    @MainActor
+    func testCopiesKeepTheirOwnColumn() {
+        let grantee = ["gac", "mcp"].joined(separator: "_")
+        var copy: GridHeaderCell?
+        autoreleasepool {
+            // Only the cells hold this column, as in the grid.
+            let cell = GridHeaderCell(column: DBColumn(name: "Grants for \(grantee)@%", type: "varchar(\(1024))"))
+            copy = cell.copy() as? GridHeaderCell
+        }
+        XCTAssertEqual(copy?.column?.name, "Grants for gac_mcp@%")
+        XCTAssertEqual(copy?.column?.type, "varchar(1024)")
+        copy = nil
     }
 }
