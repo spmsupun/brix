@@ -67,13 +67,21 @@ struct ExplorerPanel: View {
                     .focused($listFocused)
                     // Delete or ⌘⌫ moves the selected file or folder to the Trash, after asking.
                     .onKeyPress(keys: [.delete, .deleteForward], phases: .down) { _ in
-                        guard let sel = ws.state.selection else { return .ignored }
+                        guard let sel = Self.deleteTarget(ws.state.selection, visible: rows.map(\.node.path)) else { return .ignored }
                         trash(sel)
                         return .handled
                     }
                 }
             }
         }
+    }
+
+    /// What Delete acts on: the selection only while its row is on screen. Git, an
+    /// agent or opening a file can select one inside a closed folder or hidden by
+    /// the filter, and a key press must not trash a file you can't see.
+    static func deleteTarget(_ selection: String?, visible: [String]) -> String? {
+        guard let s = selection, !s.isEmpty, visible.contains(s) else { return nil }
+        return s
     }
 
     private var parentForNew: String {
@@ -98,7 +106,7 @@ struct ExplorerPanel: View {
                 .foregroundStyle(Theme.meta)
                 .frame(width: 10, height: 24)
                 .contentShape(Rectangle())
-                .onTapGesture { ws.state.selection = n.path; toggle(n.path) }
+                .onTapGesture { ws.state.selection = n.path; listFocused = true; toggle(n.path) }
                 .allowsHitTesting(n.isDirectory)
                 .opacity(n.isDirectory ? 1 : 0)
             Image(systemName: n.isDirectory ? "folder.fill" : (FileKinds.isImage(n.name) ? "photo" : "doc"))

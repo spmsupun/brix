@@ -8,7 +8,12 @@ final class AppStore {
     let persistence: Persistence
     let keychain: Keychain
 
-    var library = Library() { didSet { scheduleSave() } }
+    var library = Library() {
+        didSet {
+            scheduleSave()
+            if oldValue.notices != library.notices { updateDockBadge() }
+        }
+    }
     var settings = AppSettings() {
         didSet {
             scheduleSave()

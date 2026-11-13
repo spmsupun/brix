@@ -401,16 +401,22 @@ extension AppStore {
         for s in sessions where s.unseen && (isWatching(s.id) || onScreen[s.id, default: 0] > 0) { markSeen(s.id) }
     }
 
+    /// The same count as the bell: unread notices, one per session.
     func updateDockBadge() {
-        let n = sessions.filter { ($0.kind == .agent && $0.state == .needsInput) || $0.unseen }.count
-        NSApp?.dockTile.badgeLabel = settings.badgeDock && n > 0 ? "\(n)" : nil
+        let n = unreadNotices
+        let label = settings.badgeDock && n > 0 ? "\(n)" : nil
+        if NSApp?.dockTile.badgeLabel != label { NSApp?.dockTile.badgeLabel = label }
     }
 
     // MARK: Notification list
 
-    var unreadNotices: Int { library.notices.filter { !$0.read }.count }
+    /// One per session: older libraries can hold several notices for the same chat.
+    var unreadNotices: Int { Set(library.notices.lazy.filter { !$0.read }.map(\.sessionID)).count }
 
+    /// A session's newer notice takes the place of its older one, so a chat that
+    /// finishes three times counts once.
     func recordNotice(title: String, body: String, session: String) {
+        library.notices.removeAll { $0.sessionID == session }
         library.notices.insert(AgentNotice(title: title, body: body, sessionID: session), at: 0)
         if library.notices.count > 200 { library.notices.removeLast(library.notices.count - 200) }
     }

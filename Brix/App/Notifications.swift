@@ -36,7 +36,8 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
             content.userInfo = ["session": sessionID]
             // No macOS sound: Brix plays its own below, so there's one sound even
             // when macOS has Brix's banners or sounds turned off.
-            center.add(UNNotificationRequest(identifier: "\(sessionID)-\(UUID().uuidString)", content: content, trigger: nil)) { error in
+            // One per session: a newer one replaces the session's last in Notification Center.
+            center.add(UNNotificationRequest(identifier: sessionID, content: content, trigger: nil)) { error in
                 PerfMonitor.shared.note("notify sent \(sessionID) sound=\(sound) error=\(error?.localizedDescription ?? "none")")
                 if let error {
                     Task { @MainActor in store.toast(.error, "Notification failed", detail: error.localizedDescription) }

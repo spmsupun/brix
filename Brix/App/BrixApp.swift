@@ -22,6 +22,8 @@ struct BrixApp: App {
                     delegate.store = store
                     AgentNotifier.shared.install(store: store)
                     store.applyAppearance()
+                    // The store is made before NSApp exists, so its own badge at launch is lost.
+                    store.updateDockBadge()
                     store.restoreSessionsAtLaunch()
                     DebugSnapshot.run(store: store)
                     AppUpdater.shared.start(store: store)

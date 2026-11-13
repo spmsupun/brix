@@ -453,3 +453,33 @@ final class TerminalNameTests: XCTestCase {
         XCTAssertEqual(store.displayTitle(store.session(other.id)!), "Terminal", "numbered per project")
     }
 }
+
+final class ExplorerDeleteTests: XCTestCase {
+    func testDeleteOnlyActsOnAVisibleRow() {
+        let rows = ["src", "src/app.ts", "README.md"]
+        XCTAssertEqual(ExplorerPanel.deleteTarget("src/app.ts", visible: rows), "src/app.ts")
+        // Inside a closed folder, hidden by the filter, or already gone.
+        XCTAssertNil(ExplorerPanel.deleteTarget("src/lib/stripe.ts", visible: rows))
+        XCTAssertNil(ExplorerPanel.deleteTarget(nil, visible: rows))
+        // The project root is never a target.
+        XCTAssertNil(ExplorerPanel.deleteTarget("", visible: rows + [""]))
+    }
+}
+
+final class NoticeTests: XCTestCase {
+    @MainActor
+    func testASessionsNewerNoticeReplacesItsOlderOne() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        store.recordNotice(title: "Claude is done", body: "first", session: "s1")
+        store.recordNotice(title: "Claude needs you", body: "second", session: "s2")
+        store.markNoticesRead(session: "s1")
+        store.recordNotice(title: "Claude is done", body: "third", session: "s1")
+
+        XCTAssertEqual(store.library.notices.map(\.body), ["third", "second"])
+        // The read older one is gone; the newer one counts as unread once.
+        XCTAssertEqual(store.unreadNotices, 2)
+    }
+}

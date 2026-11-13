@@ -432,7 +432,7 @@ private struct AppearanceSettings: View {
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 4)
             switchRow("Agent finished", "When an agent session ends", $store.settings.notifyFinished)
             switchRow("Agent needs you", "When a session is waiting for input", $store.settings.notifyNeedsInput)
-            switchRow("Dock badge", "Count of sessions waiting on the Dock icon", $store.settings.badgeDock)
+            switchRow("Dock badge", "Unread notifications on the Dock icon, as on the bell", $store.settings.badgeDock)
             switchRow("Play a sound", "Heard even when macOS mutes banners", $store.settings.notifySound)
             if store.settings.notifySound {
                 controlRow("Sound", "Plays when picked") {
