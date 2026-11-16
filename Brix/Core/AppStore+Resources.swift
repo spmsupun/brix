@@ -175,6 +175,7 @@ extension AppStore {
         } else if !withParent, p.parentID.flatMap(project) != nil {
             library.dismissedRepos.insert(path)
         }
+        forgetAPISecrets(id)
         closeProject(id)
         for s in sessions where s.projectID == id { closeSession(s.id, confirmRunning: false) }
         library.projects.removeAll { $0.id == id }

@@ -373,7 +373,7 @@ final class AppStore {
 
     func removeSampleWorkspace() {
         let projectIDs = Set(library.projects.filter(\.isSample).map(\.id))
-        for id in projectIDs { closeProject(id) }
+        for id in projectIDs { forgetAPISecrets(id); closeProject(id) }
         library.projects.removeAll(where: \.isSample)
         let hostIDs = library.hosts.filter(\.isSample).map(\.id)
         let dbIDs = library.databases.filter(\.isSample).map(\.id)

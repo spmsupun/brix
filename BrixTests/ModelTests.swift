@@ -458,10 +458,12 @@ final class ParserTests: XCTestCase {
     func testCodexUsageParsing() {
         let future = Date().timeIntervalSince1970 + 3600
         let w = AgentUsageReader.parseCodex(["primary": ["used_percent": 3.0, "window_minutes": 10080, "resets_at": future],
-                                             "secondary": ["used_percent": 40.0, "window_minutes": 300, "resets_at": 1]])
+                                             "secondary": ["used_percent": 40.0, "window_minutes": 300, "resets_at": future - 7200]])
         XCTAssertEqual(w.map(\.label), ["7d", "5h"])
         XCTAssertEqual(w[0].percent, 3)
         XCTAssertEqual(w[1].percent, 0, "a window that already reset reads as zero")
+        let stale = AgentUsageReader.parseCodex(["secondary": ["used_percent": 40.0, "window_minutes": 300, "resets_at": 1]])
+        XCTAssertTrue(stale.isEmpty, "a window last reported long ago isn't shown")
     }
 
     func testClaudeUsageReadsCachedLimits() throws {
@@ -475,6 +477,12 @@ final class ParserTests: XCTestCase {
         let w = AgentUsageReader.claude(home: home.path)
         XCTAssertEqual(w.map(\.label), ["5h", "7d"])
         XCTAssertEqual(w.map(\.percent), [12, 19])
+
+        // No 5h figure for two weeks (a plan without one): only 7d shows.
+        let old = future - 14 * 86_400
+        try #"{"five_hour":{"used_percentage":0,"resets_at":\#(old)},"seven_day":{"used_percentage":2,"resets_at":\#(future)}}"#
+            .write(to: dir.appendingPathComponent("rate-limits.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(AgentUsageReader.claude(home: home.path).map(\.label), ["7d"])
     }
 
     @MainActor func testProjectDetection() throws {

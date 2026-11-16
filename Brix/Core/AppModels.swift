@@ -345,6 +345,8 @@ struct WorkspaceState: Codable {
     /// This project's own arrangement for each layout it has used (docks and
     /// tiles), keyed by preset name, so switching Code ↔ Agent comes back as left.
     var presetArrangements: [String: CustomPreset] = [:]
+    /// The API panel's requests, environments and history.
+    var api = APIWorkspace()
 
     init(layout: DockLayout) { self.layout = layout }
 
@@ -373,6 +375,9 @@ struct WorkspaceState: Codable {
         reviewFile = try? c.decode(String.self, forKey: .reviewFile)
         markdownRendered = (try? c.decode(Bool.self, forKey: .markdownRendered)) ?? true
         presetArrangements = (try? c.decode([String: CustomPreset].self, forKey: .presetArrangements)) ?? [:]
+        if c.contains(.api) {
+            do { api = try c.decode(APIWorkspace.self, forKey: .api) } catch { api.dropped = 1 }
+        }
     }
 
     private enum LegacyKeys: String, CodingKey { case paneTabs, activePaneTab }

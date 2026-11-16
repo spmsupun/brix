@@ -9,6 +9,9 @@ final class WorkspaceStore {
     unowned let app: AppStore
 
     var state: WorkspaceState { didSet { app.scheduleSave() } }
+    /// Saved inside `state`, but kept apart while open: typing in a request
+    /// doesn't redraw every view that reads the layout.
+    var api = APIWorkspace() { didSet { app.scheduleSave() } }
     var tree: [FileNode] = []
     var treeError: String?
     var contents: [String: FileContent] = [:]
@@ -64,6 +67,18 @@ final class WorkspaceStore {
                 app.toast(.error, "Couldn't read or back up the layout for \(projectID)", detail: "It won't be saved until you restart. \(copyError.localizedDescription)")
             }
         }
+        api = state.api
+        if api.dropped > 0 {
+            // Saving would drop what couldn't be read: keep the file as it was first.
+            let backup = "workspaces/\(projectID).api-unreadable-\(Int(Date().timeIntervalSince1970)).json"
+            do {
+                try FileManager.default.copyItem(at: app.persistence.url("workspaces/\(projectID).json"), to: app.persistence.url(backup))
+                app.toast(.error, "Some saved API requests couldn't be read", detail: "\(api.dropped) left out. The saved file was kept as \(backup).")
+            } catch {
+                saveBlocked = true
+                app.toast(.error, "Some saved API requests couldn't be read or backed up", detail: "This project's layout won't be saved until you restart. \(error.localizedDescription)")
+            }
+        }
         adoptTiledCentre()
     }
 
@@ -75,6 +90,7 @@ final class WorkspaceStore {
     func save() throws {
         guard !saveBlocked else { return }
         var s = state
+        s.api = api
         if restored, project?.isSample == false {
             s.sessions = projectSessions.filter(\.isLive).filter { $0.state != .finished && $0.state != .failed }.map(SessionDescriptor.init) + heldSessions
         }

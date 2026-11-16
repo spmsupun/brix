@@ -112,9 +112,9 @@ enum AgentUsageReader {
         let url = URL(fileURLWithPath: home + "/.claude/state/rate-limits.json")
         guard let data = try? Data(contentsOf: url),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
-        return [("five_hour", "5h"), ("seven_day", "7d")].compactMap { key, label in
+        return [("five_hour", "5h", 5 * 3600.0), ("seven_day", "7d", 7 * 86_400.0)].compactMap { key, label, length in
             guard let w = obj[key] as? [String: Any], let pct = (w["used_percentage"] as? NSNumber)?.doubleValue else { return nil }
-            return window(label, pct, w["resets_at"])
+            return window(label, pct, w["resets_at"], length: length)
         }
     }
 
@@ -154,12 +154,15 @@ enum AgentUsageReader {
             guard let w = limits[key] as? [String: Any], let pct = (w["used_percent"] as? NSNumber)?.doubleValue else { return nil }
             let minutes = (w["window_minutes"] as? NSNumber)?.intValue ?? 0
             let label = minutes >= 1440 ? "\(minutes / 1440)d" : "\(max(minutes / 60, 1))h"
-            return window(label, pct, w["resets_at"])
+            return window(label, pct, w["resets_at"], length: Double(minutes) * 60)
         }
     }
 
-    private static func window(_ label: String, _ pct: Double, _ resets: Any?) -> UsageWindow {
+    /// nil when the window reset more than a whole window ago with no newer figure: the
+    /// plan has no such window (some have no 5h limit) or the agent stopped reporting it.
+    private static func window(_ label: String, _ pct: Double, _ resets: Any?, length: TimeInterval) -> UsageWindow? {
         let date = (resets as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue) }
+        if let date, length > 0, date.addingTimeInterval(length) < Date() { return nil }
         // A window that has already reset starts again from zero.
         let used = date.map { $0 < Date() } == true ? 0 : pct
         return UsageWindow(label: label, percent: used, resetsAt: date)

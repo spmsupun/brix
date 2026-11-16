@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		034699C2BA12C855DE65D5EE /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22805615DEB379E5B2A4B89A /* APIClientTests.swift */; };
 		03BF5B73E10E057DF7E8AE5F /* AgentsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E597F4F0E5228947733ACF /* AgentsGrid.swift */; };
 		04AAF8E7E24E2A864184C991 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55BEA85C4CF242ED50F7D0DE /* OverviewView.swift */; };
 		0B936E924A6D7812177C2C76 /* SyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67BBA7EF946AEB7655D8725F /* SyntaxHighlighter.swift */; };
@@ -42,6 +43,7 @@
 		479997E097D410A7A69156BC /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED33C3D8F38C01FB05B8314F /* Notifications.swift */; };
 		483C389BDA88EFD7547A3FB6 /* LiveDatabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 357E45C343AA6CEC5EB959D6 /* LiveDatabaseService.swift */; };
 		4C892D29D395BB627AC9BB6E /* DataGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F47849F9E78B382E3CF9F9 /* DataGrid.swift */; };
+		4CAEC393458D4E0C94B26FFE /* APIExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FEC8CDDAC87F303E28F2931 /* APIExport.swift */; };
 		4F9F1E54F7008746B6DB143D /* AgentSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5A6C156178A8C562714813 /* AgentSheets.swift */; };
 		52BD9F52CD8B3EBFB53F5B45 /* FileEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BD673077D6E9613292DAF5 /* FileEditorSheet.swift */; };
 		52CA23322BEA6ECC9F591E35 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = D734E22237DBBE64E0805FF0 /* SwiftTerm */; };
@@ -59,6 +61,7 @@
 		6C1CAD1CB90C3AA24E8912B6 /* DataWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C8B70B85A7E6A30349837C7 /* DataWorkspaceTests.swift */; };
 		6C470A843D2E3DC7C13A2EDA /* AppStore+GitHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A528E3FC0F01B426999C58E /* AppStore+GitHub.swift */; };
 		70AACF7856FA2F01D7199D4D /* AddProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A7B89DDDD8A3CCD58F101F /* AddProjectSheet.swift */; };
+		72F7F7654416D8813A57A460 /* APIPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5F4AE6F935F5454847F8CF /* APIPanel.swift */; };
 		791ECE7E8AD2C7572C4F3378 /* ClaudeChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E703C0EF33F0BED957CA1907 /* ClaudeChat.swift */; };
 		7BA811F96FD84D61BD7FC78B /* DockHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0DE2352A5E657CE5E196E3 /* DockHost.swift */; };
 		7E31D0B751246C6269317834 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431E29C82D38812B0B2EB2A1 /* AppModels.swift */; };
@@ -66,10 +69,12 @@
 		7FA48345484490CEE11AC2C2 /* LiveTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06FD02FD30B36AAE6D15226A /* LiveTerminal.swift */; };
 		7FFA947A1F28CEAE404CBD97 /* ReorderableTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A871909E8AB81D0CB8B72D /* ReorderableTabs.swift */; };
 		8368CD4973C232B4F91C4262 /* BrixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93789C650C63158483609937 /* BrixApp.swift */; };
+		8386FEEE34F3D5F1877B6B3F /* APIImportFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44DE489584B492981C2FE774 /* APIImportFormats.swift */; };
 		86BD82BD506EDE365E2CDFF1 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C439A9A21E617EF06BC2B37 /* ProcessRunner.swift */; };
 		87077C16FE35F407C99335BF /* AppStore+DatabaseTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD9B0E374DBD2328F06EE207 /* AppStore+DatabaseTools.swift */; };
 		87467208138FF6CCCE1AF362 /* HostPing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F7E7CF0DED752589F44329 /* HostPing.swift */; };
 		88790C725676E6DD9748E5B3 /* ResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3662FA2A8AD2D4721BD2DC1 /* ResizeHandle.swift */; };
+		89F46A82FE1DA384ED3F2E4A /* APIImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2EE77CD72E544F3652DE1C /* APIImport.swift */; };
 		8ED387A5D9178EB98E5A6172 /* DataWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D5EBD38031CB6A6B50E87A0 /* DataWorkspaceView.swift */; };
 		8FC0B03961060582EEEEF601 /* ConfigImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94A2DABE572532B1A78DFFF8 /* ConfigImporter.swift */; };
 		917143435E186803089969DE /* PerfMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741B48D6C12AF4083DB250C6 /* PerfMonitor.swift */; };
@@ -87,10 +92,12 @@
 		A9CF9256716B8C5C18943AEA /* DBDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D75050B552FBD1FB7E9E9F9 /* DBDiscovery.swift */; };
 		AAE847AFEFA897F4B3C865E1 /* DBCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E0840ACAF1F220A9050967C /* DBCopyTests.swift */; };
 		AB200BF46FD9D947D6F75C57 /* AgentTranscripts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0073D4D45840C7674C3C8AD /* AgentTranscripts.swift */; };
+		AD552BC1FC9563B7105E2983 /* APIFormatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3AFD702C975C2621759262 /* APIFormatsTests.swift */; };
 		AE8F061FAD39EBAAE1209139 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5ACD256CBDAC4348363C373 /* Updater.swift */; };
 		B103CB3D417823A45219829A /* AppStore+DataWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664C2253791C3A4F9C6302D5 /* AppStore+DataWorkspace.swift */; };
 		B1FE223172EAA062A7FFE91A /* MacStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB42F6E043D58B61CFAEA72C /* MacStats.swift */; };
 		B4DFD3524165FCE4F7908FDD /* Motion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B658E357E054E47E35015F9C /* Motion.swift */; };
+		B5B20C1F768F6BB57C777390 /* MiniYAML.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC75EB8E2E63BE4CEC6DB65 /* MiniYAML.swift */; };
 		B71F4DFDA04B4543DE12BB54 /* Toolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159937A59ED91FB49B0E86B3 /* Toolbar.swift */; };
 		BB8DD68B4EFD0816D4BC9AA8 /* WorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3A8481DC1E271420E694AC1 /* WorkspaceStore.swift */; };
 		C22523162EEAB9FEF788A164 /* ClaudeChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E27C61845830CA4354E8BF00 /* ClaudeChatView.swift */; };
@@ -116,6 +123,7 @@
 		E4C7017BCF3B560CD34D0091 /* SavePresetSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DB90EC680B6F6E6CA470AE /* SavePresetSheet.swift */; };
 		E5D141468EFE595200723028 /* AppStore+Resources.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37B8341CA1BEBE6500918B5 /* AppStore+Resources.swift */; };
 		E5EC30039319735E917B8A9B /* MockServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = A717FC262141B046FF5DCAED /* MockServices.swift */; };
+		E61C01956C333BE7153231F4 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34507ABCF19DB15011EE503 /* APIClient.swift */; };
 		E7A6B7F788A303E94A7D721F /* RecentFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D97F58E07A5E5936B4675D /* RecentFilesView.swift */; };
 		E8BF64D6B3C8D0128F6F269F /* BuildSite.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E32E1C9E707E53D2B21A7E /* BuildSite.swift */; };
 		E95F894099F02370BA60B8FB /* AppStore+Agents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06D6225A3D5CD992AAC3712 /* AppStore+Agents.swift */; };
@@ -167,11 +175,14 @@
 		1AF01592CF827C3F3838094B /* SSHView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHView.swift; sourceTree = "<group>"; };
 		1D5EBD38031CB6A6B50E87A0 /* DataWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataWorkspaceView.swift; sourceTree = "<group>"; };
 		1E641DACBA40D8B6453A23D7 /* Commands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Commands.swift; sourceTree = "<group>"; };
+		1F3AFD702C975C2621759262 /* APIFormatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIFormatsTests.swift; sourceTree = "<group>"; };
+		22805615DEB379E5B2A4B89A /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
 		22C38DCDA619B3F4E3090C83 /* RemoteFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteFilesView.swift; sourceTree = "<group>"; };
 		256B86534B87793F8126481C /* DockerExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockerExtras.swift; sourceTree = "<group>"; };
 		28693C06CFB1714699FD8C6E /* PaneTreeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTreeTests.swift; sourceTree = "<group>"; };
 		2B6345E2A06D48A88A65B78D /* GitHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHub.swift; sourceTree = "<group>"; };
 		2B9CA50DE99E30DFE99E5F37 /* AddDockerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddDockerSheet.swift; sourceTree = "<group>"; };
+		2DC75EB8E2E63BE4CEC6DB65 /* MiniYAML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniYAML.swift; sourceTree = "<group>"; };
 		2F9A920AB987A332256182D1 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		357E45C343AA6CEC5EB959D6 /* LiveDatabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDatabaseService.swift; sourceTree = "<group>"; };
 		38F7E7CF0DED752589F44329 /* HostPing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostPing.swift; sourceTree = "<group>"; };
@@ -186,6 +197,7 @@
 		431E29C82D38812B0B2EB2A1 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 		433C8F7A5F1AF84073300B48 /* DBCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DBCopy.swift; sourceTree = "<group>"; };
 		44A871909E8AB81D0CB8B72D /* ReorderableTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReorderableTabs.swift; sourceTree = "<group>"; };
+		44DE489584B492981C2FE774 /* APIImportFormats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIImportFormats.swift; sourceTree = "<group>"; };
 		4BCAD0846E7659E49854F15F /* NewBranchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewBranchSheet.swift; sourceTree = "<group>"; };
 		4C7336711D68B5925D12B5C3 /* ProjectScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectScanner.swift; sourceTree = "<group>"; };
 		4D0DE2352A5E657CE5E196E3 /* DockHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockHost.swift; sourceTree = "<group>"; };
@@ -210,6 +222,7 @@
 		789B1D1B4C576EBD803755B5 /* DockModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockModelTests.swift; sourceTree = "<group>"; };
 		78D2B37BCD92E34FCDD3A08A /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
 		7B7589CCB87755B231C5AAD4 /* SourceControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceControl.swift; sourceTree = "<group>"; };
+		7D5F4AE6F935F5454847F8CF /* APIPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIPanel.swift; sourceTree = "<group>"; };
 		7E0840ACAF1F220A9050967C /* DBCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DBCopyTests.swift; sourceTree = "<group>"; };
 		81E8DF4118F1D303A794D255 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		830781B2CD13037A03BF4AA5 /* Brix.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Brix.entitlements; sourceTree = "<group>"; };
@@ -221,6 +234,7 @@
 		8DBDFE3746C4C33DC98B07EF /* RemoteFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteFiles.swift; sourceTree = "<group>"; };
 		8E5A6C156178A8C562714813 /* AgentSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSheets.swift; sourceTree = "<group>"; };
 		8EB947EAE70E6654BCFFD99F /* FileSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSheets.swift; sourceTree = "<group>"; };
+		8FEC8CDDAC87F303E28F2931 /* APIExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIExport.swift; sourceTree = "<group>"; };
 		9125E98EB15420A87D9C7EE4 /* DockerDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockerDetail.swift; sourceTree = "<group>"; };
 		91A7B89DDDD8A3CCD58F101F /* AddProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddProjectSheet.swift; sourceTree = "<group>"; };
 		91BD673077D6E9613292DAF5 /* FileEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileEditorSheet.swift; sourceTree = "<group>"; };
@@ -245,6 +259,7 @@
 		B658E357E054E47E35015F9C /* Motion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Motion.swift; sourceTree = "<group>"; };
 		BD9B0E374DBD2328F06EE207 /* AppStore+DatabaseTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+DatabaseTools.swift"; sourceTree = "<group>"; };
 		C03427B172045CFEF91C9B64 /* InspectorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPanel.swift; sourceTree = "<group>"; };
+		C34507ABCF19DB15011EE503 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		C6B39CE3E442FADEC990B5CC /* ProjectHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectHomeView.swift; sourceTree = "<group>"; };
 		C7A0F1EB7DD12918F8D249FD /* HomePanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePanels.swift; sourceTree = "<group>"; };
 		C9EE395FCC09C8D7054A8425 /* ImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportSheet.swift; sourceTree = "<group>"; };
@@ -273,6 +288,7 @@
 		F41AF0F652F4C44726F52608 /* ActivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityService.swift; sourceTree = "<group>"; };
 		F588D997631A54B9A0AA2ADF /* AgentOverview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOverview.swift; sourceTree = "<group>"; };
 		F8D97F58E07A5E5936B4675D /* RecentFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFilesView.swift; sourceTree = "<group>"; };
+		FB2EE77CD72E544F3652DE1C /* APIImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIImport.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -430,6 +446,14 @@
 			path = Sheets;
 			sourceTree = "<group>";
 		};
+		605A7D83DA1CEE97AAB5FB48 /* API */ = {
+			isa = PBXGroup;
+			children = (
+				7D5F4AE6F935F5454847F8CF /* APIPanel.swift */,
+			);
+			path = API;
+			sourceTree = "<group>";
+		};
 		60AB30D98728682C85D5286A /* RemoteFiles */ = {
 			isa = PBXGroup;
 			children = (
@@ -441,6 +465,8 @@
 		66B4F2C6EF6690282BB151AF /* BrixTests */ = {
 			isa = PBXGroup;
 			children = (
+				22805615DEB379E5B2A4B89A /* APIClientTests.swift */,
+				1F3AFD702C975C2621759262 /* APIFormatsTests.swift */,
 				5C8B70B85A7E6A30349837C7 /* DataWorkspaceTests.swift */,
 				7E0840ACAF1F220A9050967C /* DBCopyTests.swift */,
 				789B1D1B4C576EBD803755B5 /* DockModelTests.swift */,
@@ -550,6 +576,7 @@
 			isa = PBXGroup;
 			children = (
 				801335B8AADB125B90C15FCF /* Agents */,
+				605A7D83DA1CEE97AAB5FB48 /* API */,
 				3751D88B2B34BC8EA9741B4A /* CommandPalette */,
 				A4708150C44AA2B5AD080A99 /* Customize */,
 				185BD755FA16DEA94F76B60E /* Databases */,
@@ -587,7 +614,12 @@
 			isa = PBXGroup;
 			children = (
 				F2EBD8C62C1A242CE5AD395B /* Agents.swift */,
+				C34507ABCF19DB15011EE503 /* APIClient.swift */,
+				8FEC8CDDAC87F303E28F2931 /* APIExport.swift */,
+				FB2EE77CD72E544F3652DE1C /* APIImport.swift */,
+				44DE489584B492981C2FE774 /* APIImportFormats.swift */,
 				256B86534B87793F8126481C /* DockerExtras.swift */,
+				2DC75EB8E2E63BE4CEC6DB65 /* MiniYAML.swift */,
 				AEF71CF692A084C9F15A3AFA /* Models.swift */,
 			);
 			path = Models;
@@ -797,6 +829,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E61C01956C333BE7153231F4 /* APIClient.swift in Sources */,
+				4CAEC393458D4E0C94B26FFE /* APIExport.swift in Sources */,
+				89F46A82FE1DA384ED3F2E4A /* APIImport.swift in Sources */,
+				8386FEEE34F3D5F1877B6B3F /* APIImportFormats.swift in Sources */,
+				72F7F7654416D8813A57A460 /* APIPanel.swift in Sources */,
 				FEE3EAF0612088E5CDABD5FF /* ActivityService.swift in Sources */,
 				EEB9F903A34C50BC28C6CC64 /* AddDockerSheet.swift in Sources */,
 				70AACF7856FA2F01D7199D4D /* AddProjectSheet.swift in Sources */,
@@ -870,6 +907,7 @@
 				7FA48345484490CEE11AC2C2 /* LiveTerminal.swift in Sources */,
 				B1FE223172EAA062A7FFE91A /* MacStats.swift in Sources */,
 				CE3E2C70F41F2509D11890E0 /* MenuButton.swift in Sources */,
+				B5B20C1F768F6BB57C777390 /* MiniYAML.swift in Sources */,
 				6A21FA48BE80AA5C73C9AD70 /* MockData.swift in Sources */,
 				E5EC30039319735E917B8A9B /* MockServices.swift in Sources */,
 				177A106ACB23C26EA5687357 /* Models.swift in Sources */,
@@ -917,6 +955,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				034699C2BA12C855DE65D5EE /* APIClientTests.swift in Sources */,
+				AD552BC1FC9563B7105E2983 /* APIFormatsTests.swift in Sources */,
 				AAE847AFEFA897F4B3C865E1 /* DBCopyTests.swift in Sources */,
 				6C1CAD1CB90C3AA24E8912B6 /* DataWorkspaceTests.swift in Sources */,
 				409F2221CE3069B619DEAB3B /* DockModelTests.swift in Sources */,

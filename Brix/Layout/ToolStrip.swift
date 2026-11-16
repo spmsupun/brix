@@ -7,7 +7,7 @@ struct ToolStrip: View {
     @Environment(\.accent) private var accent
     let ws: WorkspaceStore
 
-    static let kinds: [PanelKind] = [.explorer, .sourceControl, .plan, .agentFiles, .inspector, .connections, .notes]
+    static let kinds: [PanelKind] = [.explorer, .sourceControl, .plan, .agentFiles, .inspector, .connections, .notes, .api]
     static let width: CGFloat = 44
 
     private func home(_ k: PanelKind) -> DockSide {
@@ -67,6 +67,10 @@ struct ToolStrip: View {
                 ws.select(panel: panel.id)
             } else if let panel, visible {
                 ws.layout.hide(panel.id)
+            } else if k == .api, panel == nil {
+                // Wide like an editor: it opens in the centre, and can still be docked from its menu.
+                ws.movePanelToGrid(k, group: nil)
+                ws.state.panes.activate(GridItemID.panel(k))
             } else {
                 let p = ws.layout.add(k, to: home(k))
                 if k == .terminal, ws.state.panelSession[p.id] == nil, let s = ws.projectSessions.first(where: { $0.kind != .agent }) {

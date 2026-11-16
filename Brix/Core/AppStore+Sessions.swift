@@ -373,15 +373,13 @@ extension AppStore {
         updateDockBadge()
     }
 
-    /// You looked at it: no longer flagged as finished-unseen.
+    /// You looked at it: no longer flagged as finished-unseen, and its notifications are read.
     /// `opened`: the user picked it from a list, which also clears a hand-set unread.
     /// Otherwise (it's merely on screen) a hand-set unread stays.
     func markSeen(_ id: String, opened: Bool = false) {
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
-        if opened {
-            sessions[i].markedUnread = false
-            markNoticesRead(session: id)
-        }
+        if opened { sessions[i].markedUnread = false }
+        if !sessions[i].markedUnread { markNoticesRead(session: id) }
         guard sessions[i].unseen, !sessions[i].markedUnread else { return }
         sessions[i].unseen = false
         updateDockBadge()
@@ -397,8 +395,9 @@ extension AppStore {
     }
 
     /// Brix came to the front: sessions already on screen count as seen.
+    /// Not only unseen ones: a session that started running again is no longer unseen but its notification is still unread.
     func markWatchedSeen() {
-        for s in sessions where s.unseen && (isWatching(s.id) || onScreen[s.id, default: 0] > 0) { markSeen(s.id) }
+        for s in sessions where isWatching(s.id) || onScreen[s.id, default: 0] > 0 { markSeen(s.id) }
     }
 
     /// The same count as the bell: unread notices, one per session.

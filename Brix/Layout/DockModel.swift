@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 enum PanelKind: String, Codable, CaseIterable, Identifiable {
-    case explorer, sourceControl, terminal, agent, inspector, connections, docker, database, serverShell, logs, notes, browser, plan, agentFiles, remoteFiles
+    case explorer, sourceControl, terminal, agent, inspector, connections, docker, database, serverShell, logs, notes, browser, plan, agentFiles, remoteFiles, api
     /// A table or SQL console tab (tiles only), and the record of its selected row.
     case dataTab, record
     var id: String { rawValue }
@@ -24,6 +24,7 @@ enum PanelKind: String, Codable, CaseIterable, Identifiable {
         case .plan: "Plan"
         case .agentFiles: "Agent Files"
         case .remoteFiles: "Server Files"
+        case .api: "API"
         case .dataTab: "Table"
         case .record: "Record"
         }
@@ -46,6 +47,7 @@ enum PanelKind: String, Codable, CaseIterable, Identifiable {
         case .plan: "checklist"
         case .agentFiles: "doc.on.doc"
         case .remoteFiles: "externaldrive.connected.to.line.below"
+        case .api: "network"
         case .dataTab: "tablecells"
         case .record: "list.bullet.rectangle"
         }
@@ -64,7 +66,7 @@ enum PanelKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .database: .left
         case .explorer, .sourceControl, .inspector, .connections, .notes, .browser, .plan, .agentFiles, .remoteFiles, .record: .right
-        case .terminal, .agent, .serverShell, .logs, .docker, .dataTab: .bottom
+        case .terminal, .agent, .serverShell, .logs, .docker, .dataTab, .api: .bottom
         }
     }
 

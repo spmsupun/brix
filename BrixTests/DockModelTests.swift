@@ -482,4 +482,25 @@ final class NoticeTests: XCTestCase {
         // The read older one is gone; the newer one counts as unread once.
         XCTAssertEqual(store.unreadNotices, 2)
     }
+
+    /// Its terminal on screen reads a session's notification, unless you flagged it unread.
+    @MainActor
+    func testSeeingASessionReadsItsNotice() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = AppStore(services: Services(mock: .mock(), live: .mock()), persistence: Persistence(directory: dir),
+                             keychain: Keychain(service: "com.brix.tests.\(UUID().uuidString)"), loadFromDisk: false)
+        for id in ["s1", "s2"] {
+            store.sessions.append(TerminalSession(id: id, projectID: "p", hostID: nil, title: id, kind: .agent, cwd: "~",
+                                                  state: .running, process: "claude", startedAt: Date()))
+            store.recordNotice(title: "Claude is done", body: id, session: id)
+        }
+        store.setUnread("s2", true)
+
+        store.markSeen("s1")
+        store.markSeen("s2")
+        XCTAssertEqual(store.library.notices.filter { !$0.read }.map(\.sessionID), ["s2"], "a hand-set unread keeps its notice")
+        store.markSeen("s2", opened: true)
+        XCTAssertEqual(store.unreadNotices, 0)
+    }
 }

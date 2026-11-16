@@ -26,6 +26,7 @@ struct PanelContent: View {
             if let h = panel.resourceID { RemoteFilesView(hostID: h) } else { EmptyState(symbol: "externaldrive", message: "No host chosen.") }
         case .dataTab: DataTabTile(ws: ws, key: panel.resourceID ?? "")
         case .record: RecordPanel(ws: ws)
+        case .api: APIPanel(ws: ws)
         }
     }
 }

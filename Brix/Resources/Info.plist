@@ -21,13 +21,18 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0-beta.21</string>
+	<string>0.1.0-beta.22</string>
 	<key>CFBundleVersion</key>
-	<string>177</string>
+	<string>186</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Brix runs your terminals and agents; commands you run in them may ask to control other apps.</string>
 	<key>NSCameraUsageDescription</key>
