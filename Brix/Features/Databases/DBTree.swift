@@ -73,7 +73,7 @@ struct DBTreeRows: View {
 
     @ViewBuilder private func folders(_ schema: String, _ objs: [DBObject], indent: CGFloat) -> some View {
         folder(schema, "Tables", "tablecells", objs.filter { $0.kind == .table }, indent: indent, openByDefault: true)
-        folder(schema, "Views", "eye", objs.filter { $0.kind == .view }, indent: indent, openByDefault: false)
+        folder(schema, "Views", "eye", objs.filter { $0.kind == .view }, indent: indent, openByDefault: true)
         folder(schema, "Routines", "function", objs.filter { $0.kind == .function }, indent: indent, openByDefault: false)
     }
 

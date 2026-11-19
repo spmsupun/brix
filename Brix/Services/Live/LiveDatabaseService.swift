@@ -61,9 +61,19 @@ final class LiveDatabaseService: DatabaseService {
         }
     }
 
-    /// Runs on the connection's shared session (opened on first use, reopened when
-    /// its settings change or it drops). One call at a time per connection.
+    /// The pool's key for a connection's session: one per tab (the owner tag up to its
+    /// "#"), so a slow or hung query holds up only its own tab. Calls without a tab share one.
+    /// ponytail: a connection to the server per open tab, closed after 5 idle minutes.
+    static func sessionID(_ id: ResourceID, owner: String?) -> ResourceID {
+        guard let tab = owner?.split(separator: "#").first, !tab.isEmpty else { return id }
+        return id + "#tab:" + tab
+    }
+
+    /// Runs on the tab's session for the connection (opened on first use, reopened when
+    /// its settings change or it drops). One call at a time per session.
     private func pooled(_ c: DatabaseConnection, password: String?, _ sqls: [String], atomic: Bool, expect: [Int?]) async throws -> [RawResult] {
+        var c = c
+        c.id = Self.sessionID(c.id, owner: Self.owner)
         try await pool.acquire(c.id, owner: Self.owner ?? "")
         do {
             let out = try await pooledLocked(c, password: password, sqls, atomic: atomic, expect: expect)
@@ -181,14 +191,17 @@ final class LiveDatabaseService: DatabaseService {
     func cancel(_ c: DatabaseConnection, owner: String?, password: String?) async {
         if c.kind == .sqlite { sqliteQueue(c.id)?.interrupt(); return }
         // Only when this tab's call holds the session; another tab's query is left alone.
-        guard let holder = await pool.holder(c.id), owner == nil || holder == owner,
-              let id = await pool.session(c.id)?.serverID, let n = Int(id) else { return }
+        let key = Self.sessionID(c.id, owner: owner)
+        guard let holder = await pool.holder(key), owner == nil || holder == owner,
+              let id = await pool.session(key)?.serverID, let n = Int(id) else { return }
         var probe = c
         probe.startupSQL = ""
         let sql = c.kind == .postgres ? "select pg_cancel_backend(\(n))" : "KILL QUERY \(n)"
         do {
             let s = try await open(probe, password: password, key: "cancel")
             defer { s.close() }
+            // Opening took a round trip: if the call finished meanwhile, the next one is left alone.
+            guard await pool.holder(key) == holder, await pool.session(key)?.serverID == id else { return }
             _ = try await s.query(sql)
         } catch {
             Self.logger.warning("cancel failed: \(Self.describe(error))")
@@ -223,12 +236,18 @@ final class LiveDatabaseService: DatabaseService {
         let tls: PostgresConnection.Configuration.TLS
         switch c.sslMode {
         case .disable: tls = .disable
-        case .prefer: tls = .prefer(try NIOSSLContext(configuration: .clientDefault))
+        // Like libpq's "prefer" (and MySQL's here): encrypted when the server offers it, certificate not checked.
+        case .prefer:
+            var unchecked = TLSConfiguration.makeClientConfiguration()
+            unchecked.certificateVerification = .none
+            tls = .prefer(try NIOSSLContext(configuration: unchecked))
         case .require: tls = .require(try NIOSSLContext(configuration: .clientDefault))
         }
         var config = PostgresConnection.Configuration(host: host, port: port, username: c.user, password: password,
                                                       database: c.database.isEmpty ? nil : c.database, tls: tls)
         config.options.connectTimeout = .seconds(Int64(c.connectTimeout ?? 10))
+        // Through a tunnel `host` is 127.0.0.1: name the real server, for hosts that route by it and for the certificate check.
+        config.options.tlsServerName = Self.tlsName(c.host)
         return try await PostgresConnection.connect(configuration: config, id: 1, logger: Self.logger)
     }
 

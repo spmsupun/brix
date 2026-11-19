@@ -317,6 +317,7 @@ struct DockerDetailView: View {
             FactRow(key: "Workdir", value: str(config["WorkingDir"]))
             FactRow(key: "Restarts", value: str(inspect["RestartCount"] ?? state["RestartCount"]))
         }
+        if case .container(let id) = selection, let c = store.dockerTarget(id) { connected(c) }
         if !stats.isEmpty {
             InspectorSection(title: statsError == nil ? "Live stats" : "Live stats (stale)") {
                 if let statsError { Text("Couldn't refresh: \(statsError)").font(Typo.ui(11)).foregroundStyle(Theme.amber).lineLimit(2).help(statsError) }
@@ -412,7 +413,27 @@ struct DockerDetailView: View {
             }
             InspectorSection(title: "Projects") {
                 let ps = store.library.links.projects(for: s.id).compactMap(store.project)
-                Text(ps.isEmpty ? "Not attached to a project." : ps.map(\.name).joined(separator: ", ")).font(Typo.ui(12)).foregroundStyle(Theme.text2)
+                if ps.isEmpty { Text("Not attached to a project.").font(Typo.ui(12)).foregroundStyle(Theme.text2) }
+                ForEach(ps) { p in ResourceLink(badge: p.initials, title: p.name, sub: "project") { store.go(.projectHome(p.id)) } }
+            }
+        }
+    }
+
+    /// What the container runs on, shares a stack with, serves and belongs to; each opens its page.
+    @ViewBuilder private func connected(_ c: DockerTarget) -> some View {
+        let host = c.hostID.flatMap(store.host)
+        let siblings = c.composeProject.isEmpty ? [] : store.allDocker.filter { $0.id != c.id && $0.hostID == c.hostID && $0.composeProject == c.composeProject }
+        let dbs = store.library.databases.filter { store.serves(c, $0) }
+        let projects = store.library.links.projects(for: c.id).compactMap(store.project)
+        InspectorSection(title: "Connected") {
+            if let host { ResourceLink(badge: "SSH", title: host.name, sub: "runs on", dot: (store.hostStatus[host.id] ?? .disconnected).color) { store.showHost(host.id) } }
+            ForEach(dbs) { d in ResourceLink(badge: d.kind.badge, title: d.name, sub: "on port \(d.port)") { store.showDatabase(d.id) } }
+            ForEach(siblings) { s in
+                ResourceLink(badge: "DK", title: s.composeService.isEmpty ? s.name : s.composeService, sub: "same stack · " + s.uptimeText.lowercased(), dot: s.state.color) { store.showContainer(s.id) }
+            }
+            ForEach(projects) { p in ResourceLink(badge: p.initials, title: p.name, sub: "linked project") { store.go(.projectHome(p.id)) } }
+            if host == nil && dbs.isEmpty && siblings.isEmpty && projects.isEmpty {
+                Text("Runs on this Mac. Not linked to a project.").font(Typo.ui(12)).foregroundStyle(Theme.text3)
             }
         }
     }

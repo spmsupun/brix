@@ -357,6 +357,12 @@ enum RelativeTime {
         return s == "now" ? "just now" : s + " ago"
     }
 
+    /// `long` with "ago", except "Just now" and "Yesterday", which already say when.
+    static func longAgo(_ d: Date, now: Date = Date()) -> String {
+        let s = long(d, now: now)
+        return s == "Just now" || s == "Yesterday" ? s : s + " ago"
+    }
+
     /// "5 min", "1 h", "Yesterday", "2 days", "1 week".
     static func long(_ d: Date, now: Date = Date()) -> String {
         let s = Int(now.timeIntervalSince(d))

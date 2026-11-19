@@ -39,6 +39,12 @@ final class DataWorkspaceTests: XCTestCase {
         XCTAssertEqual(SQLText.redacted("ALTER USER bob WITH PASSWORD 'hunter2'"), "ALTER USER bob WITH PASSWORD '•••'")
         XCTAssertEqual(SQLText.redacted("CREATE USER 'bob'@'%' IDENTIFIED BY 's3cret'"), "CREATE USER 'bob'@'%' IDENTIFIED BY '•••'")
         XCTAssertEqual(SQLText.redacted("select 'x' from t"), "select 'x' from t")
+        XCTAssertEqual(SQLText.redacted(#"CREATE USER bob IDENTIFIED BY "s3cret""#), "CREATE USER bob IDENTIFIED BY '•••'")
+        XCTAssertEqual(SQLText.redacted("ALTER ROLE bob PASSWORD $$hunter2$$"), "ALTER ROLE bob PASSWORD '•••'")
+        XCTAssertEqual(SQLText.redacted("UPDATE users SET name = 'Al', api_token = 'tok' WHERE id = 1"), "UPDATE users SET name = 'Al', api_token = '•••' WHERE id = 1")
+        XCTAssertEqual(SQLText.redacted("INSERT INTO notes VALUES ('reset password', 'abc')"), "INSERT INTO notes VALUES ('reset password', 'abc')")
+        XCTAssertEqual(SQLText.redacted(#"UPDATE users SET "password" = 'hunter2' WHERE "id" = 1"#), #"UPDATE users SET "password" = '•••' WHERE "id" = 1"#)
+        XCTAssertEqual(SQLText.redacted(#"INSERT INTO t("api_token") VALUES ('x')"#), #"INSERT INTO t("api_token") VALUES ('•••')"#)
     }
 
     func testUpdatesMatchWhatWasLoaded() {

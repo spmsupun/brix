@@ -105,7 +105,7 @@ struct RootView: View {
         case .databases: DataWorkspaceView()
         case .docker: DockerView()
         case .ssh: SSHView()
-        case .servers: ServersView()
+        case .servers: SSHView()
         case .dbConnections: DBConnectionsView()
         case .customize: CustomizeView(inSettingsWindow: false)
         case .workspace(let id):

@@ -8,7 +8,12 @@ final class WorkspaceStore {
     let projectID: ProjectID
     unowned let app: AppStore
 
-    var state: WorkspaceState { didSet { app.scheduleSave() } }
+    var state: WorkspaceState {
+        didSet {
+            app.scheduleSave()
+            if app.route == .workspace(projectID) { app.noteNavigation() }
+        }
+    }
     /// Saved inside `state`, but kept apart while open: typing in a request
     /// doesn't redraw every view that reads the layout.
     var api = APIWorkspace() { didSet { app.scheduleSave() } }
@@ -458,8 +463,19 @@ final class WorkspaceStore {
     /// Back to the layout's own default arrangement for this project.
     func resetArrangement() {
         guard let name = state.layout.presetName else { return }
-        state.presetArrangements[name] = nil
-        if let b = BuiltinPreset(rawValue: name) { apply(b, fresh: true) } else if let c = app.library.customPresets.first(where: { $0.id == name }) { apply(custom: c, fresh: true) }
+        if let b = BuiltinPreset(rawValue: name) {
+            state.presetArrangements[name] = nil
+            apply(b, fresh: true)
+        } else if let c = app.library.customPresets.first(where: { $0.id == name }) {
+            state.presetArrangements[name] = nil
+            apply(custom: c, fresh: true)
+        }
+    }
+
+    /// False when the layout in use was a custom one that's since been deleted.
+    var canResetArrangement: Bool {
+        guard let n = state.layout.presetName else { return false }
+        return BuiltinPreset(rawValue: n) != nil || app.library.customPresets.contains { $0.id == n }
     }
 
     /// The project's own saved arrangement: tabs that no longer exist drop out,

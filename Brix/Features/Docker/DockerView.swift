@@ -247,9 +247,22 @@ struct DockerStackHeader: View {
                 Text("\(running) of \(containers.count) running").font(Typo.ui(11)).foregroundStyle(running > 0 ? Theme.green : Theme.text3).lineLimit(1).fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Empty cells keep Status and Projects under their own headings.
+            if cols.image { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+            if cols.ports { Color.clear.frame(width: 90, height: 1) }
             if cols.status {
                 Text(running > 0 ? "Active now" : last == .distantPast ? "–" : "Active " + Self.relative(last))
                     .font(Typo.ui(11.5)).foregroundStyle(Theme.text3).lineLimit(1).frame(width: 120, alignment: .leading)
+            }
+            if cols.projects {
+                // The stack's own links, then its containers'.
+                let ids = (stack.map { store.library.links.projects(for: $0.id) } ?? []) + containers.flatMap { store.library.links.projects(for: $0.id) }
+                let projects = ids.reduce(into: [ProjectID]()) { if !$0.contains($1) { $0.append($1) } }.compactMap(store.project)
+                HStack(spacing: -5) {
+                    ForEach(projects.prefix(4)) { p in ProjectMark(project: p, size: 20).background(RoundedRectangle(cornerRadius: 6).fill(Theme.island).padding(-2)) }
+                    if projects.isEmpty { Text("–").font(Typo.ui(11)).foregroundStyle(Theme.meta) }
+                }
+                .frame(width: 110, alignment: .leading)
             }
             HStack(spacing: 2) {
                 if let stack {

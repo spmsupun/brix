@@ -93,8 +93,16 @@ extension AppStore {
         }
     }
 
+    /// mysqldump and mysql need a database to name; with none they only print their usage.
+    private func needsDatabase(_ d: DatabaseConnection, to verb: String) -> Bool {
+        guard d.kind == .mysql, d.database.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        toast(.info, "\(d.name) has no database name", detail: "Set the database in its settings to \(verb) it.")
+        return true
+    }
+
     func dumpDatabase(_ d: DatabaseConnection) {
         guard !d.isSample else { toast(.info, "Sample databases can't be dumped"); return }
+        guard !needsDatabase(d, to: "dump") else { return }
         let panel = NSSavePanel()
         let custom = d.kind == .postgres
         panel.nameFieldStringValue = "\(d.database.ifEmpty(d.name))-\(Date().formatted(.iso8601.year().month().day()))\(custom ? ".dump" : ".sql")"
@@ -129,6 +137,7 @@ extension AppStore {
             toast(.info, "\(d.name) is read-only", detail: "Turn off read-only in its settings to restore into it.")
             return
         }
+        guard !needsDatabase(d, to: "restore into") else { return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.message = "Choose a .sql file or a PostgreSQL custom-format dump to restore into \(d.name)"
@@ -195,7 +204,7 @@ extension AppStore {
         }
         let cmd: String = switch d.kind {
         case .postgres: "psql -h \(q(d.host)) -p \(d.port) -U \(q(d.user)) -d \(q(d.database))"
-        case .mysql: "mysql \(options)-h \(q(d.host)) -P \(d.port) -u \(q(d.user)) \(q(d.database))"
+        case .mysql: "mysql \(options)-h \(q(d.host)) -P \(d.port) -u \(q(d.user))\(d.database.trimmingCharacters(in: .whitespaces).isEmpty ? "" : " " + q(d.database))"
         case .sqlite: "sqlite3 \(d.effectiveReadOnly ? "-readonly " : "")\(q((d.filePath as NSString).expandingTildeInPath))"
         }
         if d.kind == .postgres {

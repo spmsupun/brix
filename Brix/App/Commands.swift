@@ -94,12 +94,14 @@ struct BrixCommands: Commands {
         }
 
         CommandMenu("Go") {
+            Button("Back") { store.goBack() }.keyboardShortcut("[", modifiers: .command).disabled(store.nav.back.isEmpty)
+            Button("Forward") { store.goForward() }.keyboardShortcut("]", modifiers: .command).disabled(store.nav.forward.isEmpty)
+            Divider()
             ForEach(Array(Route.numbered.enumerated()), id: \.offset) { i, r in
                 Button(r.title) { store.go(r) }.keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
             }
             Divider()
             Button("Recent Files") { store.go(.recentFiles) }
-            Button("Servers") { store.go(.servers) }
             Button("Database Connections") { store.go(.dbConnections) }
             Divider()
             Button("Previous Project") { store.switchProject(-1) }.keyboardShortcut("[", modifiers: [.command, .shift])

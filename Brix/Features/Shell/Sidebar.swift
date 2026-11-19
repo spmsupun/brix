@@ -815,6 +815,7 @@ private struct FullSidebar: View {
                         store.openDockerShell(c.id, project: p.id)
                     }
                     .contextMenu {
+                        Button("Show Container Page") { store.showContainer(c.id) }
                         Button("Open Shell") { store.openProject(p.id); store.openDockerShell(c.id, project: p.id) }
                         Button("Follow Logs") { store.openProject(p.id); store.openDockerLogs(c.id, project: p.id) }
                         Divider()
@@ -1187,7 +1188,10 @@ struct HostContextMenu: View {
     @Environment(AppStore.self) private var store
     let host: SSHHost
     var body: some View {
-        Button("Connect / Open Terminal") { store.connect(host.id) }
+        Button("Show Server Page") { store.showHost(host.id) }
+        Button("Open Terminal") { store.connect(host.id) }
+        Button("Tail Logs") { store.tailSystemLog(host.id) }
+        if (store.hostStatus[host.id] ?? .disconnected).isLive { Button("Disconnect") { store.disconnect(host.id) } }
         Button("Ping") { store.ping([host.id]) }
         Button("Browse Files") { store.guardProduction(host.tag, name: host.name, verb: "Browse files on") { store.go(.remoteFiles(host.id)) } }
         Button("Edit…") { store.sheet = .editHost(host) }
@@ -1203,7 +1207,8 @@ struct DatabaseContextMenu: View {
     @Environment(AppStore.self) private var store
     let db: DatabaseConnection
     var body: some View {
-        Button("Open in Browser") { store.selectedDatabase = db.id; store.go(.databases) }
+        Button("Show Database Page") { store.showDatabase(db.id) }
+        Button("Open Tables") { store.selectedDatabase = db.id; store.go(.databases) }
         Button("New Query") { store.pendingQuery = (db.id, ""); store.selectedDatabase = db.id; store.go(.databases) }
         Button("Edit…") { store.sheet = .editDatabase(db) }
         Button("Duplicate") { store.duplicateDatabase(db.id) }

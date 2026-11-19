@@ -15,10 +15,15 @@ struct MacStats: Equatable {
     var charging = false
     /// Brix's own memory: the footprint Activity Monitor shows as "Memory".
     var appMemory: Double = 0
+    /// Brix's own CPU as Activity Monitor's "% CPU" shows it: 1 is one core busy.
+    /// Terminals and agents are their own processes and aren't in it.
+    var appCPU: Double?
+    var cores = ProcessInfo.processInfo.activeProcessorCount
 
     /// CPU ticks from the previous sample; CPU use is the change between two.
     final class Sampler {
         private var last: (busy: UInt64, total: UInt64)?
+        private var lastApp: (time: Double, at: TimeInterval)?
 
         func read() -> MacStats {
             var s = MacStats()
@@ -32,7 +37,18 @@ struct MacStats: Equatable {
             }
             (s.battery, s.charging) = Self.battery()
             s.appMemory = Self.appFootprint()
+            s.appCPU = appCPU()
             return s
+        }
+
+        private func appCPU() -> Double? {
+            var u = rusage()
+            guard getrusage(RUSAGE_SELF, &u) == 0 else { return nil }
+            let time = Double(u.ru_utime.tv_sec + u.ru_stime.tv_sec) + Double(u.ru_utime.tv_usec + u.ru_stime.tv_usec) / 1e6
+            let now = ProcessInfo.processInfo.systemUptime
+            defer { lastApp = (time, now) }
+            guard let lastApp, now > lastApp.at else { return nil }
+            return max(time - lastApp.time, 0) / (now - lastApp.at)
         }
 
         private func cpu() -> Double? {

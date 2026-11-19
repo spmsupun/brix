@@ -12,6 +12,12 @@ struct BrixToolbar: View {
             IconButton(symbol: "sidebar.left", label: "Toggle sidebar", shortcut: "⌃⌘S", size: 28, iconSize: 14, color: Theme.text2) {
                 store.settings.sidebarHidden.toggle()
             }
+            HStack(spacing: 0) {
+                IconButton(symbol: "chevron.left", label: "Back", shortcut: "⌘[", size: 24, color: Theme.text2) { store.goBack() }
+                    .disabled(store.nav.back.isEmpty).opacity(store.nav.back.isEmpty ? 0.35 : 1)
+                IconButton(symbol: "chevron.right", label: "Forward", shortcut: "⌘]", size: 24, color: Theme.text2) { store.goForward() }
+                    .disabled(store.nav.forward.isEmpty).opacity(store.nav.forward.isEmpty ? 0.35 : 1)
+            }
             titleArea
             Spacer(minLength: 20)
             searchPill
@@ -140,7 +146,7 @@ struct BrixToolbar: View {
                 }
                 if !items.isEmpty { items.append(.separator) }
                 items.append(MenuSpec(title: "Save Current Layout…") { store.sheet = .savePreset(ws.projectID) })
-                items.append(MenuSpec(title: "Reset “\(ws.activePresetName)” for This Project", enabled: ws.layout.presetName != nil) { ws.resetArrangement() })
+                items.append(MenuSpec(title: "Reset “\(ws.activePresetName)” for This Project", enabled: ws.canResetArrangement) { ws.resetArrangement() })
                 items.append(MenuSpec(title: "Manage Layouts…") { store.customizeTab = "layout"; store.go(.customize) })
                 return items
             }) {
@@ -294,7 +300,7 @@ private struct NoticeList: View {
                     HStack {
                         Text(n.title).font(Typo.ui(12.5, n.read ? .regular : .semibold)).foregroundStyle(Theme.text).lineLimit(1)
                         Spacer(minLength: 6)
-                        Text(RelativeTime.long(n.date) + " ago").font(Typo.ui(11)).foregroundStyle(Theme.meta).fixedSize()
+                        Text(RelativeTime.longAgo(n.date)).font(Typo.ui(11)).foregroundStyle(Theme.meta).fixedSize()
                     }
                     Text(gone ? "Session closed · \(n.body)" : n.body).font(Typo.ui(11.5)).foregroundStyle(Theme.text3).lineLimit(2)
                 }

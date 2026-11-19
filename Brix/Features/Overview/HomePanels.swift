@@ -271,9 +271,13 @@ struct ThisMac: View {
                     let mem = s.memoryTotal > 0 ? s.memoryUsed / s.memoryTotal : 0
                     meter("Memory", mem, mem >= 0.85 ? Theme.red : mem >= 0.75 ? Theme.amber : Theme.green,
                           "\(gb(s.memoryUsed)) / \(gb(s.memoryTotal)) GB", warn: mem >= 0.75)
+                    // Brix's own share, so it's clear what the app itself costs. The bar is
+                    // its share of the whole Mac; the figure matches Activity Monitor.
+                    if let c = s.appCPU {
+                        meter("Brix CPU", c / Double(max(s.cores, 1)), accent, String(format: c < 0.1 ? "%.1f%%" : "%.0f%%", c * 100))
+                    }
                     if s.appMemory > 0, s.memoryTotal > 0 {
-                        // Brix's own share, so it's clear what the app itself costs.
-                        meter("Brix", s.appMemory / s.memoryTotal, accent,
+                        meter("Brix memory", s.appMemory / s.memoryTotal, accent,
                               ByteCountFormatter.string(fromByteCount: Int64(s.appMemory), countStyle: .memory))
                     }
                     let used = s.diskTotal > 0 ? 1 - s.diskFree / s.diskTotal : 0
@@ -323,7 +327,7 @@ struct ThisMac: View {
 
     private func meter(_ label: String, _ value: Double, _ color: Color, _ text: String, warn: Bool = false) -> some View {
         HStack(spacing: 10) {
-            Text(label).font(Typo.ui(12.5)).foregroundStyle(Theme.text).frame(width: 64, alignment: .leading)
+            Text(label).font(Typo.ui(12.5)).foregroundStyle(Theme.text).lineLimit(1).frame(width: 84, alignment: .leading)
             GeometryReader { g in
                 Capsule().fill(Color.white(0.07))
                     .overlay(alignment: .leading) { Capsule().fill(color).frame(width: g.size.width * min(max(value, 0), 1)) }
@@ -439,7 +443,7 @@ struct ServersAndDocker: View {
         }
         .padding(.horizontal, 8).frame(height: 46)
         .contentShape(Rectangle())
-        .clickable().onTapGesture { if !r.local { store.selectedHost = r.id; store.go(.ssh) } }
+        .clickable().onTapGesture { if !r.local { store.showHost(r.id) } }
     }
 }
 

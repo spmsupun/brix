@@ -133,6 +133,8 @@ struct ExplorerPanel: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(n.name)\(n.gitStatus.map { ", \($0.name)" } ?? "")")
         .accessibilityAddTraits(.isButton)
+        // VoiceOver presses once, so its action opens straight away.
+        .accessibilityAction { ws.state.selection = n.path; activate(n) }
     }
 
     /// One click selects, a double click opens the file or folder. One gesture that
@@ -141,6 +143,10 @@ struct ExplorerPanel: View {
         ws.state.selection = n.path
         listFocused = true
         guard (NSApp.currentEvent?.clickCount ?? 1) >= 2 else { return }
+        activate(n)
+    }
+
+    private func activate(_ n: FileNode) {
         if n.isDirectory { toggle(n.path) } else { ws.open(n.path) }
     }
 

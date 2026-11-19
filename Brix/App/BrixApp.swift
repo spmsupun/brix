@@ -20,6 +20,7 @@ struct BrixApp: App {
                 .frame(minWidth: Metrics.minWindow.width, minHeight: Metrics.minWindow.height)
                 .onAppear {
                     delegate.store = store
+                    store.installNavigationMonitor()
                     AgentNotifier.shared.install(store: store)
                     store.applyAppearance()
                     // The store is made before NSApp exists, so its own badge at launch is lost.
@@ -136,6 +137,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// Puts the traffic lights in the middle of the 52pt toolbar, matching the design.
 struct WindowChrome: NSViewRepresentable {
+    /// The main window, the only one Back and Forward act in.
+    static weak var main: NSWindow?
+
     func makeNSView(context: Context) -> NSView {
         let v = ChromeView()
         return v
@@ -150,6 +154,7 @@ struct WindowChrome: NSViewRepresentable {
             observers.forEach(NotificationCenter.default.removeObserver)
             observers = []
             guard let window else { return }
+            WindowChrome.main = window
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.isMovableByWindowBackground = false

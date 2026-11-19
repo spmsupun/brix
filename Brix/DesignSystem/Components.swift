@@ -183,6 +183,34 @@ struct SubtleButton: View {
     }
 }
 
+/// A row naming a server, container, database or project that opens its page.
+struct ResourceLink: View {
+    let badge: String
+    let title: String
+    let sub: String
+    var dot: Color? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Text(badge).font(Typo.ui(9, .bold)).foregroundStyle(Theme.text3).frame(width: 26, height: 18)
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.border))
+                if let dot { StatusDot(color: dot, size: 6) }
+                Text(title).font(Typo.ui(12.5, .medium)).foregroundStyle(Theme.text).lineLimit(1)
+                Spacer(minLength: 6)
+                Text(sub).font(Typo.ui(11)).foregroundStyle(Theme.text3).lineLimit(1).truncationMode(.middle)
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.meta)
+            }
+            .padding(.horizontal, 8).frame(height: 30)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.hand)
+        .accessibilityLabel("\(title), \(sub)")
+        .accessibilityHint("Opens its page")
+    }
+}
+
 /// Small text link such as "All terminals →".
 struct LinkButton: View {
     let title: String
@@ -279,18 +307,29 @@ struct ProjectMark: View {
     }
 }
 
-/// Project icon images, loaded once per path.
+/// Project icon images, loaded once per path and again when the file changes.
 @MainActor
 enum ProjectIcons {
-    private static var cache: [String: NSImage] = [:]
+    private static var cache: [String: (modified: Date?, image: NSImage)] = [:]
+
+    static func path(for p: Project) -> String? {
+        guard let raw = p.iconPath, !raw.isEmpty else { return nil }
+        return raw.hasPrefix("/") || raw.hasPrefix("~") ? (raw as NSString).expandingTildeInPath : p.url.appendingPathComponent(raw).path
+    }
 
     static func image(for p: Project) -> NSImage? {
-        guard let raw = p.iconPath, !raw.isEmpty else { return nil }
-        let path = raw.hasPrefix("/") || raw.hasPrefix("~") ? (raw as NSString).expandingTildeInPath : p.url.appendingPathComponent(raw).path
-        if let img = cache[path] { return img }
-        guard let img = NSImage(contentsOfFile: path) else { return nil }
-        cache[path] = img
+        guard let path = path(for: p) else { return nil }
+        let modified = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+        if let c = cache[path], c.modified == modified { return c.image }
+        guard let img = NSImage(contentsOfFile: path) else { cache[path] = nil; return nil }
+        cache[path] = (modified, img)
         return img
+    }
+
+    /// Why the chosen image isn't showing, or nil when it is (or none is chosen).
+    static func problem(for p: Project) -> String? {
+        guard let path = path(for: p), image(for: p) == nil else { return nil }
+        return FileManager.default.fileExists(atPath: path) ? "The icon image can't be read, so initials show instead." : "The icon image is missing (\(p.iconPath ?? "")), so initials show instead."
     }
 
     static func forget(_ p: Project) { cache.removeAll() }

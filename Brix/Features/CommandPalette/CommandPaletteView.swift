@@ -92,7 +92,7 @@ enum CommandCatalog {
         for (i, r) in Route.numbered.enumerated() {
             action("go-\(i)", "Go to \(r.title)", "Section", "→", key: "⌘\(i + 1)") { store.go(r) }
         }
-        for r in [Route.recentFiles, .servers, .dbConnections] {
+        for r in [Route.recentFiles, .dbConnections] {
             action("go-\(r.title)", "Go to \(r.title)", "Section", "→") { store.go(r) }
         }
         if !store.library.projects.contains(where: \.isSample) {
@@ -127,7 +127,9 @@ enum CommandCatalog {
         // Servers
         let hosts = pid.map { store.linkedHosts($0) } ?? store.library.hosts
         for h in hosts {
-            out.append(CommandItem(id: "host:\(h.id)", group: "SERVERS", title: "Open shell on \(h.name)", sub: h.address + (pid != nil ? " · linked to \(p?.name ?? "")" : ""),
+            out.append(CommandItem(id: "server:\(h.id)", group: "SERVERS", title: h.name, sub: h.address, glyph: "SSH", color: Color(hex: 0x93C5FD),
+                                   tint: Theme.blue.opacity(0.12), keywords: h.tag.name, action: { store.showHost(h.id) }, splitAction: { store.connect(h.id, project: pid) }))
+            out.append(CommandItem(id: "host:\(h.id)", group: "SERVERS", title: "Open terminal on \(h.name)", sub: h.address + (pid != nil ? " · linked to \(p?.name ?? "")" : ""),
                                    glyph: "SSH", color: Color(hex: 0x93C5FD), tint: Theme.blue.opacity(0.12), keywords: h.tag.name,
                                    action: { store.connect(h.id, project: pid) }))
             out.append(CommandItem(id: "logs:\(h.id)", group: "SERVERS", title: "Tail logs on \(h.name)", sub: h.address,
@@ -136,7 +138,7 @@ enum CommandCatalog {
         if scopeProject == nil {
             for d in store.library.databases {
                 out.append(CommandItem(id: "db:\(d.id)", group: "DATABASES", title: d.name, sub: "\(d.kind.label) · \(d.endpoint)", glyph: d.kind.badge, color: d.kind.color, tint: d.kind.color.opacity(0.14),
-                                       action: { store.selectedDatabase = d.id; store.route = .databases }))
+                                       action: { store.showDatabase(d.id) }, splitAction: { store.selectedDatabase = d.id; store.go(.databases) }))
             }
         }
 
@@ -144,6 +146,9 @@ enum CommandCatalog {
         let docker = pid.map { store.linkedDocker($0) } ?? store.allDocker
         for c in docker {
             out.append(CommandItem(id: "docker:\(c.id)", group: "DOCKER", title: c.name, sub: "\(c.image) · \(c.uptimeText.lowercased())", glyph: "DK",
+                                   action: { store.showContainer(c.id) },
+                                   splitAction: { store.openDockerLogs(c.id, project: pid) }))
+            out.append(CommandItem(id: "docker-act:\(c.id)", group: "DOCKER", title: (c.state == .running ? "Restart " : "Start ") + c.name, sub: c.image, glyph: "DK",
                                    action: { store.dockerAction(c.state == .running ? .restart : .start, c.id) },
                                    splitAction: { store.openDockerLogs(c.id, project: pid) }))
         }

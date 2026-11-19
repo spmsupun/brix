@@ -64,6 +64,7 @@
 		72F7F7654416D8813A57A460 /* APIPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5F4AE6F935F5454847F8CF /* APIPanel.swift */; };
 		791ECE7E8AD2C7572C4F3378 /* ClaudeChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E703C0EF33F0BED957CA1907 /* ClaudeChat.swift */; };
 		7BA811F96FD84D61BD7FC78B /* DockHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0DE2352A5E657CE5E196E3 /* DockHost.swift */; };
+		7D536B6ED56132CCDF108071 /* AppStore+Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55F3BA22E94601A1AEE1C93 /* AppStore+Navigation.swift */; };
 		7E31D0B751246C6269317834 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431E29C82D38812B0B2EB2A1 /* AppModels.swift */; };
 		7F25FD761B57C26CB0F0342F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5C5075D029118BD08659D548 /* Sparkle */; };
 		7FA48345484490CEE11AC2C2 /* LiveTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06FD02FD30B36AAE6D15226A /* LiveTerminal.swift */; };
@@ -269,6 +270,7 @@
 		D06D6225A3D5CD992AAC3712 /* AppStore+Agents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+Agents.swift"; sourceTree = "<group>"; };
 		D3662FA2A8AD2D4721BD2DC1 /* ResizeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResizeHandle.swift; sourceTree = "<group>"; };
 		D4E32E1C9E707E53D2B21A7E /* BuildSite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildSite.swift; sourceTree = "<group>"; };
+		D55F3BA22E94601A1AEE1C93 /* AppStore+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+Navigation.swift"; sourceTree = "<group>"; };
 		D5ACD256CBDAC4348363C373 /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
 		D60A140D5719E790B83418A7 /* AppStore+Activity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppStore+Activity.swift"; sourceTree = "<group>"; };
 		D7FCBD86CC097B7C5B4388D8 /* DataWorkspaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataWorkspaceModel.swift; sourceTree = "<group>"; };
@@ -658,6 +660,7 @@
 				96D7F69C8F2DAE9DE97F8AE1 /* AppStore+Docker.swift */,
 				03C8E52A4C1417AFBC5A83BD /* AppStore+Git.swift */,
 				0A528E3FC0F01B426999C58E /* AppStore+GitHub.swift */,
+				D55F3BA22E94601A1AEE1C93 /* AppStore+Navigation.swift */,
 				02670B9346AAC1F7ED421337 /* AppStore+ProjectFile.swift */,
 				96D9FF503A6AE3D479295763 /* AppStore+Recovery.swift */,
 				F37B8341CA1BEBE6500918B5 /* AppStore+Resources.swift */,
@@ -853,6 +856,7 @@
 				25FADB480BC30342CBE172A0 /* AppStore+Docker.swift in Sources */,
 				94447F398396E9FF6B6CE91E /* AppStore+Git.swift in Sources */,
 				6C470A843D2E3DC7C13A2EDA /* AppStore+GitHub.swift in Sources */,
+				7D536B6ED56132CCDF108071 /* AppStore+Navigation.swift in Sources */,
 				0D9D196BD26BAB5D1F3E519D /* AppStore+ProjectFile.swift in Sources */,
 				534EB43F63AB505BCC72E555 /* AppStore+Recovery.swift in Sources */,
 				E5D141468EFE595200723028 /* AppStore+Resources.swift in Sources */,

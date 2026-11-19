@@ -459,6 +459,27 @@ final class AgentDBGateway {
         return r?.rows.first?.first.flatMap { $0 }.flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// Whether a view can hand on a secret: its definition names a sensitive column, a
+    /// function of the database's own (it could return anything), or a table with a
+    /// sensitive column (a whole row cast to text carries it), or a view that does. Views
+    /// over views are followed 4 deep; deeper, or a definition that can't be read, counts.
+    private func viewCarriesSecret(_ v: DBObject, tree: DBSchemaTree, d: DatabaseConnection, depth: Int = 0) async -> Bool {
+        guard depth < 4, let store, let def = await viewDefinition(v, d: d) else { return true }
+        let words = Set(SQLText.identifiers(def))
+        if words.contains(where: AgentDBPolicy.sensitive) { return true }
+        let svc = store.svc(d).db, conn = Self.agentConnection(d), pw = store.dbPassword(d)
+        for o in tree.schemas.values.joined() where o != v && words.contains(o.name.lowercased()) {
+            switch o.kind {
+            case .function: return true
+            case .view: if await viewCarriesSecret(o, tree: tree, d: d, depth: depth + 1) { return true }
+            default:
+                guard let cols = try? await svc.tableDetail(conn, object: o, password: pw).columns,
+                      !cols.contains(where: { AgentDBPolicy.sensitive($0.name) }) else { return true }
+            }
+        }
+        return false
+    }
+
     private func sources(_ sql: String, on d: DatabaseConnection, store: AppStore) async -> [String: [String]]? {
         let words = Set(SQLText.identifiers(sql))
         let svc = store.svc(d).db, conn = Self.agentConnection(d), pw = store.dbPassword(d)
@@ -470,10 +491,8 @@ final class AgentDBGateway {
             var out: [String: [String]] = [:]
             for o in named {
                 var cols = try await svc.tableDetail(conn, object: o, password: pw).columns.map { $0.name.lowercased() }
-                // A view can pass a secret on under a harmless name. Trust its columns only
-                // when its definition reads no sensitive column; otherwise (or when the
-                // definition can't be read) its columns count as secrets.
-                if o.kind == .view, await viewDefinition(o, d: d).map({ SQLText.identifiers($0).contains(where: AgentDBPolicy.sensitive) }) ?? true {
+                // A view can pass a secret on under a harmless name; then its columns count as secrets.
+                if o.kind == .view, await viewCarriesSecret(o, tree: tree, d: d) {
                     cols = cols.map { "secret_" + $0 }
                 }
                 out[o.name.lowercased(), default: []] += cols

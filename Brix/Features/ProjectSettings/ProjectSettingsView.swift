@@ -233,6 +233,9 @@ private struct GeneralSettings: View {
                             SubtleButton(title: "Use Initials", height: 30) { symbol = nil; iconPath = nil }
                         }
                     }
+                    if let problem = ProjectIcons.problem(for: preview) {
+                        Text(problem).font(Typo.ui(11)).foregroundStyle(Theme.amber).fixedSize(horizontal: false, vertical: true)
+                    }
                     LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 5), count: 12), alignment: .leading, spacing: 5) {
                         ForEach(Self.symbols, id: \.self) { s in
                             Button { symbol = s; iconPath = nil } label: {
@@ -450,6 +453,15 @@ private struct ResourcesSettings: View {
         .accessibilityLabel("\(name), \(items.count) containers, \(open ? "expanded" : "collapsed")")
     }
 
+    private func show(_ id: ResourceID, kind: ResourceKind) {
+        switch kind {
+        case .host: store.showHost(id)
+        case .database: store.showDatabase(id)
+        case .docker: store.showContainer(id)
+        case .stack: store.dockerTab = "stacks"; store.dockerSelection = .stack(id); store.go(.docker)
+        }
+    }
+
     private func row(_ i: Item, kind: ResourceKind) -> some View {
         let on = store.library.links.isLinked(project.id, i.id)
         let others = store.library.links.projects(for: i.id).filter { $0 != project.id }.compactMap(store.project)
@@ -460,7 +472,11 @@ private struct ResourcesSettings: View {
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.border))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 7) {
-                    Text(i.name).font(Typo.ui(12.5, .medium)).foregroundStyle(on ? Theme.text : Theme.text2).lineLimit(1).truncationMode(.middle).help(i.name)
+                    // The name opens the resource's own page.
+                    Button { show(i.id, kind: kind) } label: {
+                        Text(i.name).font(Typo.ui(12.5, .medium)).foregroundStyle(on ? Theme.text : Theme.text2).lineLimit(1).truncationMode(.middle)
+                    }
+                    .buttonStyle(.hand).help("Open \(i.name)")
                     if !i.tag.isEmpty { Text(i.tag).font(.system(size: 8.5, weight: .bold)).foregroundStyle(i.tagColor) }
                 }
                 Text(i.sub).font(Typo.mono(10.5)).foregroundStyle(Theme.text3).lineLimit(1)

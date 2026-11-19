@@ -22,7 +22,7 @@ struct SSHView: View {
                 .island()
         } else {
             HStack(spacing: gap) {
-                list.frame(width: 360)
+                list.frame(width: 420)
                 if let h = selected { HostDetail(host: h) } else { Spacer() }
             }
         }
@@ -32,12 +32,17 @@ struct SSHView: View {
         VStack(spacing: 0) {
             VStack(spacing: 10) {
                 HStack(spacing: 6) {
-                    SearchField(placeholder: "Search connections", text: $query, height: 30)
-                    IconButton(symbol: "plus", label: "New connection", size: 30, iconSize: 12, color: Theme.text2) { store.sheet = .editHost(nil) }
+                    SearchField(placeholder: "Search servers", text: $query, height: 30)
+                    IconButton(symbol: "plus", label: "New server", size: 30, iconSize: 12, color: Theme.text2) { store.sheet = .editHost(nil) }
                     IconButton(symbol: "dot.radiowaves.left.and.right", label: "Ping all servers", size: 30, iconSize: 12, color: Theme.text2) {
                         store.ping(store.library.hosts.map(\.id))
                     }
-                    IconButton(symbol: "server.rack", label: "Server health", size: 30, iconSize: 12, color: Theme.text2) { store.go(.servers) }
+                    if store.healthChecking.isEmpty {
+                        IconButton(symbol: "waveform.path.ecg", label: "Check health of all servers", size: 30, iconSize: 12, color: Theme.text2) { store.checkHealthAll() }
+                            .help("Logs in to each server over SSH, reads CPU, memory and disk, and logs out. Read-only.")
+                    } else {
+                        ProgressView().controlSize(.small).frame(width: 30, height: 30).help("Checking \(store.healthChecking.count) server(s)…")
+                    }
                     IconButton(symbol: "square.and.arrow.down", label: "Import from JetBrains, VS Code or ~/.ssh/config", size: 30, iconSize: 12, color: Theme.text2) { store.sheet = .importConnections }
                 }
                 FlowLayout(spacing: 6) {
@@ -63,6 +68,18 @@ struct SSHView: View {
         .island()
     }
 
+    private func miniMeter(_ label: String, _ v: Double) -> some View {
+        let color = v >= 0.8 ? Theme.red : v >= 0.6 ? Theme.amber : Theme.green
+        return VStack(alignment: .leading, spacing: 3) {
+            Text("\(Int((v * 100).rounded()))%").font(Typo.mono(10.5)).monospacedDigit().foregroundStyle(Theme.text2)
+            Capsule().fill(Theme.control).frame(width: 30, height: 3)
+                .overlay(alignment: .leading) { Capsule().fill(color).frame(width: 30 * min(max(v, 0), 1), height: 3) }
+        }
+        .frame(width: 32, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label) \(Int((v * 100).rounded())) percent")
+    }
+
     private func row(_ h: SSHHost) -> some View {
         let status = store.hostStatus[h.id] ?? .disconnected
         let on = h.id == selected?.id
@@ -76,6 +93,24 @@ struct SSHView: View {
                 Text(h.address).font(Typo.mono(11)).foregroundStyle(Theme.text3).lineLimit(1)
             }
             Spacer(minLength: 0)
+            // Health from the last check, so the list is also the health table. Numbers older
+            // than 10 minutes on a server that isn't connected are dimmed, with their age.
+            if store.healthChecking.contains(h.id) {
+                ProgressView().controlSize(.small).frame(width: 108)
+            } else if let e = store.healthError[h.id] {
+                Label("Check failed", systemImage: "exclamationmark.triangle.fill").font(Typo.ui(10.5)).foregroundStyle(Theme.amber)
+                    .frame(width: 108, alignment: .trailing).help("Couldn't check: \(e)")
+            } else if let m = store.hostMetrics[h.id] {
+                let at = store.healthAt[h.id]
+                let stale = !status.isLive && (at.map { Date().timeIntervalSince($0) > 600 } ?? true)
+                HStack(spacing: 6) {
+                    miniMeter("CPU", m.cpu)
+                    miniMeter("Mem", m.memory)
+                    miniMeter("Disk", m.disk)
+                }
+                .opacity(stale ? 0.4 : 1)
+                .help(at.map { "Checked " + RelativeTime.longAgo($0).lowercased() } ?? "Read while connected")
+            }
             VStack(alignment: .trailing, spacing: 2) {
                 Text(status == .connecting ? "…" : (h.lastConnected.map { RelativeTime.short($0) } ?? "never")).font(Typo.ui(11)).foregroundStyle(Theme.text3)
                 PingBadge(hostID: h.id)
@@ -123,12 +158,12 @@ struct HostDetail: View {
             SubtleButton(title: "Browse Files", symbol: "folder") {
                 store.guardProduction(h.tag, name: h.name, verb: "Browse files on") { store.go(.remoteFiles(h.id)) }
             }
+            SubtleButton(title: "Logs", symbol: "text.alignleft") { store.tailSystemLog(h.id) }
             SubtleButton(title: "Edit") { store.sheet = .editHost(h) }
-            SubtleButton(title: store.pinging.contains(h.id) ? "Pinging…" : "Ping", symbol: "dot.radiowaves.left.and.right") { store.ping([h.id]) }
-                .help(store.hostPing[h.id].map { "Last: \($0.error ?? $0.label), \(RelativeTime.short($0.at)) ago" } ?? "Time a connection to port \(h.port)")
-            SubtleButton(title: "Duplicate") { store.duplicateHost(h.id) }
             MenuButton(items: {
-                [MenuSpec(title: "Copy SSH Command") { store.copyToPasteboard(h.sshCommand, label: "SSH command") },
+                [MenuSpec(title: store.pinging.contains(h.id) ? "Pinging…" : "Ping") { store.ping([h.id]) },
+                 MenuSpec(title: "Duplicate") { store.duplicateHost(h.id) },
+                 MenuSpec(title: "Copy SSH Command") { store.copyToPasteboard(h.sshCommand, label: "SSH command") },
                  MenuSpec(title: status.isLive ? "Disconnect" : "Test Connection") {
                      if status.isLive { store.disconnect(h.id) } else { store.connect(h.id, openShell: false) }
                  },
@@ -178,7 +213,7 @@ struct HostDetail: View {
                             detailRow("User", h.user)
                             detailRow("Port", "\(h.port)")
                             detailRow("Auth", HostAuthText.describe(h, keychainHas: store.keychain.has(Keychain.hostAccount(h.id))))
-                            detailRow("Last connected", h.lastConnected.map { RelativeTime.long($0) + " ago" } ?? "Never")
+                            detailRow("Last connected", h.lastConnected.map { RelativeTime.longAgo($0) } ?? "Never")
                         }
                         .padding(20)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,7 +223,7 @@ struct HostDetail: View {
                             HStack(spacing: 8) {
                                 Text("Health").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
                                 if let at = store.healthAt[h.id] {
-                                    Text("checked \(RelativeTime.long(at)) ago").font(Typo.ui(11)).foregroundStyle(Theme.meta)
+                                    Text("checked " + RelativeTime.longAgo(at).lowercased()).font(Typo.ui(11)).foregroundStyle(Theme.meta)
                                 }
                                 Spacer(minLength: 4)
                                 SubtleButton(title: m == nil ? "Check" : "Check again", symbol: "waveform.path.ecg", height: 24, isLoading: checking) { store.checkHealth([h.id]) }
@@ -211,6 +246,7 @@ struct HostDetail: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .hairlineBottom()
+                    connected(h)
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Open sessions").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
                         if sessions.isEmpty {
@@ -259,6 +295,46 @@ struct HostDetail: View {
             }
         }
         .island()
+    }
+
+    /// What runs on or goes through this server; each row opens that thing's own page.
+    private func connected(_ h: SSHHost) -> some View {
+        let containers = store.allDocker.filter { $0.hostID == h.id }
+        let dbs = store.library.databases.filter { $0.tunnelHostID == h.id }
+        return HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Containers").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
+                    Spacer()
+                    if !containers.isEmpty { LinkButton(title: "Open in Docker") { store.go(.docker) } }
+                }
+                .padding(.bottom, 2)
+                if containers.isEmpty { Text("No containers on this server.").font(Typo.ui(12)).foregroundStyle(Theme.text3) }
+                ForEach(containers) { c in
+                    HStack(spacing: 4) {
+                        ResourceLink(badge: "DK", title: c.composeService.isEmpty ? c.name : c.composeService, sub: c.uptimeText.lowercased(), dot: c.state.color) { store.showContainer(c.id) }
+                        if store.dockerBusy.contains(c.id) {
+                            ProgressView().controlSize(.mini).frame(width: 24)
+                        } else if c.state == .running {
+                            IconButton(symbol: "arrow.triangle.2.circlepath", label: "Restart \(c.name)", iconSize: 10) { store.dockerAction(.restart, c.id) }
+                        } else {
+                            IconButton(symbol: "play.fill", label: "Start \(c.name)", iconSize: 9) { store.dockerAction(.start, c.id) }
+                        }
+                    }
+                }
+            }
+            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            Rectangle().fill(Theme.divider).frame(width: 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Databases through this server").font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3).padding(.bottom, 2)
+                if dbs.isEmpty { Text("No database uses this server as its SSH tunnel.").font(Typo.ui(12)).foregroundStyle(Theme.text3) }
+                ForEach(dbs) { d in
+                    ResourceLink(badge: d.kind.badge, title: d.name, sub: d.endpoint) { store.showDatabase(d.id) }
+                }
+            }
+            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .hairlineBottom()
     }
 
     private func detailRow(_ k: String, _ v: String) -> some View {

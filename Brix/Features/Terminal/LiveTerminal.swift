@@ -288,27 +288,36 @@ final class BrixTerminalView: LocalProcessTerminalView {
     }
 
     /// What the agent last said, for a notice: its last "⏺" or "●" reply, without the
-    /// input box, rules and status bar under it. Otherwise the last lines that
-    /// aren't drawing.
+    /// input box, rules and status bar under it. Otherwise the last lines above the
+    /// input box that aren't drawing.
     static func lastReply(_ lines: [String]) -> String? {
         let trimmed = { (l: String) in l.trimmingCharacters(in: .whitespaces) }
         // Box rules, the prompt ("❯ ", "› Press up to edit queued messages"), the status
         // bar ("⏵⏵ auto mode", "⚠") and the spinner's timing line ("✻ Cogitated for 5s").
-        let chrome = { (l: String) -> Bool in
+        let rule = { (l: String) -> Bool in
             let t = l.filter { !$0.isWhitespace }
-            return t.filter { "─━═│┃╭╮╰╯┌┐└┘".contains($0) }.count * 2 >= t.count
-                || t.first.map { "❯›>⏵⚠✻✶✳✢✽·".contains($0) } == true
+            return !t.isEmpty && t.filter { "─━═│┃╭╮╰╯┌┐└┘".contains($0) }.count * 2 >= t.count
         }
+        let glyph = { (l: String) in l.first { !$0.isWhitespace }.map { "❯›>⏵⚠✻✶✳✢✽·".contains($0) } == true }
+        let chrome = { (l: String) in rule(l) || glyph(l) }
         // Claude Code marks a reply with "⏺" on macOS and "●" elsewhere; its status bar
         // can show "● high" too, so "●" counts only on a screen without "⏺".
-        let marker = { (m: String) in lines.lastIndex { trimmed($0).hasPrefix(m) } }
+        // Only above the input box (the first rule in the last 12 lines): the footer under
+        // it has its own "● main".
+        let cut = lines.suffix(12).firstIndex(where: rule) ?? lines.endIndex
+        let marker = { (m: String) in lines[..<cut].lastIndex { trimmed($0).hasPrefix(m) } }
         if let start = marker("⏺") ?? marker("●") {
-            var body = lines[start...].prefix { !chrome($0) || trimmed($0).isEmpty }.map(trimmed).filter { !$0.isEmpty }
+            // The reply's own lines are indented, so "  > quote" or "  · item" carries on;
+            // only a rule or a glyph in the first column (spinner, prompt) ends it.
+            let ends = { (l: String) in rule(l) || (l.first.map { !$0.isWhitespace } == true && glyph(l)) }
+            var body = lines[start...].prefix { !ends($0) || trimmed($0).isEmpty }.map(trimmed).filter { !$0.isEmpty }
             body[0] = trimmed(String(body[0].dropFirst()))
             let text = body.prefix(3).joined(separator: "\n")
             if !text.isEmpty { return text }
         }
-        let text = lines.filter { !chrome($0) }.map(trimmed).suffix(3).joined(separator: "\n")
+        // No marker (another agent, or the reply scrolled off): the last lines above the
+        // input box, without tool output ("⎿").
+        let text = lines[..<cut].filter { !chrome($0) && !trimmed($0).hasPrefix("⎿") }.map(trimmed).filter { !$0.isEmpty }.suffix(3).joined(separator: "\n")
         return text.isEmpty ? nil : text
     }
 

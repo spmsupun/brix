@@ -22,7 +22,13 @@ final class AppStore {
         }
     }
 
-    var route: Route = .overview
+    var route: Route = .overview { didSet { if route != oldValue { noteNavigation() } } }
+    /// Back and Forward (⌘[ ⌘]).
+    var nav = NavHistory()
+    @ObservationIgnored var navPending = false
+    @ObservationIgnored var navByUser = false
+    @ObservationIgnored var navQuietUntil = Date.distantPast
+    @ObservationIgnored var navMonitor: Any?
     var workspaces: [ProjectID: WorkspaceStore] = [:]
 
     // Runtime state
@@ -87,8 +93,8 @@ final class AppStore {
     var paletteOpen = false
     var paletteScopeToProject = false
     var inspector: InspectorSelection = .none
-    var selectedHost: ResourceID?
-    var selectedDatabase: ResourceID?
+    var selectedHost: ResourceID? { didSet { if selectedHost != oldValue, route == .ssh { noteNavigation() } } }
+    var selectedDatabase: ResourceID? { didSet { if selectedDatabase != oldValue, route == .dbConnections { noteNavigation() } } }
     var selectedProjectInList: ProjectID?
     var pendingQuery: (connection: ResourceID, sql: String)?
     var focusedSessionID: String?
@@ -96,7 +102,7 @@ final class AppStore {
     @ObservationIgnored var onScreen: [String: Int] = [:]
     var popover: PopoverRequest?
     /// Tabs on the global Terminals screen.
-    var terminalTree = PaneTree()
+    var terminalTree = PaneTree() { didSet { if route == .terminals { noteNavigation() } } }
     /// Schemas loaded by the database browser, used by ⌘K.
     var schemaCache: [ResourceID: DBSchemaTree] = [:]
     /// The Databases screen: tabs, consoles and staged edits.
@@ -131,7 +137,7 @@ final class AppStore {
     var dockerInventoryError: String?
     /// Containers, stacks, networks, volumes or images on the Docker screen.
     var dockerTab = "containers"
-    var dockerSelection: DockerSelection?
+    var dockerSelection: DockerSelection? { didSet { if dockerSelection != oldValue, route == .docker { noteNavigation() } } }
     /// Last folder shown in each host's file explorer.
     var remoteFilesPath: [ResourceID: String] = [:]
     /// Each SSH host's last listing in the file browser, so switching away and back
@@ -452,7 +458,8 @@ final class AppStore {
     // MARK: Navigation
 
     func go(_ r: Route) {
-        route = r
+        // Server Health is part of Servers now.
+        route = r == .servers ? .ssh : r
         switch r {
         case .workspace(let id):
             openProject(id)

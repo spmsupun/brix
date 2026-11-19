@@ -79,7 +79,7 @@ struct DBConnectionsView: View {
         .padding(.horizontal, 10).frame(height: 48)
         .rowBackground(selected: on, radius: 8)
         .clickable().onTapGesture { store.selectedDatabase = d.id }
-        .onTapGesture(count: 2) { store.selectedDatabase = d.id; store.route = .databases }
+        .onTapGesture(count: 2) { store.selectedDatabase = d.id; store.go(.databases) }
         .contextMenu { DatabaseContextMenu(db: d) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(d.name), \(d.kind.label), \(d.tag.name), \(status.label)")
@@ -112,7 +112,7 @@ private struct ConnectionDetail: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     AccentButton(title: testing ? "Testing…" : "Test Connection", isLoading: testing) { runTest() }.disabled(testing)
-                    SubtleButton(title: "Open in Browser") { store.selectedDatabase = d.id; store.route = .databases }
+                    SubtleButton(title: "Open Tables") { store.selectedDatabase = d.id; store.go(.databases) }
                     SubtleButton(title: "Edit") { store.sheet = .editDatabase(d) }
                 }
                 HStack(spacing: 6) {
@@ -123,7 +123,7 @@ private struct ConnectionDetail: View {
                         .help(d.readOnly ? "Read-only: turn it off to restore" : "Run a .sql or pg_dump file against this database")
                     SubtleButton(title: "Open CLI", symbol: "terminal", height: 26) { store.openDatabaseCLI(d) }
                     MenuButton(items: {
-                        [MenuSpec(title: "New Query") { store.pendingQuery = (d.id, ""); store.selectedDatabase = d.id; store.route = .databases },
+                        [MenuSpec(title: "New Query") { store.pendingQuery = (d.id, ""); store.selectedDatabase = d.id; store.go(.databases) },
                          MenuSpec(title: "Copy Connection URL") { store.copyToPasteboard(store.connectionURL(d), label: "connection URL (no password)") },
                          MenuSpec(title: "Duplicate") { store.duplicateDatabase(d.id) },
                          .separator,
@@ -168,18 +168,18 @@ private struct ConnectionDetail: View {
                             FactRow(key: "SSH tunnel", value: d.tunnelHostID.flatMap(store.host)?.name ?? "None", mono: false)
                         }
                         FactRow(key: "Read-only", value: d.readOnly ? "Yes" : (d.tag.isProduction ? "Yes (Production)" : "No"), mono: false)
-                        FactRow(key: "Last used", value: d.lastUsed.map { RelativeTime.long($0) + " ago" } ?? "Never", mono: false)
+                        FactRow(key: "Last used", value: d.lastUsed.map { RelativeTime.longAgo($0) } ?? "Never", mono: false)
                     }
-                    InspectorSection(title: "Linked projects") {
+                    InspectorSection(title: "Connected") {
+                        let host = d.tunnelHostID.flatMap(store.host)
+                        let containers = store.allDocker.filter { store.serves($0, d) }
                         let ps = store.library.links.projects(for: d.id).compactMap(store.project)
-                        if ps.isEmpty { Text("Not linked to any project.").font(Typo.ui(12)).foregroundStyle(Theme.text3) }
-                        ForEach(ps) { p in
-                            HStack(spacing: 8) {
-                                ProjectMark(project: p, size: 18)
-                                Text(p.name).font(Typo.row).foregroundStyle(Theme.text)
-                            }
-                            .frame(height: 26)
+                        if let host { ResourceLink(badge: "SSH", title: host.name, sub: "SSH tunnel", dot: (store.hostStatus[host.id] ?? .disconnected).color) { store.showHost(host.id) } }
+                        ForEach(containers) { c in
+                            ResourceLink(badge: "DK", title: c.composeService.isEmpty ? c.name : c.composeService, sub: "serves port \(d.port)", dot: c.state.color) { store.showContainer(c.id) }
                         }
+                        ForEach(ps) { p in ResourceLink(badge: p.initials, title: p.name, sub: "linked project") { store.go(.projectHome(p.id)) } }
+                        if host == nil && containers.isEmpty && ps.isEmpty { Text("Not linked to a server, container or project.").font(Typo.ui(12)).foregroundStyle(Theme.text3) }
                     }
                 }
             }

@@ -364,6 +364,14 @@ extension ImportTests {
         XCTAssertEqual(BrixTerminalView.lastReply(["❯ Reply with exactly: probe ok", "⏺ probe ok", "", "✻ Cogitated for 5s · done 3:20 PM",
                                                    "────────", "❯ Press up to edit queued messages", "────────", "● high · /effort"]), "probe ok")
         XCTAssertNil(BrixTerminalView.lastReply(["────────", "❯ ", "────────", "  ⏵⏵ auto mode on", "⚠ Transcript saving is off"]))
+        // A quote, a bullet or a warning inside the reply doesn't cut it short.
+        XCTAssertEqual(BrixTerminalView.lastReply(["⏺ Two things:", "  · the build passes", "  ⚠ one test skipped", "  > see the log",
+                                                   "✻ Baked for 3s", "────────", "❯ ", "────────"]),
+                       "Two things:\n· the build passes\n⚠ one test skipped")
+        // The marker scrolled off: the reply's tail, not tool output or the footer under the box.
+        XCTAssertEqual(BrixTerminalView.lastReply(["  ⎿  Read 40 lines", "the tests pass now", "and the build is green", "",
+                                                   "────────", "❯ ", "────────", "  ● main", "  ○ fix-tests  running the suite"]),
+                       "the tests pass now\nand the build is green")
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brix-paths-\(UUID().uuidString)").resolvingSymlinksInPath()
         try? FileManager.default.createDirectory(at: dir.appendingPathComponent("src"), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: dir.path + "/src/app.ts", contents: Data())

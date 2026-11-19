@@ -32,7 +32,7 @@ enum DebugSnapshot {
             Step(name: "SSH") { st in st.selectedHost = "dev"; st.route = .ssh },
             Step(name: "SSHSheet") { st in st.selectedHost = "dev"; st.route = .ssh; st.sheet = .editHost(st.host("dev")) },
             Step(name: "Database") { st in st.sheet = nil; st.selectedDatabase = "atlas_dev"; if let d = st.database("atlas_dev") { st.explore(d) } },
-            Step(name: "Servers") { $0.route = .servers },
+            Step(name: "Servers") { st in st.selectedHost = "stage"; st.route = .ssh },
             Step(name: "Docker") { $0.route = .docker },
             Step(name: "DBConnections") { $0.route = .dbConnections },
             Step(name: "RecentFiles") { $0.route = .recentFiles },

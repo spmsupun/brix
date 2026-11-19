@@ -266,4 +266,14 @@ final class MySQLTLSTests: XCTestCase {
         XCTAssertEqual(r.rows.first?.first ?? nil, "Ssl_version")
         XCTAssertTrue((r.rows.first?.last ?? nil)?.hasPrefix("TLS") == true, "\(r.rows)")
     }
+
+    /// Postgres "prefer" checked the certificate, so a self-signed server failed
+    /// instead of connecting encrypted. Needs a throwaway Postgres with its own
+    /// certificate on 55433 (postgres/brixtest).
+    func testPostgresPreferAcceptsASelfSignedServer() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["BRIX_TLS_SERVER"] == "1", "needs the throwaway Postgres with TLS")
+        let c = DatabaseConnection(id: "tls-pg", name: "pg", kind: .postgres, host: "127.0.0.1", port: 55433, database: "postgres", user: "postgres", sslMode: .prefer, tag: .local)
+        let r = try await LiveDatabaseService().execute(c, sql: "select ssl::text from pg_stat_ssl where pid = pg_backend_pid()", password: "brixtest")
+        XCTAssertEqual(r.rows.first?.first ?? nil, "true")
+    }
 }

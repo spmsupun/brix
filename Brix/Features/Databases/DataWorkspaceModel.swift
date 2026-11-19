@@ -300,11 +300,28 @@ enum SQLText {
         [false, true].flatMap { code(sql, mysql: $0, keepLiterals: true).matches(of: #/[a-z_][a-z0-9_$]*/#).map { String($0.output) } }
     }
 
-    /// The SQL for query history: string literals after PASSWORD or IDENTIFIED BY
-    /// (ALTER USER, CREATE ROLE, SET PASSWORD) replaced, so no secret is saved.
+    /// The SQL for query history: every literal after PASSWORD, IDENTIFIED BY or a
+    /// secret-looking column (`UPDATE … SET api_token = '…'`, an INSERT naming one) is
+    /// replaced, so no secret is saved. Single and dollar quotes count anywhere after it;
+    /// double quotes (a MySQL string, or a Postgres name) only as a value, after `=`, BY or PASSWORD.
     static func redacted(_ sql: String) -> String {
-        guard let r = sql.range(of: #"(?i)\b(password|identified\b)"#, options: .regularExpression) else { return sql }
-        return String(sql[..<r.lowerBound]) + sql[r.lowerBound...].replacingOccurrences(of: #"'(?:[^'\\]|''|\\.)*'"#, with: "'•••'", options: .regularExpression)
+        let all = NSRange(location: 0, length: (sql as NSString).length)
+        let found = { (pattern: String) in try! NSRegularExpression(pattern: pattern).matches(in: sql, range: all).map(\.range) }
+        let strings = found(#"'(?:[^'\\]|''|\\.)*'|\$([A-Za-z_]*)\$[\s\S]*?\$\1\$"#)
+        let quotedValues = try! NSRegularExpression(pattern: #"(?i)(?:=|\bby|(?<!["\w])password)\s*("(?:[^"\\]|""|\\.)*")"#)
+            .matches(in: sql, range: all).map { $0.range(at: 1) }
+        // The first such word outside strings; a string saying "password" doesn't count.
+        let code = NSMutableString(string: sql)
+        for r in strings { code.replaceCharacters(in: r, with: String(repeating: " ", count: r.length)) }
+        guard let from = try! NSRegularExpression(pattern: #"[A-Za-z_][A-Za-z0-9_$]*"#).matches(in: code as String, range: all).first(where: { m in
+            let w = code.substring(with: m.range).lowercased()
+            return w == "password" || w == "identified" || AgentDBPolicy.sensitive(w)
+        })?.range.location else { return sql }
+        let out = NSMutableString(string: sql)
+        for r in (strings + quotedValues).filter({ $0.location > from }).sorted(by: { $0.location > $1.location }) {
+            out.replaceCharacters(in: r, with: "'•••'")
+        }
+        return out as String
     }
 }
 

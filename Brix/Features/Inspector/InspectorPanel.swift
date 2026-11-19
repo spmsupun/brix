@@ -129,7 +129,7 @@ struct FileInspector: View {
                 FactRow(key: "Size", value: info.map { ByteCountFormatter.string(fromByteCount: Int64($0.size), countStyle: .file) } ?? "…")
                 FactRow(key: "Lines", value: info.map { $0.lines > 0 ? "\($0.lines)" : "–" } ?? "…")
                 FactRow(key: "Encoding", value: info?.encoding ?? "…")
-                FactRow(key: "Modified", value: info?.modified.map { RelativeTime.long($0) + " ago" } ?? "–", mono: false)
+                FactRow(key: "Modified", value: info?.modified.map { RelativeTime.longAgo($0) } ?? "–", mono: false)
                 FactRow(key: "Path", value: ((p?.path ?? "") as NSString).appendingPathComponent(path))
             }
             InspectorSection(title: "Git") {
@@ -221,10 +221,11 @@ struct LinkedResourcesList: View {
                     SubtleButton(title: "Link a server", symbol: "link", height: 26) { store.route = .projectSettings(projectID) }
                 }
             }
-            ForEach(hosts) { h in row(AnyView(ServerOSIcon(host: h, size: 22)), h.name, tag: h.tag) { store.selectedHost = h.id; store.route = .ssh } }
-            ForEach(dbs) { d in row(AnyView(DatabaseIcon(db: d, size: 22)), d.name, tag: d.tag) { store.selectedDatabase = d.id; store.route = .databases } }
+            ForEach(hosts) { h in row(AnyView(ServerOSIcon(host: h, size: 22)), h.name, tag: h.tag) { store.showHost(h.id) } }
+            ForEach(dbs) { d in row(AnyView(DatabaseIcon(db: d, size: 22)), d.name, tag: d.tag) { store.showDatabase(d.id) } }
             if !docker.isEmpty {
-                Button { store.route = .docker } label: {
+                // One container opens its page; several open the Docker list.
+                Button { if docker.count == 1 { store.showContainer(docker[0].id) } else { store.go(.docker) } } label: {
                     HStack(spacing: 9) {
                         LogoBadge(logo: "Logos/docker", color: Theme.blue, size: 22)
                         Text(docker.map(\.name).joined(separator: " · ")).font(Typo.row).foregroundStyle(Theme.text).lineLimit(1)
@@ -282,7 +283,7 @@ struct SessionInspector: View {
                         }
                         .frame(height: 28)
                     }
-                    FactRow(key: "Started", value: s.startedAt.formatted(date: .omitted, time: .shortened) + " · " + RelativeTime.long(s.startedAt) + " ago", mono: false)
+                    FactRow(key: "Started", value: s.startedAt.formatted(date: .omitted, time: .shortened) + " · " + RelativeTime.longAgo(s.startedAt), mono: false)
                     FactRow(key: "Activity", value: s.lastOutput.components(separatedBy: "\n").last ?? "–")
                 }
                 InspectorActions(actions: [
@@ -325,15 +326,15 @@ struct HostInspector: View {
                     FactRow(key: "User", value: h.user)
                     FactRow(key: "Port", value: "\(h.port)")
                     FactRow(key: "Auth", value: HostAuthText.describe(h, keychainHas: store.keychain.has(Keychain.hostAccount(h.id))))
-                    FactRow(key: "Last seen", value: h.lastConnected.map { RelativeTime.long($0) + " ago" } ?? "Never", mono: false)
+                    FactRow(key: "Last seen", value: h.lastConnected.map { RelativeTime.longAgo($0) } ?? "Never", mono: false)
                     FactRow(key: "Sessions", value: sessions.isEmpty ? "None" : sessions.map(\.title).joined(separator: ", "), mono: false)
                     FactRow(key: "Projects", value: store.library.links.projects(for: h.id).compactMap { store.project($0)?.name }.joined(separator: ", ").ifEmpty("None"), mono: false)
                 }
                 InspectorActions(actions: [
-                    ("Connect", { store.connect(h.id) }),
+                    ("Open Terminal", { store.connect(h.id) }),
                     ("Edit", { store.sheet = .editHost(h) }),
                     ("Copy SSH Command", { store.copyToPasteboard(h.sshCommand, label: "SSH command") }),
-                    ("Show in SSH", { store.selectedHost = h.id; store.route = .ssh })
+                    ("Show Server Page", { store.showHost(h.id) })
                 ])
             }
         } else {

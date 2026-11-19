@@ -217,6 +217,44 @@ extension AppStore {
         }
     }
 
+    // MARK: One page per resource
+
+    /// Every mention of a server, container or database (Docker, project Resources,
+    /// the sidebar, ⌘K) opens its one page, so the actions and links are the same everywhere.
+    func showHost(_ id: ResourceID) {
+        selectedHost = id
+        inspector = .host(id)
+        go(.ssh)
+    }
+
+    func showContainer(_ id: ResourceID) {
+        dockerTab = "containers"
+        dockerSelection = .container(id)
+        go(.docker)
+    }
+
+    func showDatabase(_ id: ResourceID) {
+        selectedDatabase = id
+        go(.dbConnections)
+    }
+
+    /// Whether a container likely serves a database: it publishes exactly the database's
+    /// port on the machine the database is reached on. That's this Mac for a loopback host
+    /// with no tunnel; a server for a loopback host tunnelled through it, or for the
+    /// server's own address with no tunnel.
+    /// ponytail: a port match, not a parsed compose file; two databases on one port both match.
+    nonisolated static func serves(_ c: DockerTarget, _ d: DatabaseConnection, server: SSHHost?) -> Bool {
+        guard d.kind != .sqlite, c.ports.split(separator: " ").contains(Substring(":\(d.port)")) else { return false }
+        let loopback = ["localhost", "127.0.0.1", "::1"].contains(d.host.lowercased())
+        guard let hostID = c.hostID else { return loopback && d.tunnelHostID == nil }
+        if d.tunnelHostID == hostID { return loopback }
+        return d.tunnelHostID == nil && server.map { d.host.lowercased() == $0.host.lowercased() } == true
+    }
+
+    func serves(_ c: DockerTarget, _ d: DatabaseConnection) -> Bool {
+        Self.serves(c, d, server: c.hostID.flatMap(host))
+    }
+
     func duplicateHost(_ id: ResourceID) {
         guard var h = host(id) else { return }
         h.id = UUID().uuidString
@@ -542,6 +580,20 @@ extension AppStore {
                     healthError[id] = error.localizedDescription
                 }
                 healthChecking.remove(id)
+            }
+        }
+    }
+
+    /// Every server, then one notice naming the ones that couldn't be read.
+    func checkHealthAll() {
+        let ids = library.hosts.map(\.id)
+        checkHealth(ids)
+        Task { [weak self] in
+            while let self, !Set(ids).isDisjoint(with: self.healthChecking) { try? await Task.sleep(nanoseconds: 300_000_000) }
+            guard let self else { return }
+            let failed = ids.filter { self.healthError[$0] != nil }.compactMap { self.host($0)?.name }
+            if failed.isEmpty { toast(.success, "Checked \(ids.count) server\(ids.count == 1 ? "" : "s")") } else {
+                toast(.error, "Couldn't check \(failed.count) of \(ids.count) servers", detail: failed.joined(separator: ", "))
             }
         }
     }

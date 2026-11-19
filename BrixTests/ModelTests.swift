@@ -1013,3 +1013,65 @@ final class ChatImageLabelTests: XCTestCase {
         XCTAssertFalse(ClaudeChat.isImageLabel("[Image #1] make it red"))
     }
 }
+
+final class NavHistoryTests: XCTestCase {
+    func testBackForwardLikeABrowser() {
+        var h = NavHistory()
+        let a = NavPlace(route: .overview), b = NavPlace(route: .git), c = NavPlace(route: .terminals)
+        h.visit(a); h.visit(b); h.visit(b); h.visit(c)
+        XCTAssertEqual(h.back, [a, b])
+        XCTAssertEqual(h.goBack { _ in true }, b)
+        XCTAssertEqual(h.goForward { _ in true }, c)
+        XCTAssertEqual(h.goBack { _ in true }, b)
+        // Somewhere new drops the forward steps.
+        h.visit(a)
+        XCTAssertTrue(h.forward.isEmpty)
+        XCTAssertNil(h.goForward { _ in true })
+    }
+
+    func testGoneAndRepeatedPlacesAreSkipped() {
+        var h = NavHistory()
+        let a = NavPlace(route: .overview), gone = NavPlace(route: .git)
+        h.visit(a); h.visit(gone); h.visit(a); h.visit(NavPlace(route: .docker))
+        // Back past docker lands on a; the gone place and a repeat of a are dropped.
+        XCTAssertEqual(h.goBack { $0 != gone }, a)
+        XCTAssertNil(h.goBack { $0 != gone })
+        XCTAssertEqual(h.current, a)
+    }
+
+    func testAPlaceNobodyAskedForKeepsForward() {
+        var h = NavHistory()
+        let a = NavPlace(route: .overview), b = NavPlace(route: .git)
+        h.visit(a); h.visit(b)
+        XCTAssertEqual(h.goBack { _ in true }, a)
+        // An agent opening a tab replaces where you are instead of adding a step.
+        h.land(NavPlace(route: .overview, tab: "s-1"))
+        XCTAssertEqual(h.forward, [b])
+        XCTAssertEqual(h.goForward { _ in true }, b)
+        XCTAssertEqual(h.back, [NavPlace(route: .overview, tab: "s-1")])
+    }
+
+    func testHistoryIsCapped() {
+        var h = NavHistory()
+        for i in 0...60 { h.visit(NavPlace(route: .overview, tab: "\(i)")) }
+        XCTAssertEqual(h.back.count, NavHistory.limit)
+    }
+}
+
+final class ResourceLinkTests: XCTestCase {
+    func testAContainerServesADatabaseOnlyOnItsExactPortAndMachine() {
+        let local = DockerTarget(id: "local/db", name: "db", image: "postgres:16", ports: ":5432 :8080", hostID: nil, state: .running, startedAt: nil)
+        let other = DockerTarget(id: "local/x", name: "x", image: "x", ports: ":54320", hostID: nil, state: .running, startedAt: nil)
+        let remote = DockerTarget(id: "dev/db", name: "db", image: "postgres:16", ports: ":5432", hostID: "dev", state: .running, startedAt: nil)
+        let server = SSHHost(id: "dev", name: "Dev", host: "dev.example.com", user: "u", tag: .dev)
+        let pg = { (host: String, tunnel: ResourceID?) in
+            DatabaseConnection(id: "d", name: "d", kind: .postgres, host: host, port: 5432, database: "app", user: "u", sslMode: .disable, tunnelHostID: tunnel, tag: .local)
+        }
+        XCTAssertTrue(AppStore.serves(local, pg("localhost", nil), server: nil))
+        XCTAssertFalse(AppStore.serves(other, pg("localhost", nil), server: nil), "54320 isn't 5432")
+        XCTAssertFalse(AppStore.serves(local, pg("localhost", "dev"), server: nil), "through a tunnel, localhost is the server's")
+        XCTAssertTrue(AppStore.serves(remote, pg("127.0.0.1", "dev"), server: server))
+        XCTAssertTrue(AppStore.serves(remote, pg("dev.example.com", nil), server: server))
+        XCTAssertFalse(AppStore.serves(remote, pg("rds.amazonaws.com", "dev"), server: server), "a database behind the server isn't on it")
+    }
+}

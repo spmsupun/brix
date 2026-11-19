@@ -531,12 +531,14 @@ struct AgentOverviewView: View {
 
     private func removeMCP(_ name: String) {
         guard let path = store.agentPaths[agent.id] else { return }
-        let args = agent.binary == "claude" ? ["mcp", "remove", name, "-s", "user"] : ["mcp", "remove", name]
+        // The list shows user-level servers; Gemini's own default is the project's settings.
+        let args = ["claude", "gemini"].contains(agent.binary) ? ["mcp", "remove", name, "-s", "user"] : ["mcp", "remove", name]
         store.confirm("Remove the “\(name)” MCP server?", "\(agent.name) stops using it. Runs \(agent.binary) \(args.joined(separator: " ")).", confirm: "Remove") {
             Task {
                 do {
                     let r = try await ProcessRunner.run(path, args, timeout: 20)
-                    if r.ok {
+                    // Gemini exits 0 when the server isn't in that scope's settings.
+                    if r.ok, !(r.stdout + r.stderr).localizedCaseInsensitiveContains("not found") {
                         store.toast(.success, "Removed \(name)")
                     } else {
                         store.toast(.error, "Couldn't remove \(name)", detail: r.stderr.isEmpty ? r.stdout : r.stderr)

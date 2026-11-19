@@ -196,7 +196,8 @@ final class LiveDockerService: DockerService {
     private func docker(_ args: [String], host: SSHHost?, timeout: TimeInterval = 20) async throws -> String {
         if let host {
             let r = try await SSHCommand.run(host, password: passwordLookup?(host), remote: Self.shellLine(["docker"] + args), timeout: timeout)
-            guard r.ok else { throw ServiceError(SSHCommand.message(r)) }
+            // Docker's answer about a missing compose is above its last line ("See 'docker --help'").
+            guard r.ok else { throw ServiceError(Self.composeMissing(r.stderr) ? r.stderr.trimmingCharacters(in: .whitespacesAndNewlines) : SSHCommand.message(r)) }
             return r.stdout
         }
         return try await ProcessRunner.check("docker", args, timeout: timeout)
