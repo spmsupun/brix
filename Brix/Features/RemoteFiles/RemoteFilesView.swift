@@ -92,7 +92,7 @@ struct RemoteFilesView: View {
                         HStack(spacing: 10) {
                             Text("Name").frame(maxWidth: .infinity, alignment: .leading)
                             Text("Size").frame(width: 72, alignment: .trailing)
-                            Text("Modified").frame(width: 120, alignment: .leading)
+                            Text("Modified").frame(width: 160, alignment: .leading)
                             Text("Mode").frame(width: 44, alignment: .leading)
                         }
                         .font(Typo.ui(10.5, .semibold)).foregroundStyle(Theme.text3)
@@ -143,7 +143,7 @@ struct RemoteFilesView: View {
             Text(e.isDirectory ? "–" : ByteCountFormatter.string(fromByteCount: e.size, countStyle: .file))
                 .font(Typo.ui(11.5)).monospacedDigit().foregroundStyle(Theme.text3).frame(width: 72, alignment: .trailing)
             Text(e.modified.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "–")
-                .font(Typo.ui(11.5)).foregroundStyle(Theme.text3).lineLimit(1).frame(width: 120, alignment: .leading)
+                .font(Typo.ui(11.5)).foregroundStyle(Theme.text3).lineLimit(1).frame(width: 160, alignment: .leading)
             Text(e.mode == "0" ? "" : e.mode).font(Typo.mono(10.5)).foregroundStyle(Theme.meta).frame(width: 44, alignment: .leading)
         }
         .padding(.horizontal, 8).rowHeight(28)

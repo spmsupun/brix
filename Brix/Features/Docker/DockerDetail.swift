@@ -185,8 +185,10 @@ struct DockerDetailView: View {
         case .container(let id):
             if let c = store.dockerTarget(id) {
                 let running = c.state == .running, paused = c.state == .paused
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
+                // The ⋯ menu stays put; only the buttons scroll in a narrow panel.
+                HStack(spacing: 6) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                      HStack(spacing: 6) {
                         if running {
                             SubtleButton(title: "Stop", symbol: "stop.fill", height: 26) { store.dockerAction(.stop, id) }
                             SubtleButton(title: "Restart", symbol: "arrow.triangle.2.circlepath", height: 26) { store.dockerAction(.restart, id) }
@@ -198,7 +200,9 @@ struct DockerDetailView: View {
                         }
                         SubtleButton(title: "Logs", symbol: "text.alignleft", height: 26) { store.openDockerLogs(id, project: nil) }
                         SubtleButton(title: "Shell", symbol: "terminal", height: 26) { store.openDockerShell(id, project: nil) }.disabled(!running)
-                        MenuButton(items: {
+                      }
+                    }
+                    MenuButton(items: {
                             [MenuSpec(title: "Kill") { confirmAct("Kill \(c.name)?", "Sends SIGKILL. Unsaved work in the container is lost.", ["kill", c.name], "Killed \(c.name)") },
                              MenuSpec(title: "Copy ID") { store.copyToPasteboard(inspect["Id"] as? String ?? c.name, label: "container id") },
                              .separator,
@@ -208,7 +212,6 @@ struct DockerDetailView: View {
                                 confirmAct("Remove \(c.name)?", "Deletes the container\(running ? " (stopping it first)" : ""). Volumes are kept.", ["rm", "-f", c.name], "Removed \(c.name)") { store.dockerSelection = nil }
                              }]
                         }) { moreButton }
-                    }
                 }
             }
         case .stack(let id):
@@ -306,11 +309,19 @@ struct DockerDetailView: View {
         }
     }
 
+    /// Docker's "2026-10-27T09:12:03.123456789Z" as a local date and time.
+    private func started(_ v: Any?) -> String {
+        guard let s = v as? String else { return "–" }
+        let whole = s.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
+        guard let d = ISO8601DateFormatter().date(from: whole), d.timeIntervalSince1970 > 0 else { return s.hasPrefix("0001") ? "–" : s }
+        return d.formatted(date: .abbreviated, time: .shortened)
+    }
+
     @ViewBuilder private var containerSections: some View {
         let state = dict("State"), config = dict("Config"), net = dict("NetworkSettings")
         InspectorSection(title: "Overview") {
             FactRow(key: "Status", value: str(state["Status"]), mono: false)
-            FactRow(key: "Started", value: str(state["StartedAt"]))
+            FactRow(key: "Started", value: started(state["StartedAt"]), mono: false)
             FactRow(key: "Image", value: str(config["Image"]))
             FactRow(key: "Command", value: str(config["Cmd"]))
             FactRow(key: "Entrypoint", value: str(config["Entrypoint"]))

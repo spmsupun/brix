@@ -220,23 +220,18 @@ private struct FullSidebar: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.name).font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text).lineLimit(1)
                 if let sub {
-                    // The path is cut short in a narrow sidebar; hovering shows all of it.
-                    sub.lineLimit(1).truncationMode(.middle)
-                        .accessibilityHint(p.path)
+                    sub.lineLimit(1).truncationMode(.tail)
                 }
             }
             Spacer(minLength: 0)
             HStack(spacing: 6) {
-                if !open, !agents.isEmpty {
-                    // Folded, the agent rows (and their spinners) are hidden: show it here.
-                    if agents.contains(where: { $0.state == .running }) { WorkingSpinner(size: 10) }
-                    Text("✳\(agents.count)").font(Typo.ui(10.5, .semibold))
-                        .foregroundStyle(agents.contains { $0.state == .needsInput } ? Theme.amber : Self.agentOrange)
-                        .accessibilityLabel("\(agents.count) agent sessions")
-                }
-                let ci = store.runningPipelines(p.id)
-                if ci > 0 { PipelineBadge(count: ci) }
-                if changes > 0 {
+                // One status: an agent waiting (while folded, its row is hidden), else the changes.
+                if !open, agents.contains(where: { $0.state == .needsInput }) {
+                    Text("Input").font(Typo.ui(10, .semibold)).foregroundStyle(Color(hex: 0x09090B))
+                        .padding(.horizontal, 7).padding(.vertical, 1)
+                        .background(Capsule().fill(Theme.amber))
+                        .accessibilityLabel("An agent is waiting for your answer")
+                } else if changes > 0 {
                     Text("±\(Compact.number(changes))").font(Typo.mono(10.5, .semibold)).foregroundStyle(Theme.amber)
                         .accessibilityLabel("\(changes) lines changed")
                 }
@@ -284,16 +279,18 @@ private struct FullSidebar: View {
 
     static let agentOrange = Color(hex: 0xE07B53)
 
-    /// "~/projects/gac · 7 repos", or "~/projects/brix · agent editing". Branches
-    /// are in the toolbar's project header, so the row stays light.
+    /// "3 sessions · agent working · CI running", or nothing for a quiet project.
+    /// The path is in the tooltip; branches are in the toolbar's project header.
     private func subLine(_ p: Project, repos: [Project]) -> Text? {
-        // What an agent is doing says more than the path while it lasts.
-        if repos.isEmpty, let a = activityLine(p) { return Text(a.text).foregroundColor(a.color).font(Typo.ui(10.5)) }
-        var parts: [Text] = [Text((p.path as NSString).abbreviatingWithTildeInPath)]
-        if !repos.isEmpty { parts.append(Text("\(repos.count) repos")) }
-        guard let first = parts.first else { return nil }
-        return parts.dropFirst().reduce(first) { $0 + Text(" · ") + $1 }
-            .font(Typo.ui(10.5)).foregroundColor(Theme.text3)
+        let ids = Set(repos.map(\.id) + [p.id])
+        let sessions = store.sessions.filter { $0.projectID.map(ids.contains) == true }
+        var parts: [String] = []
+        if !repos.isEmpty { parts.append("\(repos.count) repos") }
+        if !sessions.isEmpty { parts.append(sessions.count == 1 ? "1 session" : "\(sessions.count) sessions") }
+        if sessions.contains(where: { $0.kind == .agent && $0.state == .running }) { parts.append("agent working") }
+        if ids.contains(where: { store.runningPipelines($0) > 0 }) { parts.append("CI running") }
+        guard !parts.isEmpty else { return nil }
+        return Text(parts.joined(separator: " · ")).font(Typo.ui(10.5)).foregroundColor(Theme.text3)
     }
 
     /// The branch most repos are on, and how many repos are on another one.
@@ -307,18 +304,6 @@ private struct FullSidebar: View {
     /// Added plus deleted lines not yet committed.
     private func lineChanges(_ id: ProjectID) -> Int {
         store.git[id]?.changes.reduce(0) { $0 + $1.add + $1.del } ?? 0
-    }
-
-    /// What's happening in a collapsed project: an agent waiting, or one working.
-    private func activityLine(_ p: Project) -> (text: String, color: Color)? {
-        let sessions = store.sessions.filter { $0.projectID == p.id && $0.kind == .agent }
-        if let w = sessions.first(where: { $0.state == .needsInput }) {
-            return ("\(store.agent(for: w)?.name ?? "agent") needs input", Theme.amber)
-        }
-        if sessions.contains(where: { $0.state == .running }) {
-            return ("agent editing", Theme.text3)
-        }
-        return nil
     }
 
     private func dashedButton(_ title: String, icon: AnyView, action: @escaping () -> Void) -> some View {
@@ -939,30 +924,45 @@ private struct FullSidebar: View {
                 withAnimation(.easeOut(duration: 0.15)) { dbTreeOpen.toggle() }
                 if dbTreeOpen { store.go(.dbConnections) }
             } label: {
-                libraryLabel("Databases", symbol: "cylinder", meta: "\(store.library.databases.count) saved",
-                             on: isActive(.dbConnections) || isActive(.databases))
+                libraryLabel("Databases", symbol: "cylinder", meta: upOf(store.library.databases.map(\.id), store.dbStatus),
+                             dot: health(store.library.databases.map(\.id), store.dbStatus), on: isActive(.dbConnections) || isActive(.databases))
             }
             .buttonStyle(.hand)
             .accessibilityValue(dbTreeOpen ? "Expanded" : "Collapsed")
             if dbTreeOpen { DBLibraryTree() }
-            libraryRow("Servers", symbol: "server.rack", meta: "\(store.library.hosts.count) saved", route: .ssh)
-            if store.dockerVisible { libraryRow("Docker", symbol: "shippingbox", meta: "\(running) running", route: .docker) }
+            libraryRow("Servers", symbol: "server.rack", meta: upOf(store.library.hosts.map(\.id), store.hostStatus),
+                       dot: health(store.library.hosts.map(\.id), store.hostStatus), route: .ssh)
+            if store.dockerVisible {
+                libraryRow("Docker", symbol: "shippingbox", meta: "\(running) running", dot: running > 0 ? Theme.green : Theme.disabled, route: .docker)
+            }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
         .hairlineTop()
     }
 
-    private func libraryRow(_ title: String, symbol: String, meta: String, route: Route) -> some View {
-        Button { store.go(route) } label: { libraryLabel(title, symbol: symbol, meta: meta, on: isActive(route)) }
+    /// "3 of 5": how many are connected out of how many are saved.
+    private func upOf(_ ids: [ResourceID], _ status: [ResourceID: ConnectionStatus]) -> String {
+        "\(ids.filter { status[$0] == .connected }.count) of \(ids.count)"
+    }
+
+    /// Red if any failed, green if any is connected, else grey.
+    private func health(_ ids: [ResourceID], _ status: [ResourceID: ConnectionStatus]) -> Color {
+        if ids.contains(where: { if case .error = status[$0] { true } else { false } }) { return Theme.red }
+        return ids.contains { status[$0] == .connected } ? Theme.green : Theme.disabled
+    }
+
+    private func libraryRow(_ title: String, symbol: String, meta: String, dot: Color, route: Route) -> some View {
+        Button { store.go(route) } label: { libraryLabel(title, symbol: symbol, meta: meta, dot: dot, on: isActive(route)) }
             .buttonStyle(.hand)
     }
 
-    private func libraryLabel(_ title: String, symbol: String, meta: String, on: Bool) -> some View {
+    private func libraryLabel(_ title: String, symbol: String, meta: String, dot: Color, on: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: symbol).font(.system(size: 11.5, weight: .medium)).foregroundStyle(on ? accent : Theme.text3).frame(width: 16)
             Text(title).font(Typo.ui(12.5)).foregroundStyle(on ? Theme.text : Theme.body)
             Spacer(minLength: 0)
-            Text(meta).font(Typo.ui(11)).foregroundStyle(Theme.text3)
+            Text(meta).font(Typo.ui(11)).monospacedDigit().foregroundStyle(Theme.text3)
+            Circle().fill(dot).frame(width: 6, height: 6)
         }
         .padding(.horizontal, 8)
         .rowHeight(28)

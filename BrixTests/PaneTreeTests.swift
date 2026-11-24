@@ -204,4 +204,48 @@ final class SavedTabRestoreTests: XCTestCase {
         }
         XCTAssertEqual(out.allTabs, ["s-new", "file:src/a.swift", "panel:plan", "panel:agentFiles", "panel:database:db-1", kept])
     }
+
+    func testGroupingAndLayouts() {
+        let rank = ["a1": 0, "a2": 0, "b1": 1, "b2": 1, "c1": 2]
+        var t = PaneTree()
+        for id in ["b1", "a1", "c1", "b2"] { t.add(id) }
+        t.sortTabs { rank[$0]! }
+        XCTAssertEqual(t.allTabs, ["a1", "b1", "b2", "c1"])
+        // A new tab lands after its kin, even in another pane.
+        t.split("c1", beside: t.groups[0].id, edge: .right)
+        t.add("a2", to: t.group(of: "c1")!.id)
+        XCTAssertTrue(t.placeWithKin("a2") { rank[$0]! })
+        XCTAssertEqual(t.groups.map(\.tabs), [["a1", "a2", "b1", "b2"], ["c1"]])
+        XCTAssertFalse(t.placeWithKin("c1") { rank[$0]! })
+        XCTAssertFalse(t.placeWithKin("c1") { _ in Int.max })
+
+        // Placing a background tab keeps what each pane shows and where focus is.
+        var u = PaneTree()
+        u.add("a1"); u.add("b1")
+        u.split("b1", beside: u.groups[0].id, edge: .right)
+        u.add("a2", to: u.group(of: "b1")!.id)
+        u.activate("b1")
+        XCTAssertTrue(u.placeWithKin("a2") { rank[$0]! })
+        XCTAssertEqual(u.group(of: "a2")?.tabs, ["a1", "a2"])
+        XCTAssertEqual(u.group(of: "a1")?.active, "a1")
+        XCTAssertEqual(u.focusedGroup, u.group(of: "b1")?.id)
+        // Only the named panes are sorted.
+        var v = PaneTree()
+        v.add("b1"); v.add("a1"); v.add("c1")
+        v.split("c1", beside: v.groups[0].id, edge: .right)
+        v.add("b2", to: v.group(of: "c1")!.id)
+        v.sortTabs(by: { rank[$0]! }, only: [v.group(of: "c1")!.id])
+        XCTAssertEqual(v.groups.map(\.tabs), [["b1", "a1"], ["b2", "c1"]])
+
+        XCTAssertEqual(PaneTree.chunked(["1", "2", "3", "4", "5"], into: 2), [["1", "2", "3"], ["4", "5"]])
+        XCTAssertEqual(PaneTree.chunked(["1", "2", "3", "4", "5"], into: 4), [["1", "2"], ["3"], ["4"], ["5"]])
+        XCTAssertEqual(PaneTree.chunked(["1", "2", "3", "4", "5", "6", "7", "8", "9"], into: 4).map(\.count), [3, 2, 2, 2])
+        XCTAssertEqual(PaneTree.chunked(["1"], into: 4), [["1"]])
+        XCTAssertEqual(PaneTree.chunked([], into: 2), [])
+        let grid = PaneTree.tiled([["1"], ["2"], ["3"]], perRow: 2)
+        XCTAssertEqual(grid.groups.map(\.tabs), [["1"], ["2"], ["3"]])
+        guard case .split(_, true, let rows, _) = grid.root else { return XCTFail("expected stacked rows") }
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(PaneTree.tiled([["1", "2"]], perRow: 2).groups.count, 1)
+    }
 }

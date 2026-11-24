@@ -66,16 +66,17 @@ struct ReviewView: View {
     private func header(_ c: GitFileChange) -> some View {
         HStack(spacing: 10) {
             GitStatusLetter(status: c.status)
-            Text(c.name).font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text)
+            Text(c.name).font(Typo.ui(13, .semibold)).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle).layoutPriority(1)
             Text(c.dir).font(Typo.ui(11.5)).foregroundStyle(Theme.text3).lineLimit(1)
             Text(c.staged ? "Staged" : "Unstaged")
                 .font(Typo.ui(10.5, .semibold))
                 .foregroundStyle(c.staged ? Theme.green : Theme.amber)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(RoundedRectangle(cornerRadius: 5).fill((c.staged ? Theme.green : Theme.amber).opacity(0.10)))
+                .fixedSize()
             fileSwitcher
             Spacer(minLength: 0)
-            AddDel(add: c.add, del: c.del, size: 11)
+            AddDel(add: c.add, del: c.del, size: 11).fixedSize()
             SegmentedControl(options: [(DiffMode.unified, "Unified"), (DiffMode.split, "Split")],
                              selection: Binding(get: { ws.state.diffMode }, set: { ws.state.diffMode = $0 }), fill: Theme.input)
             SubtleButton(title: c.staged ? "Unstage" : "Stage", height: 28) {

@@ -268,6 +268,65 @@ struct PaneTree: Codable, Hashable {
         prune()
     }
 
+    // MARK: Arranging
+
+    /// Stable-sorts each pane's tabs (or only the panes in `only`) by `rank`, so
+    /// equal ranks keep the order you gave them.
+    mutating func sortTabs(by rank: (String) -> Int, only: Set<String>? = nil) {
+        for g in groups where only?.contains(g.id) ?? true {
+            _ = update(g.id) { g in
+                g.tabs = g.tabs.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+            }
+        }
+    }
+
+    /// Moves `tab` next to the last tab of the same rank, into that tab's pane,
+    /// without changing which tab each pane shows or which pane has focus.
+    /// Returns false when no other tab shares its rank (`Int.max` means unknown and never matches).
+    @discardableResult
+    mutating func placeWithKin(_ tab: String, rank: (String) -> Int) -> Bool {
+        let r = rank(tab)
+        guard r != Int.max, let kin = allTabs.last(where: { $0 != tab && rank($0) == r }),
+              let g = group(of: kin), let source = group(of: tab) else { return false }
+        let focus = focusedGroup
+        let without = g.tabs.filter { $0 != tab }
+        move(tab, to: g.id, at: (without.firstIndex(of: kin) ?? without.count - 1) + 1)
+        _ = update(g.id) { $0.active = g.active }
+        if source.active != tab { _ = update(source.id) { $0.active = source.active } }
+        focusedGroup = focus.flatMap { f in groups.contains { $0.id == f } ? f : nil } ?? g.id
+        return true
+    }
+
+    /// A fresh layout: one pane per bucket, `perRow` panes side by side, rows stacked.
+    static func tiled(_ buckets: [[String]], perRow: Int) -> PaneTree {
+        let panes = buckets.filter { !$0.isEmpty }.map { PaneNode.group(TabGroup.make($0)) }
+        guard !panes.isEmpty else { return PaneTree() }
+        let sid = { "s-\(UUID().uuidString.prefix(6))" }
+        let n = max(perRow, 1)
+        let rows: [PaneNode] = stride(from: 0, to: panes.count, by: n).map { i in
+            let row = Array(panes[i..<min(i + n, panes.count)])
+            return row.count == 1 ? row[0] : .split(id: sid(), vertical: false, children: row, weights: Array(repeating: 1, count: row.count))
+        }
+        var t = PaneTree()
+        t.root = rows.count == 1 ? rows[0] : .split(id: sid(), vertical: true, children: rows, weights: Array(repeating: 1, count: rows.count))
+        t.focusedGroup = t.groups.first?.id
+        return t
+    }
+
+    /// Splits `tabs` into `n` runs (fewer only when there are fewer tabs), order
+    /// kept; the first runs take one extra when it doesn't divide evenly.
+    static func chunked(_ tabs: [String], into n: Int) -> [[String]] {
+        let n = min(max(n, 1), tabs.count)
+        guard n > 0 else { return [] }
+        var out: [[String]] = [], start = 0
+        for i in 0..<n {
+            let size = tabs.count / n + (i < tabs.count % n ? 1 : 0)
+            out.append(Array(tabs[start..<start + size]))
+            start += size
+        }
+        return out
+    }
+
     // MARK: Internals
 
     @discardableResult

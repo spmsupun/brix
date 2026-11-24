@@ -28,6 +28,8 @@ struct TiledHost {
     var close: ([String]) -> Void
     /// The tab body.
     var content: (String) -> AnyView
+    /// Extra items at the top of the pane menu (Group Tabs and Layout on the Terminals screen).
+    var arrangeMenu: () -> [MenuSpec] = { [] }
 }
 
 enum TileMetrics {
@@ -304,7 +306,8 @@ private struct PaneGroupView: View {
     private var paneMenu: [MenuSpec] {
         let others = tree.groups.filter { $0.id != group.id }
         let title = PaneTabLabel.title(store)
-        return [
+        let arrange = host.arrangeMenu()
+        return arrange + (arrange.isEmpty ? [] : [.separator]) + [
             MenuSpec(title: "Split Right", key: "⌘D") { splitNew(.right) },
             MenuSpec(title: "Split Down", key: "⇧⌘D") { splitNew(.bottom) },
             MenuSpec(title: "Split into 2 × 2") {

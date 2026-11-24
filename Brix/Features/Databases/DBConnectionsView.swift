@@ -32,12 +32,12 @@ struct DBConnectionsView: View {
             .padding(.leading, 16).padding(.trailing, 12).frame(height: 52).hairlineBottom()
             HStack(spacing: 10) {
                 Color.clear.frame(width: 26)
-                Text("Name").frame(width: 170, alignment: .leading)
+                Text("Name").frame(width: 150, alignment: .leading)
                 Text("Endpoint").frame(maxWidth: .infinity, alignment: .leading)
-                Text("Env").frame(width: 70, alignment: .leading)
+                Text("Env").frame(width: 58, alignment: .leading)
                 Text("Status").frame(width: 110, alignment: .leading)
                 Text("Last used").frame(width: 80, alignment: .leading)
-                Text("Projects").frame(width: 90, alignment: .leading)
+                Text("Projects").frame(width: 64, alignment: .leading)
             }
             .font(Typo.ui(11, .semibold)).foregroundStyle(Theme.text3)
             .padding(.horizontal, 16).frame(height: 30).hairlineBottom()
@@ -61,9 +61,9 @@ struct DBConnectionsView: View {
                 Text(d.name).font(Typo.ui(13, .medium)).foregroundStyle(Theme.text).lineLimit(1)
                 if d.effectiveReadOnly { Image(systemName: "lock.fill").font(.system(size: 8.5)).foregroundStyle(Theme.text3) }
             }
-            .frame(width: 170, alignment: .leading)
+            .frame(width: 150, alignment: .leading)
             Text(d.endpoint).font(Typo.mono(11)).foregroundStyle(Theme.text2).lineLimit(1).truncationMode(.middle).frame(maxWidth: .infinity, alignment: .leading)
-            TagPill(tag: d.tag, size: 8.5).frame(width: 70, alignment: .leading)
+            TagPill(tag: d.tag, size: 8.5).frame(width: 58, alignment: .leading)
             HStack(spacing: 6) {
                 if status == .connecting { ProgressView().controlSize(.mini) } else { StatusDot(color: status.color, size: 6) }
                 Text(status.label).font(Typo.ui(11.5)).foregroundStyle(Theme.text2).lineLimit(1)
@@ -74,7 +74,7 @@ struct DBConnectionsView: View {
                 ForEach(projects.prefix(3)) { p in ProjectMark(project: p, size: 20).background(RoundedRectangle(cornerRadius: 6).fill(Theme.island).padding(-2)) }
                 if projects.isEmpty { Text("–").font(Typo.ui(11)).foregroundStyle(Theme.meta) }
             }
-            .frame(width: 90, alignment: .leading)
+            .frame(width: 64, alignment: .leading)
         }
         .padding(.horizontal, 10).frame(height: 48)
         .rowBackground(selected: on, radius: 8)

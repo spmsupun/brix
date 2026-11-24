@@ -302,7 +302,8 @@ struct ProjectMark: View {
         }
             .frame(width: size, height: size)
             .background(RoundedRectangle(cornerRadius: size * 0.29, style: .continuous).fill(hue.opacity(0.16)))
-            .overlay(RoundedRectangle(cornerRadius: size * 0.29, style: .continuous).strokeBorder(hue.opacity(0.38)))
+            // A project's own logo stands on its own; the border frames initials and symbols.
+            .overlay(RoundedRectangle(cornerRadius: size * 0.29, style: .continuous).strokeBorder(hue.opacity(image == nil ? 0.38 : 0)))
             .accessibilityHidden(true)
     }
 }

@@ -4,6 +4,8 @@ import SwiftUI
 struct TerminalsView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.islandGap) private var gap
+    /// Keeps tabs grouped as sessions come and go: "none", "project" or "machine".
+    @AppStorage("terminals.groupTabs") private var groupTabs = "none"
 
     var body: some View {
         HStack(spacing: gap) {
@@ -17,21 +19,96 @@ struct TerminalsView: View {
                     addPopover: nil, addMenu: newItems,
                     newTerminal: { store.newTerminal(project: nil, attach: false).id },
                     close: { store.closeSessions($0) },
-                    content: { AnyView(pane($0)) }))
+                    content: { AnyView(pane($0)) },
+                    arrangeMenu: arrangeMenu))
             }
         }
-        .onAppear(perform: sync)
-        .onChange(of: store.sessions.map(\.id)) { _, _ in sync() }
+        .onAppear { sync() }
+        .onChange(of: store.sessions.map(\.id)) { old, new in sync(new: Set(new).subtracting(old)) }
         .onChange(of: store.focusedSessionID) { _, id in if let id { open(id) } }
+        // Reordering projects or adding a server moves the groups too.
+        .onChange(of: store.sortedProjects.map(\.id) + store.library.hosts.map(\.id)) { _, _ in
+            if let rank { store.terminalTree.sortTabs(by: rank) }
+        }
     }
 
     /// Keeps the tree in step with sessions: drops closed ones, adds new ones.
-    private func sync() {
+    /// With tab grouping on, `new` sessions join their project's (or machine's)
+    /// tabs. Only panes that gained a tab are re-sorted, so a drag elsewhere stays put.
+    private func sync(new: Set<String> = []) {
         let ids = Set(store.sessions.map(\.id))
         if !Set(store.terminalTree.allTabs).isSubset(of: ids) { store.terminalTree.retain(ids) }
         let placed = Set(store.terminalTree.allTabs)
         for s in store.sessions where !placed.contains(s.id) { store.terminalTree.add(s.id) }
+        if let rank {
+            for id in new { store.terminalTree.placeWithKin(id, rank: rank) }
+            let touched = Set(new.compactMap { store.terminalTree.group(of: $0)?.id })
+            if !touched.isEmpty { store.terminalTree.sortTabs(by: rank, only: touched) }
+        }
         if let f = store.focusedSessionID { store.terminalTree.activate(f) }
+    }
+
+    /// Where a tab sorts when grouped, in the Sessions list's order: projects,
+    /// then This Mac, then each server. Nil when grouping is off.
+    private var rank: ((String) -> Int)? { rank(groupTabs) }
+
+    private func rank(_ mode: String) -> ((String) -> Int)? {
+        let projects = store.sortedProjects.map(\.id), hosts = store.library.hosts.map(\.id)
+        func host(_ s: TerminalSession) -> Int { 1 + (s.hostID.flatMap { hosts.firstIndex(of: $0) } ?? hosts.count) }
+        switch mode {
+        case "project":
+            return { id in
+                guard let s = store.session(id) else { return Int.max }
+                if s.hostID != nil { return projects.count + host(s) }
+                return s.projectID.flatMap { projects.firstIndex(of: $0) } ?? projects.count
+            }
+        case "machine":
+            return { id in store.session(id).map { $0.hostID == nil ? 0 : host($0) } ?? Int.max }
+        default: return nil
+        }
+    }
+
+    private func arrangeMenu() -> [MenuSpec] {
+        let modes = [("none", "Off"), ("project", "By Project"), ("machine", "By Machine")]
+        return [
+            MenuSpec(title: "Group Tabs", children: modes.map { m in
+                MenuSpec(title: m.1, checked: groupTabs == m.0) {
+                    groupTabs = m.0
+                    if let rank { withAnimation(.easeOut(duration: 0.18)) { store.terminalTree.sortTabs(by: rank) } }
+                }
+            }),
+            MenuSpec(title: "Layout", children: [
+                MenuSpec(title: "One Pane") { layout([ordered], perRow: 1) },
+                MenuSpec(title: "Two Side by Side") { layout(PaneTree.chunked(ordered, into: 2), perRow: 2) },
+                MenuSpec(title: "Two Stacked") { layout(PaneTree.chunked(ordered, into: 2), perRow: 1) },
+                MenuSpec(title: "2 × 2 Grid") { layout(PaneTree.chunked(ordered, into: 4), perRow: 2) },
+                MenuSpec(title: groupTabs == "machine" ? "A Pane per Machine" : "A Pane per Project") {
+                    guard let r = rank ?? rank("project") else { return }
+                    let buckets = Dictionary(grouping: ordered, by: r).sorted { $0.key < $1.key }.map(\.value)
+                    layout(buckets, perRow: Int(Double(buckets.count).squareRoot().rounded(.up)))
+                }
+            ])
+        ]
+    }
+
+    /// Every open tab, grouped when grouping is on.
+    private var ordered: [String] {
+        let all = store.terminalTree.allTabs
+        guard let rank else { return all }
+        return all.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+    }
+
+    /// Replaces the panes. Each tab that was showing still shows where it can, and
+    /// the one you were on keeps focus.
+    private func layout(_ buckets: [[String]], perRow: Int) {
+        let tree = store.terminalTree
+        let current = tree.focusedGroup.flatMap { tree.group($0)?.active }
+        withAnimation(.easeOut(duration: 0.2)) {
+            var t = PaneTree.tiled(buckets, perRow: perRow)
+            for id in tree.visibleTabs where id != current { t.activate(id) }
+            if let current { t.activate(current) } else { t.focusedGroup = t.groups.first?.id }
+            store.terminalTree = t
+        }
     }
 
     private func open(_ id: String) {
@@ -159,7 +236,7 @@ private struct SessionList: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(store.displayTitle(s)).font(Typo.ui(12.5, .medium)).foregroundStyle(on ? Theme.text : Theme.body)
                         .lineLimit(1).truncationMode(.middle)
-                    Text(place.isEmpty ? meta(s) : "\(place) · \(meta(s))").font(Typo.ui(10.5)).foregroundStyle(Theme.text3).lineLimit(1)
+                    Text([place, meta(s)].filter { !$0.isEmpty }.joined(separator: " · ")).font(Typo.ui(10.5)).foregroundStyle(Theme.text3).lineLimit(1)
                 }
                 .help(store.displayTitle(s))
                 Spacer(minLength: 4)
@@ -200,7 +277,7 @@ private struct SessionList: View {
         switch s.state {
         case .needsInput: "waiting for you"
         case .idle: s.unseen ? "done, not opened" : "idle"
-        case .running: s.kind == .agent ? AgentPane.duration(since: store.runningSince[s.id] ?? s.startedAt).replacingOccurrences(of: " min", with: "m") : (s.kind == .logs ? "tail" : (s.process.contains("dev") ? ":3000" : ""))
+        case .running: s.kind == .agent ? AgentPane.duration(since: store.runningSince[s.id] ?? s.startedAt).replacingOccurrences(of: " min", with: "m") : (s.kind == .logs ? "tail" : (["", "zsh", "bash", "login"].contains(s.process) ? "" : s.process))
         default: s.state.label.lowercased()
         }
     }
